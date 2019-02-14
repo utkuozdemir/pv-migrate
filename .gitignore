@@ -16,8 +16,8 @@
 *.out
 
 ### Go Patch ###
-/vendor/
-/Godeps/
+#/vendor/
+#/Godeps/
 
 ### JetBrains+all ###
 # Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and WebStorm
@@ -101,3 +101,5 @@ modules.xml
 *.ipr
 
 # End of https://www.gitignore.io/api/go,jetbrains+all
+
+/pv-migrate
