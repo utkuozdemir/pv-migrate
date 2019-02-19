@@ -1,6 +1,10 @@
 [[constraint]]
-  name = "k8s.io/cli-runtime"
-  version = "kubernetes-1.12.2"
+  name = "github.com/sirupsen/logrus"
+  version = "=v1.3.0"
+
+[[constraint]]
+  name = "github.com/kyokomi/emoji"
+  version = "=v2.1.0"
 
 [[override]]
   name = "k8s.io/klog"

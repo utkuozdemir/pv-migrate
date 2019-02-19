@@ -4,16 +4,42 @@ import (
 	"flag"
 	"fmt"
 	"github.com/golang/glog"
+	"github.com/kyokomi/emoji"
+	log "github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"time"
 )
+
+var (
+	sftpPodName = "pv-migrate-source-sftp-pod"
+)
+
+func init() {
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.InfoLevel)
+	rand.Seed(time.Now().UnixNano())
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+
+func randSeq(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
+}
 
 func main() {
 	configureConsoleLogging()
@@ -73,18 +99,19 @@ func main() {
 		panic("Could not determine the owner of the target claim")
 	}
 
-	fmt.Println("Both claims exist and bound, proceeding...")
+	log.Info("Both claims exist and bound, proceeding...")
 	if sourceClaim.Namespace != targetClaim.Namespace {
-		fmt.Println("Case 1: Worst case - claims are in different namespaces. Let's see...")
+		log.Info("Case 1: Worst case - claims are in different namespaces. Let's see...")
 		return
 	} else {
 		if sourceOwnerNode == targetOwnerNode {
-			fmt.Println("Case 2: Lucky - claims are bound to the same node. This will be easy...")
+			log.Info("Case 2: Lucky - claims are bound to the same node. This will be easy...")
 
 			jobTtlSeconds := int32(600)
+			jobName := "pv-migrate-" + randSeq(5)
 			job := batchv1.Job{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "pv-migrate-temp",
+					Name:      jobName,
 					Namespace: sourceClaim.Namespace,
 				},
 				Spec: batchv1.JobSpec{
@@ -92,7 +119,7 @@ func main() {
 					Template: corev1.PodTemplateSpec{
 
 						ObjectMeta: metav1.ObjectMeta{
-							Name:      "pv-migrate-temp",
+							Name:      jobName,
 							Namespace: sourceClaim.Namespace,
 						},
 						Spec: corev1.PodSpec{
@@ -143,33 +170,141 @@ func main() {
 				},
 			}
 
-			//pod := corev1.Pod{}
-			//createdPod, err := kubeClient.CoreV1().Pods(sourceClaim.Namespace).Create(&pod)
 			jobsClient := kubeClient.BatchV1().Jobs(sourceClaim.Namespace)
-
 			_ = jobsClient.Delete(job.Name, &metav1.DeleteOptions{})
-
-			createdJob, err := jobsClient.Create(&job)
+			_, err := jobsClient.Create(&job)
 			if err != nil {
-				panic(fmt.Sprintf("Failed: %+v", err))
+				log.Panicf("Failed: %+v", err)
 			}
 
-			//fmt.Printf("Created pod: %+v\n", createdPod)
-			fmt.Printf("Created job: %+v\n", createdJob)
+			log.Infof("Created job: %s", jobName)
 
 			// todo: do this blocking, tail the container logs etc: https://stackoverflow.com/a/32984298/1005102
 
 		} else {
 			if containsAnyAccessMode(sourceClaim.Status.AccessModes, corev1.ReadOnlyMany, corev1.ReadWriteMany) {
-				fmt.Println("Case 3: We are fine, source claim can be read by many nodes...")
+				log.Info("Case 3: We are fine, source claim can be read by many nodes...")
 			} else if containsAnyAccessMode(targetClaim.Status.AccessModes, corev1.ReadWriteMany) {
-				fmt.Println("Case 4: We are fine, target claim can be written by many nodes...")
+				log.Info("Case 4: We are fine, target claim can be written by many nodes...")
 			} else {
-				fmt.Println("Case 5: Bad, claims are bound to different nodes and they can be bound to 1 node at once...")
+				log.Info("Case 5: Bad, claims are bound to different nodes and they can be bound to 1 node at once...")
+
+				sourceSftpPod := corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      sftpPodName,
+						Namespace: sourceClaim.Namespace,
+					},
+					Spec: corev1.PodSpec{
+						Volumes: []corev1.Volume{
+							{
+								Name: "source-vol",
+								VolumeSource: corev1.VolumeSource{
+									PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+										ClaimName: sourceClaim.Name,
+										ReadOnly:  true,
+									},
+								},
+							},
+						},
+						Containers: []corev1.Container{
+							{
+								Name:  "app",
+								Image: "docker.io/panubo/sshd",
+								Env: []corev1.EnvVar{
+									{
+										Name:  "SSH_USERS",
+										Value: "",
+									},
+								},
+								Args: []string{
+									"foo:pass:1001",
+								},
+								VolumeMounts: []corev1.VolumeMount{
+									{
+										Name:      "source-vol",
+										MountPath: "/home/foo/source",
+										ReadOnly:  true,
+									},
+								},
+							},
+						},
+						NodeName: sourceOwnerNode,
+					},
+				}
+
+				podsClient := kubeClient.CoreV1().Pods(sourceClaim.Namespace)
+
+				existingPod, getPodErr := podsClient.Get(sftpPodName, metav1.GetOptions{})
+				if getPodErr != nil || existingPod.Name == "" {
+					running := newPodRunningChannel(kubeClient, sourceClaim.Namespace, sftpPodName)
+					_, err := podsClient.Create(&sourceSftpPod)
+					if err != nil {
+						panic(fmt.Sprintf("Failed: %+v", err))
+					}
+					<-*running
+				} else {
+					log.WithFields(log.Fields{
+						"pod": sftpPodName,
+					}).Info("Already exists")
+				}
+
+				log.WithFields(log.Fields{
+					"pod": sftpPodName,
+				}).Info(emoji.Sprint("Running :tada:"))
 			}
 		}
 	}
 
+}
+
+func newPodDeletionChannel(kubeClient *kubernetes.Clientset, namespace string, podName string) *chan bool {
+	deleted := make(chan bool)
+	stopCh := make(chan struct{})
+	sharedInformerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
+	sharedInformerFactory.Core().V1().Pods().Informer().AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			DeleteFunc: func(obj interface{}) {
+				pod := obj.(*corev1.Pod)
+				if pod.Namespace == namespace && pod.Name == podName {
+					close(stopCh)
+					deleted <- true
+				}
+			},
+		},
+	)
+	sharedInformerFactory.Start(stopCh)
+	return &deleted
+}
+
+func newPodRunningChannel(kubeClient *kubernetes.Clientset, namespace string, podName string) *chan bool {
+	running := make(chan bool)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	sharedInformerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
+	sharedInformerFactory.Core().V1().Pods().Informer().AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				pod := obj.(*corev1.Pod)
+				if pod.Namespace == namespace && pod.Name == podName {
+					if pod.Status.Phase == corev1.PodRunning {
+						close(stopCh)
+						running <- true
+					}
+				}
+			},
+			UpdateFunc: func(old interface{}, new interface{}) {
+				newPod := new.(*corev1.Pod)
+				if newPod.Namespace == namespace && newPod.Name == podName {
+					if newPod.Status.Phase == corev1.PodRunning {
+						close(stopCh)
+						running <- true
+					}
+				}
+			},
+		},
+	)
+	sharedInformerFactory.Start(stopCh)
+	return &running
 }
 
 func findOwnerNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.PersistentVolumeClaim) (string, error) {
