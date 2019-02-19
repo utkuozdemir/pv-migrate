@@ -209,20 +209,11 @@ func main() {
 						Containers: []corev1.Container{
 							{
 								Name:  "app",
-								Image: "docker.io/panubo/sshd",
-								Env: []corev1.EnvVar{
-									{
-										Name:  "SSH_USERS",
-										Value: "",
-									},
-								},
-								Args: []string{
-									"foo:pass:1001",
-								},
+								Image: "rastasheep/ubuntu-sshd:18.04",
 								VolumeMounts: []corev1.VolumeMount{
 									{
 										Name:      "source-vol",
-										MountPath: "/home/foo/source",
+										MountPath: "/root/source",
 										ReadOnly:  true,
 									},
 								},
