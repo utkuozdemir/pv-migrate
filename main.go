@@ -2,14 +2,13 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/golang/glog"
-	"github.com/kyokomi/emoji"
 	log "github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -17,12 +16,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"math/rand"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
-)
-
-var (
-	sftpPodName = "pv-migrate-source-sftp-pod"
 )
 
 func init() {
@@ -41,6 +38,38 @@ func randSeq(n int) string {
 	return string(b)
 }
 
+type claimInfo struct {
+	ownerNode string
+	claim     *corev1.PersistentVolumeClaim
+}
+
+func doCleanup(kubeClient *kubernetes.Clientset, instance string, namespace string) {
+	log.WithFields(log.Fields{
+		"instance":  instance,
+		"namespace": namespace,
+	}).Info("Doing cleanup")
+
+	_ = kubeClient.BatchV1().Jobs(namespace).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{
+		LabelSelector: "app=pv-migrate,instance=" + instance,
+	})
+
+	_ = kubeClient.CoreV1().Pods(namespace).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{
+		LabelSelector: "app=pv-migrate,instance=" + instance,
+	})
+
+	serviceClient := kubeClient.CoreV1().Services(namespace)
+	serviceList, _ := serviceClient.List(metav1.ListOptions{
+		LabelSelector: "app=pv-migrate,instance=" + instance,
+	})
+
+	for _, service := range serviceList.Items {
+		_ = serviceClient.Delete(service.Name, &metav1.DeleteOptions{})
+	}
+	log.WithFields(log.Fields{
+		"instance": instance,
+	}).Info("Finished cleanup")
+}
+
 func main() {
 	configureConsoleLogging()
 
@@ -53,11 +82,11 @@ func main() {
 
 	source := flag.String("source", "", "Source persistent volume claim")
 	sourceNamespace := flag.String("source-namespace", "", "Source namespace")
-	target := flag.String("target", "", "Target persistent volume claim")
-	targetNamespace := flag.String("target-namespace", "", "Target namespace")
+	dest := flag.String("dest", "", "Destination persistent volume claim")
+	destNamespace := flag.String("dest-namespace", "", "Destination namespace")
 	flag.Parse()
 
-	if *source == "" || *sourceNamespace == "" || *target == "" || *targetNamespace == "" {
+	if *source == "" || *sourceNamespace == "" || *dest == "" || *destNamespace == "" {
 		flag.Usage()
 		return
 	}
@@ -72,230 +101,303 @@ func main() {
 		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
-	sourceClaim, err := kubeClient.CoreV1().PersistentVolumeClaims(*sourceNamespace).Get(*source, v1.GetOptions{})
-	if err != nil {
-		panic("Failed to get source claim")
-	}
-
-	if sourceClaim.Status.Phase != corev1.ClaimBound {
-		panic("Source claim not bound")
-	}
-	targetClaim, err := kubeClient.CoreV1().PersistentVolumeClaims(*targetNamespace).Get(*target, v1.GetOptions{})
-	if err != nil {
-		panic("Failed to get source claim")
-	}
-
-	if targetClaim.Status.Phase != corev1.ClaimBound {
-		panic("Target claim not bound")
-	}
-
-	sourceOwnerNode, err := findOwnerNodeForPvc(kubeClient, sourceClaim)
-	if err != nil {
-		panic("Could not determine the owner of the source claim")
-	}
-
-	targetOwnerNode, err := findOwnerNodeForPvc(kubeClient, targetClaim)
-	if err != nil {
-		panic("Could not determine the owner of the target claim")
-	}
+	sourceClaimInfo := buildClaimInfo(kubeClient, sourceNamespace, source)
+	destClaimInfo := buildClaimInfo(kubeClient, destNamespace, dest)
 
 	log.Info("Both claims exist and bound, proceeding...")
-	if sourceClaim.Namespace != targetClaim.Namespace {
-		log.Info("Case 1: Worst case - claims are in different namespaces. Let's see...")
-		return
-	} else {
-		if sourceOwnerNode == targetOwnerNode {
-			log.Info("Case 2: Lucky - claims are bound to the same node. This will be easy...")
+	instance := randSeq(5)
 
-			jobTtlSeconds := int32(600)
-			jobName := "pv-migrate-" + randSeq(5)
-			job := batchv1.Job{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      jobName,
-					Namespace: sourceClaim.Namespace,
-				},
-				Spec: batchv1.JobSpec{
-					TTLSecondsAfterFinished: &jobTtlSeconds,
-					Template: corev1.PodTemplateSpec{
+	handleSigterm(kubeClient, instance, *sourceNamespace, *destNamespace)
 
-						ObjectMeta: metav1.ObjectMeta{
-							Name:      jobName,
-							Namespace: sourceClaim.Namespace,
-						},
-						Spec: corev1.PodSpec{
-							Volumes: []corev1.Volume{
-								{
-									Name: "source-vol",
-									VolumeSource: corev1.VolumeSource{
-										PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-											ClaimName: sourceClaim.Name,
-											ReadOnly:  true,
-										},
-									},
-								}, {
-									Name: "target-vol",
-									VolumeSource: corev1.VolumeSource{
-										PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-											ClaimName: targetClaim.Name,
-											ReadOnly:  false,
-										},
-									},
-								},
-							},
-							Containers: []corev1.Container{
-								{
-									Name:  "app",
-									Image: "docker.io/utkuozdemir/rsync:v0.1.0",
-									Command: []string{
-										"rsync", "-rtv", "/source/", "/target/",
-									},
-									VolumeMounts: []corev1.VolumeMount{
-										{
-											Name:      "source-vol",
-											MountPath: "/source",
-											ReadOnly:  true,
-										},
-										{
-											Name:      "target-vol",
-											MountPath: "/target",
-											ReadOnly:  false,
-										},
-									},
-								},
-							},
-							NodeName:      sourceOwnerNode,
-							RestartPolicy: corev1.RestartPolicyNever,
-						},
-					},
-				},
-			}
+	defer doCleanup(kubeClient, instance, *sourceNamespace)
+	defer doCleanup(kubeClient, instance, *destNamespace)
 
-			jobsClient := kubeClient.BatchV1().Jobs(sourceClaim.Namespace)
-			_ = jobsClient.Delete(job.Name, &metav1.DeleteOptions{})
-			_, err := jobsClient.Create(&job)
-			if err != nil {
-				log.Panicf("Failed: %+v", err)
-			}
-
-			log.Infof("Created job: %s", jobName)
-
-			// todo: do this blocking, tail the container logs etc: https://stackoverflow.com/a/32984298/1005102
-
-		} else {
-			if containsAnyAccessMode(sourceClaim.Status.AccessModes, corev1.ReadOnlyMany, corev1.ReadWriteMany) {
-				log.Info("Case 3: We are fine, source claim can be read by many nodes...")
-			} else if containsAnyAccessMode(targetClaim.Status.AccessModes, corev1.ReadWriteMany) {
-				log.Info("Case 4: We are fine, target claim can be written by many nodes...")
-			} else {
-				log.Info("Case 5: Bad, claims are bound to different nodes and they can be bound to 1 node at once...")
-
-				sourceSftpPod := corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      sftpPodName,
-						Namespace: sourceClaim.Namespace,
-					},
-					Spec: corev1.PodSpec{
-						Volumes: []corev1.Volume{
-							{
-								Name: "source-vol",
-								VolumeSource: corev1.VolumeSource{
-									PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-										ClaimName: sourceClaim.Name,
-										ReadOnly:  true,
-									},
-								},
-							},
-						},
-						Containers: []corev1.Container{
-							{
-								Name:  "app",
-								Image: "rastasheep/ubuntu-sshd:18.04",
-								VolumeMounts: []corev1.VolumeMount{
-									{
-										Name:      "source-vol",
-										MountPath: "/root/source",
-										ReadOnly:  true,
-									},
-								},
-							},
-						},
-						NodeName: sourceOwnerNode,
-					},
-				}
-
-				podsClient := kubeClient.CoreV1().Pods(sourceClaim.Namespace)
-
-				existingPod, getPodErr := podsClient.Get(sftpPodName, metav1.GetOptions{})
-				if getPodErr != nil || existingPod.Name == "" {
-					running := newPodRunningChannel(kubeClient, sourceClaim.Namespace, sftpPodName)
-					_, err := podsClient.Create(&sourceSftpPod)
-					if err != nil {
-						panic(fmt.Sprintf("Failed: %+v", err))
-					}
-					<-*running
-				} else {
-					log.WithFields(log.Fields{
-						"pod": sftpPodName,
-					}).Info("Already exists")
-				}
-
-				log.WithFields(log.Fields{
-					"pod": sftpPodName,
-				}).Info(emoji.Sprint("Running :tada:"))
-			}
-		}
-	}
-
+	migrateViaRsync(instance, kubeClient, sourceClaimInfo, destClaimInfo)
 }
 
-func newPodDeletionChannel(kubeClient *kubernetes.Clientset, namespace string, podName string) *chan bool {
-	deleted := make(chan bool)
-	stopCh := make(chan struct{})
-	sharedInformerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
-	sharedInformerFactory.Core().V1().Pods().Informer().AddEventHandler(
-		cache.ResourceEventHandlerFuncs{
-			DeleteFunc: func(obj interface{}) {
-				pod := obj.(*corev1.Pod)
-				if pod.Namespace == namespace && pod.Name == podName {
-					close(stopCh)
-					deleted <- true
-				}
+func handleSigterm(kubeClient *kubernetes.Clientset, instance string, sourceNamespace string, destNamespace string) {
+	c := make(chan os.Signal)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		doCleanup(kubeClient, instance, sourceNamespace)
+		doCleanup(kubeClient, instance, destNamespace)
+		os.Exit(1)
+	}()
+}
+
+func prepareRsyncJob(instance string, destClaimInfo claimInfo, targetHost string) batchv1.Job {
+	jobTtlSeconds := int32(600)
+	backoffLimit := int32(0)
+	jobName := "pv-migrate-rsync-" + instance
+	job := batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: destClaimInfo.claim.Namespace,
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoffLimit,
+			TTLSecondsAfterFinished: &jobTtlSeconds,
+			Template: corev1.PodTemplateSpec{
+
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      jobName,
+					Namespace: destClaimInfo.claim.Namespace,
+					Labels: map[string]string{
+						"app":       "pv-migrate",
+						"component": "rsync",
+						"instance":  instance,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Volumes: []corev1.Volume{
+						{
+							Name: "dest-vol",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: destClaimInfo.claim.Name,
+									ReadOnly:  false,
+								},
+							},
+						},
+					},
+					Containers: []corev1.Container{
+						{
+							Name:            "app",
+							Image:           "docker.io/utkuozdemir/pv-migrate-rsync:v0.1.0",
+							ImagePullPolicy: corev1.PullAlways,
+							Command: []string{
+								"rsync",
+								"-avz",
+								"-e",
+								"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
+								"root@" + targetHost + ":/source/",
+								"/dest/",
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "dest-vol",
+									MountPath: "/dest",
+									ReadOnly:  false,
+								},
+							},
+						},
+					},
+					NodeName:      destClaimInfo.ownerNode,
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+		},
+	}
+	return job
+}
+
+func migrateViaRsync(instance string, kubeClient *kubernetes.Clientset, sourceClaimInfo claimInfo, destClaimInfo claimInfo) {
+	sftpPod := prepareSshdPod(instance, sourceClaimInfo)
+	createSshdPodWaitTillRunning(kubeClient, sftpPod)
+	createdService := createSshdService(instance, kubeClient, sourceClaimInfo)
+	targetHostName := createdService.Name + "." + createdService.Namespace + ".svc"
+	rsyncJob := prepareRsyncJob(instance, destClaimInfo, targetHostName)
+	createJobWaitTillCompleted(kubeClient, rsyncJob)
+}
+
+func prepareSshdPod(instance string, sourceClaimInfo claimInfo) corev1.Pod {
+	podName := "pv-migrate-sshd-" + instance
+	return corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podName,
+			Namespace: sourceClaimInfo.claim.Namespace,
+			Labels: map[string]string{
+				"app":       "pv-migrate",
+				"component": "sshd",
+				"instance":  instance,
+			},
+		},
+		Spec: corev1.PodSpec{
+			Volumes: []corev1.Volume{
+				{
+					Name: "source-vol",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: sourceClaimInfo.claim.Name,
+							ReadOnly:  true,
+						},
+					},
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:            "app",
+					Image:           "docker.io/utkuozdemir/pv-migrate-sshd:v0.1.0",
+					ImagePullPolicy: corev1.PullAlways,
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "source-vol",
+							MountPath: "/source",
+							ReadOnly:  true,
+						},
+					},
+					Ports: []corev1.ContainerPort{
+						{
+							ContainerPort: 22,
+						},
+					},
+				},
+			},
+			NodeName: sourceClaimInfo.ownerNode,
+		},
+	}
+}
+
+func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, source *string) claimInfo {
+	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(*sourceNamespace).Get(*source, v1.GetOptions{})
+	if err != nil {
+		log.Panic("Failed to get source claim")
+	}
+	if claim.Status.Phase != corev1.ClaimBound {
+		log.Panic("Source claim not bound")
+	}
+	ownerNode, err := findOwnerNodeForPvc(kubeClient, claim)
+	if err != nil {
+		log.Panic("Could not determine the owner of the source claim")
+	}
+	return claimInfo{
+		ownerNode: ownerNode,
+		claim:     claim,
+	}
+}
+
+func createSshdService(instance string, kubeClient *kubernetes.Clientset, sourceClaimInfo claimInfo) *corev1.Service {
+	serviceName := "pv-migrate-sshd-" + instance
+	createdService, err := kubeClient.CoreV1().Services(sourceClaimInfo.claim.Namespace).Create(
+		&corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      serviceName,
+				Namespace: sourceClaimInfo.claim.Namespace,
+				Labels: map[string]string{
+					"app":       "pv-migrate",
+					"component": "sshd",
+					"instance":  instance,
+				},
+			},
+			Spec: corev1.ServiceSpec{
+				Ports: []corev1.ServicePort{
+					{
+						Port:       22,
+						TargetPort: intstr.FromInt(22),
+					},
+				},
+				Selector: map[string]string{
+					"app":       "pv-migrate",
+					"component": "sshd",
+					"instance":  instance,
+				},
 			},
 		},
 	)
-	sharedInformerFactory.Start(stopCh)
-	return &deleted
+	if err != nil {
+		log.Panicf("Failed: %+v", err)
+	}
+	return createdService
 }
 
-func newPodRunningChannel(kubeClient *kubernetes.Clientset, namespace string, podName string) *chan bool {
+func createSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod corev1.Pod) *corev1.Pod {
 	running := make(chan bool)
+	defer close(running)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	sharedInformerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
 	sharedInformerFactory.Core().V1().Pods().Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {
-				pod := obj.(*corev1.Pod)
-				if pod.Namespace == namespace && pod.Name == podName {
-					if pod.Status.Phase == corev1.PodRunning {
-						close(stopCh)
-						running <- true
-					}
-				}
-			},
 			UpdateFunc: func(old interface{}, new interface{}) {
 				newPod := new.(*corev1.Pod)
-				if newPod.Namespace == namespace && newPod.Name == podName {
-					if newPod.Status.Phase == corev1.PodRunning {
-						close(stopCh)
+				if newPod.Namespace == pod.Namespace && newPod.Name == pod.Name {
+					switch newPod.Status.Phase {
+					case corev1.PodRunning:
+						log.WithFields(log.Fields{
+							"podName": pod.Name,
+						}).Info("sshd pod running")
 						running <- true
+
+					case corev1.PodFailed, corev1.PodUnknown:
+						log.WithFields(log.Fields{
+							"podName": newPod.Name,
+						}).Panic("sshd pod failed to start, exiting")
 					}
 				}
 			},
 		},
 	)
 	sharedInformerFactory.Start(stopCh)
-	return &running
+
+	log.WithFields(log.Fields{
+		"podName": pod.Name,
+	}).Info("Creating sshd pod")
+	createdPod, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(&pod)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"podName": pod.Name,
+		}).Panic("Failed to create sshd pod")
+	}
+
+	log.WithFields(log.Fields{
+		"podName": pod.Name,
+	}).Info("Waiting for pod to start running")
+	<-running
+
+	return createdPod
+}
+
+func createJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Job) {
+	succeeded := make(chan bool)
+	defer close(succeeded)
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	sharedInformerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
+	sharedInformerFactory.Core().V1().Pods().Informer().AddEventHandler(
+		cache.ResourceEventHandlerFuncs{
+			UpdateFunc: func(old interface{}, new interface{}) {
+				newPod := new.(*corev1.Pod)
+				if newPod.Namespace == job.Namespace && newPod.Labels["job-name"] == job.Name {
+					switch newPod.Status.Phase {
+					case corev1.PodSucceeded:
+						log.WithFields(log.Fields{
+							"jobName": job.Name,
+							"podName": newPod.Name,
+						}).Info("Job completed...")
+						succeeded <- true
+					case corev1.PodRunning:
+						log.WithFields(log.Fields{
+							"jobName": job.Name,
+							"podName": newPod.Name,
+						}).Info("Job is running ")
+					case corev1.PodFailed, corev1.PodUnknown:
+						log.WithFields(log.Fields{
+							"jobName": job.Name,
+							"podName": newPod.Name,
+						}).Panic("Job failed, exiting")
+					}
+				}
+			},
+		},
+	)
+
+	sharedInformerFactory.Start(stopCh)
+
+	log.WithFields(log.Fields{
+		"jobName": job.Name,
+	}).Info("Creating rsync job")
+	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(&job)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"jobName": job.Name,
+		}).Panic("Failed to create rsync job")
+	}
+
+	log.WithFields(log.Fields{
+		"jobName": job.Name,
+	}).Info("Waiting for rsync job to finish")
+	<-succeeded
 }
 
 func findOwnerNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.PersistentVolumeClaim) (string, error) {
@@ -314,17 +416,6 @@ func findOwnerNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.Persisten
 	}
 
 	return "", nil
-}
-
-func containsAnyAccessMode(sourceElements []corev1.PersistentVolumeAccessMode, elements ...corev1.PersistentVolumeAccessMode) bool {
-	for _, sourceElement := range sourceElements {
-		for _, element := range elements {
-			if sourceElement == element {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func configureConsoleLogging() {
