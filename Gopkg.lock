@@ -133,14 +133,6 @@
   version = "v1.0.1"
 
 [[projects]]
-  digest = "1:ea7929b5ce35b109685e5c992ddf64d5b977cd915b2c050fc340d7d645c87418"
-  name = "github.com/kyokomi/emoji"
-  packages = ["."]
-  pruneopts = "UT"
-  revision = "eba9a9d7bfd64dcfe6e90fb3d53b2f3357a015c3"
-  version = "v2.1.0"
-
-[[projects]]
   digest = "1:33422d238f147d247752996a26574ac48dcf472976eda7f5134015f06bf16563"
   name = "github.com/modern-go/concurrent"
   packages = ["."]
@@ -536,11 +528,11 @@
   analyzer-version = 1
   input-imports = [
     "github.com/golang/glog",
-    "github.com/kyokomi/emoji",
     "github.com/sirupsen/logrus",
     "k8s.io/api/batch/v1",
     "k8s.io/api/core/v1",
     "k8s.io/apimachinery/pkg/apis/meta/v1",
+    "k8s.io/apimachinery/pkg/util/intstr",
     "k8s.io/client-go/informers",
     "k8s.io/client-go/kubernetes",
     "k8s.io/client-go/plugin/pkg/client/auth/gcp",
