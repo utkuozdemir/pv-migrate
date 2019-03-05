@@ -21,7 +21,7 @@ $ kubectl pv-migrate \
   --dest-namespace ns-b \
   --dest big-pvc
 ```
-This will create a temporary **ssh** pod that has the `small-pvc` mounted, 
+This will create a temporary **sshd** pod that has the `small-pvc` mounted, 
 and an **rsync** job with `big-pvc` mounted, and will rsync the whole content from the source to the target.
 It will clean up the temporary resources it created after the operation is completed (or failed).
 
