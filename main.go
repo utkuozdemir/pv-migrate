@@ -2,24 +2,29 @@ package main
 
 import (
 	"flag"
-	"github.com/golang/glog"
-	log "github.com/sirupsen/logrus"
-	batchv1 "k8s.io/api/batch/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/informers"
-	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/golang/glog"
+	log "github.com/sirupsen/logrus"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/clientcmd"
+
+	// needed for k8s oidc auth
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
 func init() {
@@ -41,6 +46,8 @@ func randSeq(n int) string {
 type claimInfo struct {
 	ownerNode string
 	claim     *corev1.PersistentVolumeClaim
+	readOnly  bool
+	svcType   corev1.ServiceType
 }
 
 func doCleanup(kubeClient *kubernetes.Clientset, instance string, namespace string) {
@@ -70,6 +77,21 @@ func doCleanup(kubeClient *kubernetes.Clientset, instance string, namespace stri
 	}).Info("Finished cleanup")
 }
 
+func buildConfigFromFlags(context, kubeconfigPath string) (*rest.Config, error) {
+	clientcmd.NewDefaultClientConfigLoadingRules()
+	clientConfigLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+
+	if kubeconfigPath != "" {
+		clientConfigLoadingRules = &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath}
+	}
+
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientConfigLoadingRules,
+		&clientcmd.ConfigOverrides{
+			CurrentContext: context,
+		}).ClientConfig()
+}
+
 func main() {
 	configureConsoleLogging()
 
@@ -82,8 +104,11 @@ func main() {
 
 	source := flag.String("source", "", "Source persistent volume claim")
 	sourceNamespace := flag.String("source-namespace", "", "Source namespace")
+	sourceContext := flag.String("source-context", "", "Source context")
 	dest := flag.String("dest", "", "Destination persistent volume claim")
 	destNamespace := flag.String("dest-namespace", "", "Destination namespace")
+	destContext := flag.String("dest-context", "", "Destination context")
+	sourceReadOnly := flag.Bool("sourceReadOnly", true, "source pvc ReadOnly")
 	flag.Parse()
 
 	if *source == "" || *sourceNamespace == "" || *dest == "" || *destNamespace == "" {
@@ -91,37 +116,52 @@ func main() {
 		return
 	}
 
-	cfg, err := clientcmd.BuildConfigFromFlags("", *kubeconfig)
+	svcType := corev1.ServiceTypeClusterIP
+	if *sourceContext != *destContext {
+		svcType = corev1.ServiceTypeLoadBalancer
+	}
+
+	sourceCfg, err := buildConfigFromFlags(*sourceContext, *kubeconfig)
 	if err != nil {
 		glog.Fatalf("Error building kubeconfig: %s", err.Error())
 	}
 
-	kubeClient, err := kubernetes.NewForConfig(cfg)
+	sourceKubeClient, err := kubernetes.NewForConfig(sourceCfg)
 	if err != nil {
 		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
 	}
 
-	sourceClaimInfo := buildClaimInfo(kubeClient, sourceNamespace, source)
-	destClaimInfo := buildClaimInfo(kubeClient, destNamespace, dest)
+	destCfg, err := buildConfigFromFlags(*destContext, *kubeconfig)
+	if err != nil {
+		glog.Fatalf("Error building kubeconfig: %s", err.Error())
+	}
+
+	destKubeClient, err := kubernetes.NewForConfig(destCfg)
+	if err != nil {
+		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+	}
+
+	sourceClaimInfo := buildClaimInfo(sourceKubeClient, sourceNamespace, source, *sourceReadOnly, svcType)
+	destClaimInfo := buildClaimInfo(destKubeClient, destNamespace, dest, true, svcType)
 
 	log.Info("Both claims exist and bound, proceeding...")
 	instance := randSeq(5)
 
-	handleSigterm(kubeClient, instance, *sourceNamespace, *destNamespace)
+	handleSigterm(sourceKubeClient, destKubeClient, instance, *sourceNamespace, *destNamespace)
 
-	defer doCleanup(kubeClient, instance, *sourceNamespace)
-	defer doCleanup(kubeClient, instance, *destNamespace)
+	defer doCleanup(sourceKubeClient, instance, *sourceNamespace)
+	defer doCleanup(destKubeClient, instance, *destNamespace)
 
-	migrateViaRsync(instance, kubeClient, sourceClaimInfo, destClaimInfo)
+	migrateViaRsync(instance, destKubeClient, sourceClaimInfo, destClaimInfo)
 }
 
-func handleSigterm(kubeClient *kubernetes.Clientset, instance string, sourceNamespace string, destNamespace string) {
+func handleSigterm(sourceKubeClient, destKubeClient *kubernetes.Clientset, instance string, sourceNamespace string, destNamespace string) {
 	c := make(chan os.Signal)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-c
-		doCleanup(kubeClient, instance, sourceNamespace)
-		doCleanup(kubeClient, instance, destNamespace)
+		doCleanup(sourceKubeClient, instance, sourceNamespace)
+		doCleanup(destKubeClient, instance, destNamespace)
 		os.Exit(1)
 	}()
 }
@@ -156,7 +196,7 @@ func prepareRsyncJob(instance string, destClaimInfo claimInfo, targetHost string
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 									ClaimName: destClaimInfo.claim.Name,
-									ReadOnly:  false,
+									ReadOnly:  destClaimInfo.readOnly,
 								},
 							},
 						},
@@ -178,7 +218,7 @@ func prepareRsyncJob(instance string, destClaimInfo claimInfo, targetHost string
 								{
 									Name:      "dest-vol",
 									MountPath: "/dest",
-									ReadOnly:  false,
+									ReadOnly:  destClaimInfo.readOnly,
 								},
 							},
 						},
@@ -196,8 +236,10 @@ func migrateViaRsync(instance string, kubeClient *kubernetes.Clientset, sourceCl
 	sftpPod := prepareSshdPod(instance, sourceClaimInfo)
 	createSshdPodWaitTillRunning(kubeClient, sftpPod)
 	createdService := createSshdService(instance, kubeClient, sourceClaimInfo)
-	targetHostName := createdService.Name + "." + createdService.Namespace + ".svc"
-	rsyncJob := prepareRsyncJob(instance, destClaimInfo, targetHostName)
+	targetServiceAddress := getServiceAddress(createdService, kubeClient)
+
+	glog.Infof("use service address %s to connect to rsync server", targetServiceAddress)
+	rsyncJob := prepareRsyncJob(instance, destClaimInfo, targetServiceAddress)
 	createJobWaitTillCompleted(kubeClient, rsyncJob)
 }
 
@@ -220,7 +262,7 @@ func prepareSshdPod(instance string, sourceClaimInfo claimInfo) corev1.Pod {
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 							ClaimName: sourceClaimInfo.claim.Name,
-							ReadOnly:  true,
+							ReadOnly:  sourceClaimInfo.readOnly,
 						},
 					},
 				},
@@ -234,7 +276,7 @@ func prepareSshdPod(instance string, sourceClaimInfo claimInfo) corev1.Pod {
 						{
 							Name:      "source-vol",
 							MountPath: "/source",
-							ReadOnly:  true,
+							ReadOnly:  sourceClaimInfo.readOnly,
 						},
 					},
 					Ports: []corev1.ContainerPort{
@@ -249,21 +291,44 @@ func prepareSshdPod(instance string, sourceClaimInfo claimInfo) corev1.Pod {
 	}
 }
 
-func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, source *string) claimInfo {
+func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, source *string, readOnly bool, svcType corev1.ServiceType) claimInfo {
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(*sourceNamespace).Get(*source, v1.GetOptions{})
 	if err != nil {
-		log.Panic("Failed to get source claim")
+		log.WithField("pvc", *source).Fatal("Failed to get source claim")
 	}
 	if claim.Status.Phase != corev1.ClaimBound {
-		log.Panic("Source claim not bound")
+		log.Fatal("Source claim not bound")
 	}
 	ownerNode, err := findOwnerNodeForPvc(kubeClient, claim)
 	if err != nil {
-		log.Panic("Could not determine the owner of the source claim")
+		log.Fatal("Could not determine the owner of the source claim")
 	}
 	return claimInfo{
 		ownerNode: ownerNode,
 		claim:     claim,
+		readOnly:  readOnly,
+		svcType:   svcType,
+	}
+}
+
+func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) string {
+	if svc.Spec.Type == corev1.ServiceTypeClusterIP {
+		return svc.Spec.ClusterIP
+	}
+
+	for {
+		createdService, err := kubeClient.CoreV1().Services(svc.Namespace).Get(svc.Name, v1.GetOptions{})
+		if err != nil {
+			glog.Fatal("unable to get service")
+		}
+
+		if createdService.Spec.LoadBalancerIP == "" {
+			sleepInterval := 10 * time.Second
+			glog.Info("wait for external ip, sleep %s", sleepInterval)
+			time.Sleep(sleepInterval)
+			continue
+		}
+		return svc.Spec.LoadBalancerIP
 	}
 }
 
@@ -281,6 +346,7 @@ func createSshdService(instance string, kubeClient *kubernetes.Clientset, source
 				},
 			},
 			Spec: corev1.ServiceSpec{
+				Type: sourceClaimInfo.svcType,
 				Ports: []corev1.ServicePort{
 					{
 						Port:       22,
