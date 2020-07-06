@@ -1,15 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"math/rand"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 	"time"
 
-	"github.com/golang/glog"
 	log "github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,18 +17,18 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 
-	// needed for k8s oidc auth
+	// needed for k8s oidc and gcp auth
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
 func init() {
 	log.SetOutput(os.Stdout)
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.DebugLevel)
 	rand.Seed(time.Now().UnixNano())
 }
 
@@ -56,21 +55,21 @@ func doCleanup(kubeClient *kubernetes.Clientset, instance string, namespace stri
 		"namespace": namespace,
 	}).Info("Doing cleanup")
 
-	_ = kubeClient.BatchV1().Jobs(namespace).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{
+	_ = kubeClient.BatchV1().Jobs(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{
 		LabelSelector: "app=pv-migrate,instance=" + instance,
 	})
 
-	_ = kubeClient.CoreV1().Pods(namespace).DeleteCollection(&metav1.DeleteOptions{}, metav1.ListOptions{
+	_ = kubeClient.CoreV1().Pods(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{
 		LabelSelector: "app=pv-migrate,instance=" + instance,
 	})
 
 	serviceClient := kubeClient.CoreV1().Services(namespace)
-	serviceList, _ := serviceClient.List(metav1.ListOptions{
+	serviceList, _ := serviceClient.List(context.TODO(), metav1.ListOptions{
 		LabelSelector: "app=pv-migrate,instance=" + instance,
 	})
 
 	for _, service := range serviceList.Items {
-		_ = serviceClient.Delete(service.Name, &metav1.DeleteOptions{})
+		_ = serviceClient.Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
 	}
 	log.WithFields(log.Fields{
 		"instance": instance,
@@ -93,22 +92,14 @@ func buildConfigFromFlags(context, kubeconfigPath string) (*rest.Config, error) 
 }
 
 func main() {
-	configureConsoleLogging()
-
-	var kubeconfig *string
-	if home := homeDir(); home != "" {
-		kubeconfig = flag.String("kubeconfig", filepath.Join(home, ".kube", "config"), "(optional) absolute path to the kubeconfig file")
-	} else {
-		kubeconfig = flag.String("kubeconfig", "", "absolute path to the kubeconfig file")
-	}
-
+	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
 	source := flag.String("source", "", "Source persistent volume claim")
 	sourceNamespace := flag.String("source-namespace", "", "Source namespace")
-	sourceContext := flag.String("source-context", "", "Source context")
+	sourceContext := flag.String("source-context", "", "(optional) Source context")
 	dest := flag.String("dest", "", "Destination persistent volume claim")
 	destNamespace := flag.String("dest-namespace", "", "Destination namespace")
-	destContext := flag.String("dest-context", "", "Destination context")
-	sourceReadOnly := flag.Bool("sourceReadOnly", true, "source pvc ReadOnly")
+	destContext := flag.String("dest-context", "", "(optional) Destination context")
+	sourceReadOnly := flag.Bool("sourceReadOnly", true, "(optional) source pvc ReadOnly")
 	flag.Parse()
 
 	if *source == "" || *sourceNamespace == "" || *dest == "" || *destNamespace == "" {
@@ -123,22 +114,22 @@ func main() {
 
 	sourceCfg, err := buildConfigFromFlags(*sourceContext, *kubeconfig)
 	if err != nil {
-		glog.Fatalf("Error building kubeconfig: %s", err.Error())
+		log.WithError(err).Fatal("Error building kubeconfig")
 	}
 
 	sourceKubeClient, err := kubernetes.NewForConfig(sourceCfg)
 	if err != nil {
-		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+		log.WithError(err).Fatal("Error building kubernetes clientset")
 	}
 
 	destCfg, err := buildConfigFromFlags(*destContext, *kubeconfig)
 	if err != nil {
-		glog.Fatalf("Error building kubeconfig: %s", err.Error())
+		log.WithError(err).Fatal("Error building kubeconfig")
 	}
 
 	destKubeClient, err := kubernetes.NewForConfig(destCfg)
 	if err != nil {
-		glog.Fatalf("Error building kubernetes clientset: %s", err.Error())
+		log.WithError(err).Fatal("Error building kubernetes clientset")
 	}
 
 	sourceClaimInfo := buildClaimInfo(sourceKubeClient, sourceNamespace, source, *sourceReadOnly, svcType)
@@ -238,7 +229,7 @@ func migrateViaRsync(instance string, kubeClient *kubernetes.Clientset, sourceCl
 	createdService := createSshdService(instance, kubeClient, sourceClaimInfo)
 	targetServiceAddress := getServiceAddress(createdService, kubeClient)
 
-	glog.Infof("use service address %s to connect to rsync server", targetServiceAddress)
+	log.Infof("use service address %s to connect to rsync server", targetServiceAddress)
 	rsyncJob := prepareRsyncJob(instance, destClaimInfo, targetServiceAddress)
 	createJobWaitTillCompleted(kubeClient, rsyncJob)
 }
@@ -292,7 +283,7 @@ func prepareSshdPod(instance string, sourceClaimInfo claimInfo) corev1.Pod {
 }
 
 func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, source *string, readOnly bool, svcType corev1.ServiceType) claimInfo {
-	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(*sourceNamespace).Get(*source, v1.GetOptions{})
+	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(*sourceNamespace).Get(context.TODO(), *source, v1.GetOptions{})
 	if err != nil {
 		log.WithField("pvc", *source).Fatal("Failed to get source claim")
 	}
@@ -317,14 +308,14 @@ func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) st
 	}
 
 	for {
-		createdService, err := kubeClient.CoreV1().Services(svc.Namespace).Get(svc.Name, v1.GetOptions{})
+		createdService, err := kubeClient.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, v1.GetOptions{})
 		if err != nil {
-			glog.Fatal("unable to get service")
+			log.Fatal("unable to get service")
 		}
 
 		if createdService.Spec.LoadBalancerIP == "" {
 			sleepInterval := 10 * time.Second
-			glog.Info("wait for external ip, sleep %s", sleepInterval)
+			log.Info("wait for external ip, sleep %s", sleepInterval)
 			time.Sleep(sleepInterval)
 			continue
 		}
@@ -335,6 +326,7 @@ func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) st
 func createSshdService(instance string, kubeClient *kubernetes.Clientset, sourceClaimInfo claimInfo) *corev1.Service {
 	serviceName := "pv-migrate-sshd-" + instance
 	createdService, err := kubeClient.CoreV1().Services(sourceClaimInfo.claim.Namespace).Create(
+		context.TODO(),
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      serviceName,
@@ -360,6 +352,7 @@ func createSshdService(instance string, kubeClient *kubernetes.Clientset, source
 				},
 			},
 		},
+		v1.CreateOptions{},
 	)
 	if err != nil {
 		log.Panicf("Failed: %+v", err)
@@ -399,7 +392,7 @@ func createSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod corev1.P
 	log.WithFields(log.Fields{
 		"podName": pod.Name,
 	}).Info("Creating sshd pod")
-	createdPod, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(&pod)
+	createdPod, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 	if err != nil {
 		log.WithFields(log.Fields{
 			"podName": pod.Name,
@@ -453,7 +446,7 @@ func createJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Jo
 	log.WithFields(log.Fields{
 		"jobName": job.Name,
 	}).Info("Creating rsync job")
-	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(&job)
+	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(context.TODO(), &job, metav1.CreateOptions{})
 	if err != nil {
 		log.WithFields(log.Fields{
 			"jobName": job.Name,
@@ -467,7 +460,7 @@ func createJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Jo
 }
 
 func findOwnerNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.PersistentVolumeClaim) (string, error) {
-	podList, err := kubeClient.CoreV1().Pods(pvc.Namespace).List(metav1.ListOptions{})
+	podList, err := kubeClient.CoreV1().Pods(pvc.Namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -482,12 +475,6 @@ func findOwnerNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.Persisten
 	}
 
 	return "", nil
-}
-
-func configureConsoleLogging() {
-	if err := flag.Set("logtostderr", "true"); err != nil {
-		glog.Errorf("Failed to set logging to stderr: %v", err)
-	}
 }
 
 func homeDir() string {

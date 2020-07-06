@@ -2,7 +2,7 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-dep ensure
+GO111MODULE=on
 GOOS=linux go build -a -installsuffix cgo -o bin/linux/pv-migrate
 GOOS=windows go build -a -installsuffix cgo -o bin/windows/pv-migrate
 GOOS=darwin go build -a -installsuffix cgo -o bin/darwin/pv-migrate
