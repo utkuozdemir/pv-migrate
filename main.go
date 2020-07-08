@@ -133,7 +133,7 @@ func main() {
 	}
 
 	sourceClaimInfo := buildClaimInfo(sourceKubeClient, sourceNamespace, source, *sourceReadOnly, svcType)
-	destClaimInfo := buildClaimInfo(destKubeClient, destNamespace, dest, true, svcType)
+	destClaimInfo := buildClaimInfo(destKubeClient, destNamespace, dest, false, svcType)
 
 	log.Info("Both claims exist and bound, proceeding...")
 	instance := randSeq(5)
@@ -143,7 +143,7 @@ func main() {
 	defer doCleanup(sourceKubeClient, instance, *sourceNamespace)
 	defer doCleanup(destKubeClient, instance, *destNamespace)
 
-	migrateViaRsync(instance, destKubeClient, sourceClaimInfo, destClaimInfo)
+	migrateViaRsync(instance, sourceKubeClient, destKubeClient, sourceClaimInfo, destClaimInfo)
 }
 
 func handleSigterm(sourceKubeClient, destKubeClient *kubernetes.Clientset, instance string, sourceNamespace string, destNamespace string) {
@@ -223,15 +223,15 @@ func prepareRsyncJob(instance string, destClaimInfo claimInfo, targetHost string
 	return job
 }
 
-func migrateViaRsync(instance string, kubeClient *kubernetes.Clientset, sourceClaimInfo claimInfo, destClaimInfo claimInfo) {
+func migrateViaRsync(instance string, sourcekubeClient *kubernetes.Clientset, destkubeClient *kubernetes.Clientset, sourceClaimInfo claimInfo, destClaimInfo claimInfo) {
 	sftpPod := prepareSshdPod(instance, sourceClaimInfo)
-	createSshdPodWaitTillRunning(kubeClient, sftpPod)
-	createdService := createSshdService(instance, kubeClient, sourceClaimInfo)
-	targetServiceAddress := getServiceAddress(createdService, kubeClient)
+	createSshdPodWaitTillRunning(sourcekubeClient, sftpPod)
+	createdService := createSshdService(instance, sourcekubeClient, sourceClaimInfo)
+	targetServiceAddress := getServiceAddress(createdService, sourcekubeClient)
 
 	log.Infof("use service address %s to connect to rsync server", targetServiceAddress)
 	rsyncJob := prepareRsyncJob(instance, destClaimInfo, targetServiceAddress)
-	createJobWaitTillCompleted(kubeClient, rsyncJob)
+	createJobWaitTillCompleted(destkubeClient, rsyncJob)
 }
 
 func prepareSshdPod(instance string, sourceClaimInfo claimInfo) corev1.Pod {
@@ -285,7 +285,7 @@ func prepareSshdPod(instance string, sourceClaimInfo claimInfo) corev1.Pod {
 func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, source *string, readOnly bool, svcType corev1.ServiceType) claimInfo {
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(*sourceNamespace).Get(context.TODO(), *source, v1.GetOptions{})
 	if err != nil {
-		log.WithField("pvc", *source).Fatal("Failed to get source claim")
+		log.WithError(err).WithField("pvc", *source).Fatal("Failed to get source claim")
 	}
 	if claim.Status.Phase != corev1.ClaimBound {
 		log.Fatal("Source claim not bound")
@@ -313,13 +313,13 @@ func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) st
 			log.Fatal("unable to get service")
 		}
 
-		if createdService.Spec.LoadBalancerIP == "" {
+		if len(createdService.Status.LoadBalancer.Ingress) == 0 {
 			sleepInterval := 10 * time.Second
-			log.Info("wait for external ip, sleep %s", sleepInterval)
+			log.Infof("wait for external ip, sleep %s", sleepInterval)
 			time.Sleep(sleepInterval)
 			continue
 		}
-		return svc.Spec.LoadBalancerIP
+		return createdService.Status.LoadBalancer.Ingress[0].IP
 	}
 }
 
@@ -355,7 +355,7 @@ func createSshdService(instance string, kubeClient *kubernetes.Clientset, source
 		v1.CreateOptions{},
 	)
 	if err != nil {
-		log.Panicf("Failed: %+v", err)
+		log.WithError(err).Fatal("service creation failed")
 	}
 	return createdService
 }
@@ -450,7 +450,7 @@ func createJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Jo
 	if err != nil {
 		log.WithFields(log.Fields{
 			"jobName": job.Name,
-		}).Panic("Failed to create rsync job")
+		}).WithError(err).Fatal("Failed to create rsync job")
 	}
 
 	log.WithFields(log.Fields{
@@ -475,11 +475,4 @@ func findOwnerNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.Persisten
 	}
 
 	return "", nil
-}
-
-func homeDir() string {
-	if h := os.Getenv("HOME"); h != "" {
-		return h
-	}
-	return os.Getenv("USERPROFILE") // windows
 }
