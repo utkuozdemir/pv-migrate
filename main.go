@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -43,10 +44,11 @@ func randSeq(n int) string {
 }
 
 type claimInfo struct {
-	ownerNode string
-	claim     *corev1.PersistentVolumeClaim
-	readOnly  bool
-	svcType   corev1.ServiceType
+	ownerNode             string
+	claim                 *corev1.PersistentVolumeClaim
+	readOnly              bool
+	svcType               corev1.ServiceType
+	deleteExtraneousFiles bool
 }
 
 func doCleanup(kubeClient *kubernetes.Clientset, instance string, namespace string) {
@@ -100,7 +102,12 @@ func main() {
 	destNamespace := flag.String("dest-namespace", "", "Destination namespace")
 	destContext := flag.String("dest-context", "", "(optional) Destination context")
 	sourceReadOnly := flag.Bool("sourceReadOnly", true, "(optional) source pvc ReadOnly")
+	deleteExtraneousFromDest := flag.Bool("dest-delete-extraneous-files", false, "(optional) delete extraneous files from destination dirs")
 	flag.Parse()
+
+	if *deleteExtraneousFromDest {
+		log.Warn("delete extraneous files from dest is enabled")
+	}
 
 	if *source == "" || *sourceNamespace == "" || *dest == "" || *destNamespace == "" {
 		flag.Usage()
@@ -132,8 +139,8 @@ func main() {
 		log.WithError(err).Fatal("Error building kubernetes clientset")
 	}
 
-	sourceClaimInfo := buildClaimInfo(sourceKubeClient, sourceNamespace, source, *sourceReadOnly, svcType)
-	destClaimInfo := buildClaimInfo(destKubeClient, destNamespace, dest, false, svcType)
+	sourceClaimInfo := buildClaimInfo(sourceKubeClient, sourceNamespace, source, *sourceReadOnly, false, svcType)
+	destClaimInfo := buildClaimInfo(destKubeClient, destNamespace, dest, false, *deleteExtraneousFromDest, svcType)
 
 	log.Info("Both claims exist and bound, proceeding...")
 	instance := randSeq(5)
@@ -157,10 +164,25 @@ func handleSigterm(sourceKubeClient, destKubeClient *kubernetes.Clientset, insta
 	}()
 }
 
+func buildRsyncCommand(claimInfo claimInfo, targetHost string) []string {
+	rsyncCommand := []string{"rsync"}
+	if claimInfo.deleteExtraneousFiles {
+		rsyncCommand = append(rsyncCommand, "--delete")
+	}
+	rsyncCommand = append(rsyncCommand, "-avz")
+	rsyncCommand = append(rsyncCommand, "-e")
+	rsyncCommand = append(rsyncCommand, "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null")
+	rsyncCommand = append(rsyncCommand, fmt.Sprintf("root@%s:/source/", targetHost))
+	rsyncCommand = append(rsyncCommand, "/dest/")
+
+	return rsyncCommand
+}
+
 func prepareRsyncJob(instance string, destClaimInfo claimInfo, targetHost string) batchv1.Job {
 	jobTtlSeconds := int32(600)
 	backoffLimit := int32(0)
 	jobName := "pv-migrate-rsync-" + instance
+
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -197,14 +219,7 @@ func prepareRsyncJob(instance string, destClaimInfo claimInfo, targetHost string
 							Name:            "app",
 							Image:           "docker.io/utkuozdemir/pv-migrate-rsync:v0.1.0",
 							ImagePullPolicy: corev1.PullAlways,
-							Command: []string{
-								"rsync",
-								"-avz",
-								"-e",
-								"ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null",
-								"root@" + targetHost + ":/source/",
-								"/dest/",
-							},
+							Command:         buildRsyncCommand(destClaimInfo, targetHost),
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "dest-vol",
@@ -282,7 +297,7 @@ func prepareSshdPod(instance string, sourceClaimInfo claimInfo) corev1.Pod {
 	}
 }
 
-func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, source *string, readOnly bool, svcType corev1.ServiceType) claimInfo {
+func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, source *string, readOnly, deleteExtraneousFiles bool, svcType corev1.ServiceType) claimInfo {
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(*sourceNamespace).Get(context.TODO(), *source, v1.GetOptions{})
 	if err != nil {
 		log.WithError(err).WithField("pvc", *source).Fatal("Failed to get source claim")
@@ -295,10 +310,11 @@ func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, s
 		log.Fatal("Could not determine the owner of the source claim")
 	}
 	return claimInfo{
-		ownerNode: ownerNode,
-		claim:     claim,
-		readOnly:  readOnly,
-		svcType:   svcType,
+		ownerNode:             ownerNode,
+		claim:                 claim,
+		readOnly:              readOnly,
+		svcType:               svcType,
+		deleteExtraneousFiles: deleteExtraneousFiles,
 	}
 }
 
