@@ -50,13 +50,12 @@ To use it standalone, simply run it like `./pv-migrate --source-namespace ....`
 
 To build for your platform
 ```bash
-$ dep ensure
-$ go build
+$ make build
 ```
 
 To build for all major platforms and prepare release archives:
 ```bash
-$ ./build.sh
+$ make build-all
 ```
 
 ## Notes
