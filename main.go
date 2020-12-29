@@ -150,7 +150,11 @@ func main() {
 	defer doCleanup(sourceKubeClient, instance, *sourceNamespace)
 	defer doCleanup(destKubeClient, instance, *destNamespace)
 
-	migrateViaRsync(instance, sourceKubeClient, destKubeClient, sourceClaimInfo, destClaimInfo, maxRetriesFetchServiceIP)
+	err = migrateViaRsync(instance, sourceKubeClient, destKubeClient, sourceClaimInfo, destClaimInfo, maxRetriesFetchServiceIP)
+
+	if err != nil {
+		log.WithError(err).Fatal("pv migrate unsuccessful")
+	}
 }
 
 func handleSigterm(sourceKubeClient, destKubeClient *kubernetes.Clientset, instance string, sourceNamespace string, destNamespace string) {
@@ -238,14 +242,14 @@ func prepareRsyncJob(instance string, destClaimInfo claimInfo, targetHost string
 	return job
 }
 
-func migrateViaRsync(instance string, sourcekubeClient *kubernetes.Clientset, destkubeClient *kubernetes.Clientset, sourceClaimInfo claimInfo, destClaimInfo claimInfo, maxRetriesFetchServiceIP int) {
+func migrateViaRsync(instance string, sourcekubeClient *kubernetes.Clientset, destkubeClient *kubernetes.Clientset, sourceClaimInfo claimInfo, destClaimInfo claimInfo, maxRetriesFetchServiceIP int) error {
 	sftpPod := prepareSshdPod(instance, sourceClaimInfo)
 	createSshdPodWaitTillRunning(sourcekubeClient, sftpPod)
 	createdService := createSshdService(instance, sourcekubeClient, sourceClaimInfo)
-	targetServiceAddress := getServiceAddress(createdService, sourcekubeClient, maxRetriesFetchServiceIP)
+	targetServiceAddress, err := getServiceAddress(createdService, sourcekubeClient, maxRetriesFetchServiceIP)
 
-	if targetServiceAddress == "" {
-		return
+	if err != nil {
+		return err
 	}
 
 	log.Infof("use service address %s to connect to rsync server", targetServiceAddress)
@@ -322,9 +326,9 @@ func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, s
 	}
 }
 
-func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset, maxRetries int) string {
+func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset, maxRetries int) (string, error) {
 	if svc.Spec.Type == corev1.ServiceTypeClusterIP {
-		return svc.Spec.ClusterIP
+		return svc.Spec.ClusterIP, nil
 	}
 
 	sleepInterval := 10 * time.Second
@@ -332,8 +336,7 @@ func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset, ma
 
 	for {
 		if retryCounter > maxRetries {
-			log.Error("unable to get external ip from svc, maximum retries reached")
-			return ""
+			return "", fmt.Errorf("unable to get external ip from svc, maximum retries reached")
 		}
 
 		retryCounter++
@@ -348,7 +351,7 @@ func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset, ma
 			time.Sleep(sleepInterval)
 			continue
 		}
-		return createdService.Status.LoadBalancer.Ingress[0].IP
+		return createdService.Status.LoadBalancer.Ingress[0].IP, nil
 	}
 }
 
