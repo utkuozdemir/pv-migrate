@@ -103,6 +103,7 @@ func main() {
 	destContext := flag.String("dest-context", "", "(optional) Destination context")
 	sourceReadOnly := flag.Bool("sourceReadOnly", true, "(optional) source pvc ReadOnly")
 	deleteExtraneousFromDest := flag.Bool("dest-delete-extraneous-files", false, "(optional) delete extraneous files from destination dirs")
+	maxRetriesFetchServiceIP := flag.Int("max-retries-fetch-service-ip", 30, "(optional) maximum retries to fetch ip from service, retries * 10 seconds")
 	flag.Parse()
 
 	if *deleteExtraneousFromDest {
@@ -150,7 +151,7 @@ func main() {
 	defer doCleanup(sourceKubeClient, instance, *sourceNamespace)
 	defer doCleanup(destKubeClient, instance, *destNamespace)
 
-	migrateViaRsync(instance, sourceKubeClient, destKubeClient, sourceClaimInfo, destClaimInfo)
+	migrateViaRsync(instance, sourceKubeClient, destKubeClient, sourceClaimInfo, destClaimInfo, maxRetriesFetchServiceIP)
 }
 
 func handleSigterm(sourceKubeClient, destKubeClient *kubernetes.Clientset, instance string, sourceNamespace string, destNamespace string) {
@@ -238,11 +239,15 @@ func prepareRsyncJob(instance string, destClaimInfo claimInfo, targetHost string
 	return job
 }
 
-func migrateViaRsync(instance string, sourcekubeClient *kubernetes.Clientset, destkubeClient *kubernetes.Clientset, sourceClaimInfo claimInfo, destClaimInfo claimInfo) {
+func migrateViaRsync(instance string, sourcekubeClient *kubernetes.Clientset, destkubeClient *kubernetes.Clientset, sourceClaimInfo claimInfo, destClaimInfo claimInfo, maxRetriesFetchServiceIP int) {
 	sftpPod := prepareSshdPod(instance, sourceClaimInfo)
 	createSshdPodWaitTillRunning(sourcekubeClient, sftpPod)
 	createdService := createSshdService(instance, sourcekubeClient, sourceClaimInfo)
-	targetServiceAddress := getServiceAddress(createdService, sourcekubeClient)
+	targetServiceAddress := getServiceAddress(createdService, sourcekubeClient, maxRetriesFetchServiceIP)
+
+	if targetServiceAddress == "" {
+		return
+	}
 
 	log.Infof("use service address %s to connect to rsync server", targetServiceAddress)
 	rsyncJob := prepareRsyncJob(instance, destClaimInfo, targetServiceAddress)
@@ -318,20 +323,29 @@ func buildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, s
 	}
 }
 
-func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) string {
+func getServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset, maxRetries int) string {
 	if svc.Spec.Type == corev1.ServiceTypeClusterIP {
 		return svc.Spec.ClusterIP
 	}
 
+	sleepInterval := 10 * time.Second
+	retryCounter := 0
+
 	for {
+		if retryCounter > maxRetries {
+			log.Error("unable to get external ip from svc, maximum retries reached")
+			return ""
+		}
+
+		retryCounter++
+
 		createdService, err := kubeClient.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, v1.GetOptions{})
 		if err != nil {
 			log.Fatal("unable to get service")
 		}
 
 		if len(createdService.Status.LoadBalancer.Ingress) == 0 {
-			sleepInterval := 10 * time.Second
-			log.Infof("wait for external ip, sleep %s", sleepInterval)
+			log.WithField("retry", retryCounter).Infof("wait for external ip, sleep %s", sleepInterval)
 			time.Sleep(sleepInterval)
 			continue
 		}
