@@ -101,7 +101,6 @@ func main() {
 	dest := flag.String("dest", "", "Destination persistent volume claim")
 	destNamespace := flag.String("dest-namespace", "", "Destination namespace")
 	destContext := flag.String("dest-context", "", "(optional) Destination context")
-	sourceReadOnly := flag.Bool("sourceReadOnly", true, "(optional) source pvc ReadOnly")
 	deleteExtraneousFromDest := flag.Bool("dest-delete-extraneous-files", false, "(optional) delete extraneous files from destination dirs")
 	maxRetriesFetchServiceIP := flag.Int("max-retries-fetch-service-ip", 30, "(optional) maximum retries to fetch ip from service, retries * 10 seconds")
 	flag.Parse()
@@ -140,7 +139,7 @@ func main() {
 		log.WithError(err).Fatal("Error building kubernetes clientset")
 	}
 
-	sourceClaimInfo := buildClaimInfo(sourceKubeClient, sourceNamespace, source, *sourceReadOnly, false, svcType)
+	sourceClaimInfo := buildClaimInfo(sourceKubeClient, sourceNamespace, source, true, false, svcType)
 	destClaimInfo := buildClaimInfo(destKubeClient, destNamespace, dest, false, *deleteExtraneousFromDest, svcType)
 
 	log.Info("Both claims exist and bound, proceeding...")
