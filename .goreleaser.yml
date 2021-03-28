@@ -1,0 +1,47 @@
+---
+before:
+  hooks:
+    - go mod download
+builds:
+  - id: pv-migrate
+    main: ./cmd/pv-migrate
+    binary: pv-migrate
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm
+      - arm64
+      - ppc64le
+    goarm: 
+      - 6 
+      - 7
+archives:
+  - id: pv-migrate-archive
+    name_template: |-
+      pv-migrate_{{ .Tag }}_{{ .Os }}_{{ .Arch -}}
+      {{- with .Arm -}}
+        {{- if (eq . "6") -}}hf
+        {{- else -}}v{{- . -}}
+        {{- end -}}
+      {{- end -}}
+    builds:
+      - pv-migrate
+    replacements:
+      386: i386
+      amd64: x86_64
+    format_overrides:
+      - goos: windows
+        format: zip
+    files: 
+      - LICENSE
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+release:
+  extra_files:
+    - glob: ./pv-migrate
