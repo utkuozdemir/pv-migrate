@@ -2,39 +2,40 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	log "github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 	"time"
 )
 
-func GetServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) string {
-	if svc.Spec.Type == corev1.ServiceTypeClusterIP {
-		return svc.Spec.ClusterIP
-	}
+func GetServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) (string, error) {
+	// todo move commented-out logic to cross-cluster rsync code
+	//if svc.Spec.Type == corev1.ServiceTypeClusterIP {
+	return svc.Name + "." + svc.Namespace, nil
+	//}
 
-	for {
-		createdService, err := kubeClient.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, v1.GetOptions{})
-		if err != nil {
-			log.Fatal("unable to get service")
-		}
-
-		if len(createdService.Status.LoadBalancer.Ingress) == 0 {
-			sleepInterval := 10 * time.Second
-			log.Infof("wait for external ip, sleep %s", sleepInterval)
-			time.Sleep(sleepInterval)
-			continue
-		}
-		return createdService.Status.LoadBalancer.Ingress[0].IP
-	}
+	//for {
+	//	createdService, err := kubeClient.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, v1.GetOptions{})
+	//	if err != nil {
+	//		return "", err
+	//	}
+	//
+	//	if len(createdService.Status.LoadBalancer.Ingress) == 0 {
+	//		sleepInterval := 10 * time.Second
+	//		log.Infof("wait for external ip, sleep %s", sleepInterval)
+	//		time.Sleep(sleepInterval)
+	//		continue
+	//	}
+	//	return createdService.Status.LoadBalancer.Ingress[0].IP, nil
+	//}
 }
 
-func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Job) {
+func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Job) error {
 	succeeded := make(chan bool)
 	defer close(succeeded)
 	stopCh := make(chan struct{})
@@ -58,10 +59,7 @@ func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Jo
 							"podName": newPod.Name,
 						}).Info("Job is running ")
 					case corev1.PodFailed, corev1.PodUnknown:
-						log.WithFields(log.Fields{
-							"jobName": job.Name,
-							"podName": newPod.Name,
-						}).Panic("Job failed, exiting")
+						succeeded <- false
 					}
 				}
 			},
@@ -75,13 +73,14 @@ func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Jo
 	}).Info("Creating rsync job")
 	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(context.TODO(), &job, metav1.CreateOptions{})
 	if err != nil {
-		log.WithFields(log.Fields{
-			"jobName": job.Name,
-		}).WithError(err).Fatal("Failed to create rsync job")
+		return err
 	}
 
 	log.WithFields(log.Fields{
 		"jobName": job.Name,
 	}).Info("Waiting for rsync job to finish")
-	<-succeeded
+	if !<-succeeded {
+		return errors.New("job did not succeed")
+	}
+	return nil
 }

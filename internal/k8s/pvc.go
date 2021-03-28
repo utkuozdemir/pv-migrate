@@ -2,22 +2,38 @@ package k8s
 
 import (
 	"context"
-	log "github.com/sirupsen/logrus"
+	"errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
-type ClaimInfo struct {
-	OwnerNode             string
-	Claim                 *corev1.PersistentVolumeClaim
-	ReadOnly              bool
-	SvcType               corev1.ServiceType
-	DeleteExtraneousFiles bool
+type PvcInfo struct {
+	KubeClient  *kubernetes.Clientset
+	Claim       *corev1.PersistentVolumeClaim
+	MountedNode string
 }
 
-func FindOwnerNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.PersistentVolumeClaim) (string, error) {
+func BuildPvcInfo(kubeClient *kubernetes.Clientset, namespace string, name string) (*PvcInfo, error) {
+	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), name, v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	mountedNode, err := findMountedNodeForPvc(kubeClient, claim)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PvcInfo{
+		KubeClient:  kubeClient,
+		Claim:       claim,
+		MountedNode: mountedNode,
+	}, nil
+}
+
+func findMountedNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.PersistentVolumeClaim) (string, error) {
 	podList, err := kubeClient.CoreV1().Pods(pvc.Namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return "", err
@@ -32,26 +48,5 @@ func FindOwnerNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.Persisten
 		}
 	}
 
-	return "", nil
-}
-
-func BuildClaimInfo(kubeClient *kubernetes.Clientset, sourceNamespace *string, source *string, readOnly, deleteExtraneousFiles bool, svcType corev1.ServiceType) ClaimInfo {
-	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(*sourceNamespace).Get(context.TODO(), *source, v1.GetOptions{})
-	if err != nil {
-		log.WithError(err).WithField("pvc", *source).Fatal("Failed to get source claim")
-	}
-	if claim.Status.Phase != corev1.ClaimBound {
-		log.Fatal("Source claim not bound")
-	}
-	ownerNode, err := FindOwnerNodeForPvc(kubeClient, claim)
-	if err != nil {
-		log.Fatal("Could not determine the owner of the source claim")
-	}
-	return ClaimInfo{
-		OwnerNode:             ownerNode,
-		Claim:                 claim,
-		ReadOnly:              readOnly,
-		SvcType:               svcType,
-		DeleteExtraneousFiles: deleteExtraneousFiles,
-	}
+	return "", errors.New("couldn't find the node that the pvc is mounted to")
 }

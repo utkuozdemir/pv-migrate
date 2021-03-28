@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"context"
+	"errors"
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
@@ -14,14 +15,14 @@ import (
 	"time"
 )
 
-func createSshdService(instance string, kubeClient *kubernetes.Clientset, sourceClaimInfo k8s.ClaimInfo) *corev1.Service {
+func createSshdService(instance string, kubeClient *kubernetes.Clientset, sourcePvcInfo *k8s.PvcInfo) (*corev1.Service, error) {
 	serviceName := "pv-migrate-sshd-" + instance
-	createdService, err := kubeClient.CoreV1().Services(sourceClaimInfo.Claim.Namespace).Create(
+	createdService, err := kubeClient.CoreV1().Services(sourcePvcInfo.Claim.Namespace).Create(
 		context.TODO(),
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      serviceName,
-				Namespace: sourceClaimInfo.Claim.Namespace,
+				Namespace: sourcePvcInfo.Claim.Namespace,
 				Labels: map[string]string{
 					"app":       "pv-migrate",
 					"component": "sshd",
@@ -29,7 +30,6 @@ func createSshdService(instance string, kubeClient *kubernetes.Clientset, source
 				},
 			},
 			Spec: corev1.ServiceSpec{
-				Type: sourceClaimInfo.SvcType,
 				Ports: []corev1.ServicePort{
 					{
 						Port:       22,
@@ -46,17 +46,18 @@ func createSshdService(instance string, kubeClient *kubernetes.Clientset, source
 		v1.CreateOptions{},
 	)
 	if err != nil {
-		log.WithError(err).Fatal("service creation failed")
+		return nil, err
 	}
-	return createdService
+	return createdService, nil
 }
 
-func createSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod corev1.Pod) *corev1.Pod {
+func createSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod *corev1.Pod) error {
 	running := make(chan bool)
 	defer close(running)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	sharedInformerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
+	logger := log.WithField("podName", pod.Name)
 	sharedInformerFactory.Core().V1().Pods().Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			UpdateFunc: func(old interface{}, new interface{}) {
@@ -64,15 +65,12 @@ func createSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod corev1.P
 				if newPod.Namespace == pod.Namespace && newPod.Name == pod.Name {
 					switch newPod.Status.Phase {
 					case corev1.PodRunning:
-						log.WithFields(log.Fields{
-							"podName": pod.Name,
-						}).Info("sshd pod running")
+						logger.Info("Sshd pod running")
 						running <- true
 
 					case corev1.PodFailed, corev1.PodUnknown:
-						log.WithFields(log.Fields{
-							"podName": newPod.Name,
-						}).Panic("sshd pod failed to start, exiting")
+						logger.Error("Sshd pod failed")
+						running <- false
 					}
 				}
 			},
@@ -80,30 +78,26 @@ func createSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod corev1.P
 	)
 	sharedInformerFactory.Start(stopCh)
 
-	log.WithFields(log.Fields{
-		"podName": pod.Name,
-	}).Info("Creating sshd pod")
-	createdPod, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
+	logger.Info("Creating sshd pod")
+	_, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 	if err != nil {
-		log.WithFields(log.Fields{
-			"podName": pod.Name,
-		}).Panic("Failed to create sshd pod")
+		return err
 	}
 
-	log.WithFields(log.Fields{
-		"podName": pod.Name,
-	}).Info("Waiting for pod to start running")
-	<-running
+	logger.Info("Waiting for the sshd pod to start running")
+	if !<-running {
+		return errors.New("sshd pod failed to start")
+	}
 
-	return createdPod
+	return nil
 }
 
-func prepareSshdPod(instance string, sourceClaimInfo k8s.ClaimInfo) corev1.Pod {
+func prepareSshdPod(instance string, sourcePvcInfo *k8s.PvcInfo) *corev1.Pod {
 	podName := "pv-migrate-sshd-" + instance
-	return corev1.Pod{
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: sourceClaimInfo.Claim.Namespace,
+			Namespace: sourcePvcInfo.Claim.Namespace,
 			Labels: map[string]string{
 				"app":       "pv-migrate",
 				"component": "sshd",
@@ -116,8 +110,8 @@ func prepareSshdPod(instance string, sourceClaimInfo k8s.ClaimInfo) corev1.Pod {
 					Name: "source-vol",
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: sourceClaimInfo.Claim.Name,
-							ReadOnly:  sourceClaimInfo.ReadOnly,
+							ClaimName: sourcePvcInfo.Claim.Name,
+							ReadOnly:  true,
 						},
 					},
 				},
@@ -131,7 +125,7 @@ func prepareSshdPod(instance string, sourceClaimInfo k8s.ClaimInfo) corev1.Pod {
 						{
 							Name:      "source-vol",
 							MountPath: "/source",
-							ReadOnly:  sourceClaimInfo.ReadOnly,
+							ReadOnly:  true,
 						},
 					},
 					Ports: []corev1.ContainerPort{
@@ -141,7 +135,7 @@ func prepareSshdPod(instance string, sourceClaimInfo k8s.ClaimInfo) corev1.Pod {
 					},
 				},
 			},
-			NodeName: sourceClaimInfo.OwnerNode,
+			NodeName: sourcePvcInfo.MountedNode,
 		},
 	}
 }
