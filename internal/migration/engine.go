@@ -44,14 +44,20 @@ func (e *engine) Run(request *Request) error {
 	}
 
 	strategies := e.determineStrategies(request, task)
-	logger := log.WithField("request", request).WithField("engine", e)
+	logger := log.WithFields(request.LogFields())
+
 	if len(strategies) == 0 {
 		return errors.New("no strategy found that can handle the request")
 	}
 
 	for _, strategy := range strategies {
 		s := *strategy
-		logger = log.WithField("strategy", s.Name())
+		logger = log.WithFields(log.Fields{
+			"strategy": s.Name(),
+			"priority": s.Priority(),
+		})
+
+		logger.Info("Executing strategy")
 		runErr := s.Run(task)
 		if runErr != nil {
 			logger.WithError(runErr).Warn("Migration failed, will try remaining strategies")

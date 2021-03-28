@@ -1,6 +1,7 @@
 package migration
 
 import (
+	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 )
 
@@ -58,4 +59,11 @@ type Task struct {
 	Source  *k8s.PvcInfo
 	Dest    *k8s.PvcInfo
 	Options RequestOptions
+}
+
+func (request *Request) LogFields() log.Fields {
+	return log.Fields{
+		"source": request.SourceNamespace + "/" + request.SourceName,
+		"dest":   request.DestNamespace + "/" + request.DestName,
+	}
 }

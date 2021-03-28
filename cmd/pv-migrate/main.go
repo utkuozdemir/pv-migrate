@@ -2,13 +2,12 @@ package main
 
 import (
 	"flag"
+	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"math/rand"
 	"os"
 	"time"
-
-	log "github.com/sirupsen/logrus"
 	// needed for k8s oidc and gcp auth
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
@@ -21,6 +20,10 @@ var strategies = []migration.Strategy{
 }
 
 func init() {
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+		PadLevelText:  true,
+	})
 	log.SetOutput(os.Stdout)
 	log.SetLevel(log.DebugLevel)
 	rand.Seed(time.Now().UnixNano())
@@ -42,10 +45,6 @@ func main() {
 		return
 	}
 
-	if *deleteExtraneousFromDest {
-		log.Warn("delete extraneous files from dest is enabled")
-	}
-
 	request := migration.Request{
 		SourceKubeconfigPath: *kubeconfig,
 		SourceContext:        *sourceContext,
@@ -61,23 +60,29 @@ func main() {
 		Strategies: nil, // todo: accept as optional param
 	}
 
-	err := executeRequest(&request)
+	logger := log.WithFields(request.LogFields())
+
+	if *deleteExtraneousFromDest {
+		logger.Warn("delete extraneous files from dest is enabled")
+	}
+
+	err := executeRequest(logger, &request)
 	if err != nil {
-		log.WithField("request", request).WithError(err).Fatal("Failed to initialize the engine")
+		logger.WithError(err).Fatal("Failed to initialize the engine")
 		return
 	}
 }
 
-func executeRequest(request *migration.Request) error {
+func executeRequest(logger *log.Entry, request *migration.Request) error {
 	engine, err := migration.NewEngine(strategies)
 	if err != nil {
-		log.WithField("request", request).WithError(err).Error("Failed to initialize the engine")
+		logger.WithError(err).Error("Failed to initialize the engine")
 		return err
 	}
 
 	err = engine.Run(request)
 	if err != nil {
-		log.WithField("request", request).WithError(err).Error("Migration failed")
+		logger.WithError(err).Error("Migration failed")
 		return err
 	}
 
