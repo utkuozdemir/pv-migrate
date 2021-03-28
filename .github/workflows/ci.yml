@@ -1,4 +1,5 @@
 ---
+# Used ahmetb/kubectx as reference: https://github.com/ahmetb/kubectx
 name: Continuous Integration
 on:  # yamllint disable-line rule:truthy
   push:
