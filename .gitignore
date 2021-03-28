@@ -102,5 +102,4 @@ modules.xml
 
 # End of https://www.gitignore.io/api/go,jetbrains+all
 
-/pv-migrate
-/bin
+/dist

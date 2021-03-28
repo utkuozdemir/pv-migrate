@@ -11,8 +11,8 @@ This is a cli tool/kubectl plugin to easily migrate
 the contents of one Kubernetes `PersistentVolume` to another.
 
 Common use case: You have a database with a bound 50gb PersistentVolumeClaim.
-Unfortunately 50gb was not enough and you filled all the disk space rather quickly. 
-And sadly your StorageClass/provisioner doesn't support [volume expansion](https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/).
+Unfortunately 50gb was not enough, and you filled all the disk space rather quickly. 
+Sadly, your StorageClass/provisioner doesn't support [volume expansion](https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/).
 Now you need to create a new PVC of 1tb and somehow copy all the data to the new volume, as-is, with its permissions and so on.
 
 Another use case: You need to move a PersistentVolumeClaim from one namespace to another.
