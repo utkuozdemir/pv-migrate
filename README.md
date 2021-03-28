@@ -1,9 +1,9 @@
 # pv-migrate
 
 [![Continuous Integration](https://github.com/utkuozdemir/pv-migrate/actions/workflows/ci.yml/badge.svg)](https://github.com/utkuozdemir/pv-migrate/actions/workflows/ci.yml)
-[!Latest GitHub release](https://img.shields.io/github/release/utkuozdemir/pv-migrate.svg)
+![Latest GitHub release](https://img.shields.io/github/release/utkuozdemir/pv-migrate.svg)
 [![GitHub license](https://img.shields.io/github/license/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/blob/master/LICENSE)
-[!GitHub stars](https://img.shields.io/github/stars/utkuozdemir/pv-migrate.svg?label=github%20stars)
+![GitHub stars](https://img.shields.io/github/stars/utkuozdemir/pv-migrate.svg?label=github%20stars)
 [![GitHub forks](https://img.shields.io/github/forks/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/network)
 [![GitHub issues](https://img.shields.io/github/issues/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/issues)
 
