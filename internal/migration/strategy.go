@@ -1,10 +1,5 @@
 package migration
 
-import (
-	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/k8s"
-)
-
 type Strategy interface {
 	// Unique name of the strategy.
 	//
@@ -35,35 +30,4 @@ type Strategy interface {
 	// it shouldn't immediately return but proceed with the cleanup and
 	// return all of the encountered errors combined at the end.
 	Cleanup(task *Task) error
-}
-
-type Request struct {
-	SourceKubeconfigPath string
-	SourceContext        string
-	SourceNamespace      string
-	SourceName           string
-	DestKubeconfigPath   string
-	DestContext          string
-	DestNamespace        string
-	DestName             string
-	Options              RequestOptions
-	Strategies           []string
-}
-
-type RequestOptions struct {
-	DeleteExtraneousFiles bool
-}
-
-type Task struct {
-	Id      string
-	Source  *k8s.PvcInfo
-	Dest    *k8s.PvcInfo
-	Options RequestOptions
-}
-
-func (request *Request) LogFields() log.Fields {
-	return log.Fields{
-		"source": request.SourceNamespace + "/" + request.SourceName,
-		"dest":   request.DestNamespace + "/" + request.DestName,
-	}
 }

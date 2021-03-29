@@ -4,7 +4,6 @@ import (
 	"flag"
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
-	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"math/rand"
 	"os"
 	"time"
@@ -14,9 +13,9 @@ import (
 )
 
 var strategies = []migration.Strategy{
-	&rsync.InClusterStrategy{},
-	//&rsync.CrossClusterStrategy{}, // todo: enable when implemented
-	//&mount.SourcePvcMountStrategy{}, // todo: enable when implemented
+	&migration.MountBothStrategy{},
+	&migration.RsyncSshInClusterStrategy{},
+	&migration.RsyncSshCrossClusterStrategy{},
 }
 
 func init() {
@@ -79,6 +78,10 @@ func executeRequest(logger *log.Entry, request migration.Request) error {
 		logger.WithError(err).Error("Failed to initialize the engine")
 		return err
 	}
+
+	numStrategies := len(strategies)
+	strategyNames := migration.StrategyNames(strategies)
+	logger.WithField("strategies", strategyNames).Infof("Engine initialized with %v total strategies", numStrategies)
 
 	err = engine.Run(request)
 	if err != nil {

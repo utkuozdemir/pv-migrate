@@ -46,12 +46,16 @@ func (e engine) Run(request Request) error {
 	strategies := e.determineStrategies(&request, task)
 	logger := log.WithFields(request.LogFields())
 
-	if len(strategies) == 0 {
+	numStrategies := len(strategies)
+	if numStrategies == 0 {
 		return errors.New("no strategy found that can handle the request")
 	}
 
-	strategyNames := getStrategyNames(strategies)
-	logger.WithField("strategies", strategyNames).Info()
+	strategyNames := StrategyNames(strategies)
+	logger.
+		WithField("strategies", strategyNames).
+		Infof("Determined %v strategies to be attempted", numStrategies)
+
 	for _, strategy := range strategies {
 		logger = log.WithFields(log.Fields{
 			"strategy": strategy.Name(),
@@ -148,7 +152,7 @@ func (e *engine) determineStrategies(request *Request, task *Task) []Strategy {
 	return strategies
 }
 
-func getStrategyNames(strategies []Strategy) []string {
+func StrategyNames(strategies []Strategy) []string {
 	var result []string
 	for _, strategy := range strategies {
 		name := strategy.Name()

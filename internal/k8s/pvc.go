@@ -13,6 +13,9 @@ type PvcInfo struct {
 	KubeClient  *kubernetes.Clientset
 	Claim       *corev1.PersistentVolumeClaim
 	MountedNode string
+	SupportsRWO bool
+	SupportsROX bool
+	SupportsRWX bool
 }
 
 func BuildPvcInfo(kubeClient *kubernetes.Clientset, namespace string, name string) (*PvcInfo, error) {
@@ -26,10 +29,28 @@ func BuildPvcInfo(kubeClient *kubernetes.Clientset, namespace string, name strin
 		return nil, err
 	}
 
+	supportsRWO := false
+	supportsROX := false
+	supportsRWX := false
+
+	for _, accessMode := range claim.Spec.AccessModes {
+		switch accessMode {
+		case corev1.ReadWriteOnce:
+			supportsRWO = true
+		case corev1.ReadOnlyMany:
+			supportsROX = true
+		case corev1.ReadWriteMany:
+			supportsRWX = true
+		}
+	}
+
 	return &PvcInfo{
 		KubeClient:  kubeClient,
 		Claim:       claim,
 		MountedNode: mountedNode,
+		SupportsRWO: supportsRWO,
+		SupportsROX: supportsROX,
+		SupportsRWX: supportsRWX,
 	}, nil
 }
 

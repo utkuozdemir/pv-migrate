@@ -57,7 +57,7 @@ func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Jo
 						log.WithFields(log.Fields{
 							"jobName": job.Name,
 							"podName": newPod.Name,
-						}).Info("Job completed...")
+						}).Info("Job completed")
 						channel <- podResult{true, newPod}
 					case corev1.PodRunning:
 						log.WithFields(log.Fields{

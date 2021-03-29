@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	log "github.com/sirupsen/logrus"
+	"github.com/utkuozdemir/pv-migrate/internal/constants"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +16,7 @@ import (
 	"time"
 )
 
-func createSshdService(instance string, kubeClient *kubernetes.Clientset, sourcePvcInfo *k8s.PvcInfo) (*corev1.Service, error) {
+func CreateSshdService(instance string, kubeClient *kubernetes.Clientset, sourcePvcInfo *k8s.PvcInfo) (*corev1.Service, error) {
 	serviceName := "pv-migrate-sshd-" + instance
 	createdService, err := kubeClient.CoreV1().Services(sourcePvcInfo.Claim.Namespace).Create(
 		context.TODO(),
@@ -24,9 +25,9 @@ func createSshdService(instance string, kubeClient *kubernetes.Clientset, source
 				Name:      serviceName,
 				Namespace: sourcePvcInfo.Claim.Namespace,
 				Labels: map[string]string{
-					"app":       "pv-migrate",
-					"component": "sshd",
-					"instance":  instance,
+					constants.AppLabelKey:      constants.AppLabelValue,
+					constants.InstanceLabelKey: instance,
+					"component":                "sshd",
 				},
 			},
 			Spec: corev1.ServiceSpec{
@@ -37,9 +38,9 @@ func createSshdService(instance string, kubeClient *kubernetes.Clientset, source
 					},
 				},
 				Selector: map[string]string{
-					"app":       "pv-migrate",
-					"component": "sshd",
-					"instance":  instance,
+					constants.AppLabelKey:      constants.AppLabelValue,
+					constants.InstanceLabelKey: instance,
+					"component":                "sshd",
 				},
 			},
 		},
@@ -51,7 +52,7 @@ func createSshdService(instance string, kubeClient *kubernetes.Clientset, source
 	return createdService, nil
 }
 
-func createSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod *corev1.Pod) error {
+func CreateSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod *corev1.Pod) error {
 	running := make(chan bool)
 	defer close(running)
 	stopCh := make(chan struct{})
@@ -92,16 +93,16 @@ func createSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod *corev1.
 	return nil
 }
 
-func prepareSshdPod(instance string, sourcePvcInfo *k8s.PvcInfo) *corev1.Pod {
+func PrepareSshdPod(instance string, sourcePvcInfo *k8s.PvcInfo) *corev1.Pod {
 	podName := "pv-migrate-sshd-" + instance
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: sourcePvcInfo.Claim.Namespace,
 			Labels: map[string]string{
-				"app":       "pv-migrate",
-				"component": "sshd",
-				"instance":  instance,
+				constants.AppLabelKey:      constants.AppLabelValue,
+				constants.InstanceLabelKey: instance,
+				"component":                "sshd",
 			},
 		},
 		Spec: corev1.PodSpec{
