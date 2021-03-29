@@ -16,14 +16,15 @@ import (
 	"time"
 )
 
-func CreateSshdService(instance string, kubeClient *kubernetes.Clientset, sourcePvcInfo *k8s.PvcInfo) (*corev1.Service, error) {
+func CreateSshdService(instance string, sourcePvcInfo k8s.PvcInfo) (*corev1.Service, error) {
+	kubeClient := sourcePvcInfo.KubeClient()
 	serviceName := "pv-migrate-sshd-" + instance
-	createdService, err := kubeClient.CoreV1().Services(sourcePvcInfo.Claim.Namespace).Create(
+	createdService, err := kubeClient.CoreV1().Services(sourcePvcInfo.Claim().Namespace).Create(
 		context.TODO(),
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      serviceName,
-				Namespace: sourcePvcInfo.Claim.Namespace,
+				Namespace: sourcePvcInfo.Claim().Namespace,
 				Labels: map[string]string{
 					constants.AppLabelKey:      constants.AppLabelValue,
 					constants.InstanceLabelKey: instance,
@@ -93,12 +94,12 @@ func CreateSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod *corev1.
 	return nil
 }
 
-func PrepareSshdPod(instance string, sourcePvcInfo *k8s.PvcInfo) *corev1.Pod {
+func PrepareSshdPod(instance string, sourcePvcInfo k8s.PvcInfo) *corev1.Pod {
 	podName := "pv-migrate-sshd-" + instance
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: sourcePvcInfo.Claim.Namespace,
+			Namespace: sourcePvcInfo.Claim().Namespace,
 			Labels: map[string]string{
 				constants.AppLabelKey:      constants.AppLabelValue,
 				constants.InstanceLabelKey: instance,
@@ -111,7 +112,7 @@ func PrepareSshdPod(instance string, sourcePvcInfo *k8s.PvcInfo) *corev1.Pod {
 					Name: "source-vol",
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: sourcePvcInfo.Claim.Name,
+							ClaimName: sourcePvcInfo.Claim().Name,
 							ReadOnly:  true,
 						},
 					},
@@ -136,7 +137,7 @@ func PrepareSshdPod(instance string, sourcePvcInfo *k8s.PvcInfo) *corev1.Pod {
 					},
 				},
 			},
-			NodeName: sourcePvcInfo.MountedNode,
+			NodeName: sourcePvcInfo.MountedNode(),
 		},
 	}
 }

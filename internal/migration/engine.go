@@ -18,6 +18,10 @@ type engine struct {
 }
 
 func NewEngine(strategies []Strategy) (Engine, error) {
+	if len(strategies) == 0 {
+		return nil, errors.New("no strategies passed")
+	}
+
 	strategyMap := make(map[string]Strategy)
 	for _, strategy := range strategies {
 		name := strategy.Name()
@@ -33,17 +37,17 @@ func NewEngine(strategies []Strategy) (Engine, error) {
 }
 
 func (e engine) Run(request Request) error {
-	err := e.validate(&request)
+	err := e.validate(request)
 	if err != nil {
 		return err
 	}
 
-	task, err := e.buildTask(&request)
+	task, err := e.buildTask(request)
 	if err != nil {
 		return err
 	}
 
-	strategies := e.determineStrategies(&request, task)
+	strategies := e.determineStrategies(request, task)
 	logger := log.WithFields(request.LogFields())
 
 	numStrategies := len(strategies)
@@ -84,58 +88,54 @@ func (e engine) Run(request Request) error {
 	return errors.New("all strategies have failed")
 }
 
-func (e *engine) validate(request *Request) error {
-	for _, requestStrategy := range request.Strategies {
-		if _, exists := e.strategyMap[requestStrategy]; exists {
-			if !exists {
-				log.WithField("strategy", requestStrategy).Error("Requested strategy not found")
-				return errors.New("requested strategy not found")
-			}
+func (e *engine) validate(request Request) error {
+	for _, requestStrategy := range request.Strategies() {
+		if _, exists := e.strategyMap[requestStrategy]; !exists {
+			log.WithField("strategy", requestStrategy).Error("Requested strategy not found")
+			return errors.New("requested strategy not found")
 		}
 	}
 
 	return nil
 }
 
-func (e *engine) buildTask(request *Request) (*Task, error) {
+func (e *engine) buildTask(request Request) (Task, error) {
 	id := util.RandomHexadecimalString(5)
 
-	var sourceClient, err = k8s.GetK8sClient(request.SourceKubeconfigPath, request.SourceContext)
+	source := request.Source()
+	dest := request.Dest()
+	var sourceClient, err = k8s.GetK8sClient(source.KubeconfigPath(), source.Context())
 	if err != nil {
 		return nil, err
 	}
 
 	var destClient *kubernetes.Clientset
-	if request.SourceKubeconfigPath == request.DestKubeconfigPath && request.SourceContext == request.DestContext {
+	if source.KubeconfigPath() == dest.KubeconfigPath() && source.Context() == dest.Context() {
 		destClient = sourceClient
 	} else {
-		destClient, err = k8s.GetK8sClient(request.DestKubeconfigPath, request.DestContext)
+		destClient, err = k8s.GetK8sClient(dest.KubeconfigPath(), dest.Context())
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	sourcePvcInfo, err := k8s.BuildPvcInfo(sourceClient, request.SourceNamespace, request.SourceName)
+	sourcePvcInfo, err := k8s.BuildPvcInfo(sourceClient, source.Namespace(), source.Name())
 	if err != nil {
 		return nil, err
 	}
 
-	destPvcInfo, err := k8s.BuildPvcInfo(destClient, request.DestNamespace, request.DestName)
+	destPvcInfo, err := k8s.BuildPvcInfo(destClient, dest.Namespace(), dest.Name())
 	if err != nil {
 		return nil, err
 	}
 
-	return &Task{
-		Id:      id,
-		Source:  sourcePvcInfo,
-		Dest:    destPvcInfo,
-		Options: request.Options,
-	}, nil
+	taskOptions := NewTaskOptions(request.Options().DeleteExtraneousFiles())
+	return NewTask(id, sourcePvcInfo, destPvcInfo, taskOptions), nil
 }
 
-func (e *engine) determineStrategies(request *Request, task *Task) []Strategy {
-	if len(request.Strategies) > 0 {
-		return e.findStrategies(request.Strategies)
+func (e *engine) determineStrategies(request Request, task Task) []Strategy {
+	if len(request.Strategies()) > 0 {
+		return e.findStrategies(request.Strategies())
 	}
 
 	var strategies []Strategy
@@ -150,15 +150,6 @@ func (e *engine) determineStrategies(request *Request, task *Task) []Strategy {
 	})
 
 	return strategies
-}
-
-func StrategyNames(strategies []Strategy) []string {
-	var result []string
-	for _, strategy := range strategies {
-		name := strategy.Name()
-		result = append(result, name)
-	}
-	return result
 }
 
 func (e *engine) findStrategies(strategyNames []string) []Strategy {

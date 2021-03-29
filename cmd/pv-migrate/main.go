@@ -44,21 +44,11 @@ func main() {
 		return
 	}
 
-	request := migration.Request{
-		SourceKubeconfigPath: *kubeconfig,
-		SourceContext:        *sourceContext,
-		SourceNamespace:      *sourceNamespace,
-		SourceName:           *source,
-		DestKubeconfigPath:   *kubeconfig,
-		DestContext:          *destContext,
-		DestNamespace:        *destNamespace,
-		DestName:             *dest,
-		Options: migration.RequestOptions{
-			DeleteExtraneousFiles: *deleteExtraneousFromDest,
-		},
-		Strategies: nil, // todo: accept as optional param
-	}
+	sourceRequestPvc := migration.NewRequestPvc(*kubeconfig, *sourceContext, *sourceNamespace, *source)
+	destRequestPvc := migration.NewRequestPvc(*kubeconfig, *destContext, *destNamespace, *dest)
+	requestOptions := migration.NewRequestOptions(*deleteExtraneousFromDest)
 
+	request := migration.NewRequest(sourceRequestPvc, destRequestPvc, requestOptions, nil)
 	logger := log.WithFields(request.LogFields())
 
 	if *deleteExtraneousFromDest {

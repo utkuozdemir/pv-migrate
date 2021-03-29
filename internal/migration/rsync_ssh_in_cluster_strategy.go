@@ -15,13 +15,13 @@ import (
 type RsyncSshInClusterStrategy struct {
 }
 
-func (r *RsyncSshInClusterStrategy) Cleanup(task *Task) error {
+func (r *RsyncSshInClusterStrategy) Cleanup(task Task) error {
 	var result *multierror.Error
-	err := k8s.CleanupForId(task.Source.KubeClient, task.Source.Claim.Namespace, task.Id)
+	err := k8s.CleanupForId(task.Source().KubeClient(), task.Source().Claim().Namespace, task.Id())
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
-	err = k8s.CleanupForId(task.Dest.KubeClient, task.Dest.Claim.Namespace, task.Id)
+	err = k8s.CleanupForId(task.Dest().KubeClient(), task.Dest().Claim().Namespace, task.Id())
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
@@ -37,26 +37,26 @@ func (r *RsyncSshInClusterStrategy) Priority() int {
 	return 2000
 }
 
-func (r *RsyncSshInClusterStrategy) CanDo(task *Task) bool {
-	sameCluster := task.Source.KubeClient == task.Dest.KubeClient
+func (r *RsyncSshInClusterStrategy) CanDo(task Task) bool {
+	sameCluster := task.Source().KubeClient() == task.Dest().KubeClient()
 	return sameCluster
 }
 
-func (r *RsyncSshInClusterStrategy) Run(task *Task) error {
+func (r *RsyncSshInClusterStrategy) Run(task Task) error {
 	if !r.CanDo(task) {
 		return errors.New("cannot do this task using this strategy")
 	}
 
-	instance := task.Id
-	sourcePvcInfo := task.Source
-	sourceKubeClient := task.Source.KubeClient
-	destKubeClient := task.Dest.KubeClient
+	instance := task.Id()
+	sourcePvcInfo := task.Source()
+	sourceKubeClient := task.Source().KubeClient()
+	destKubeClient := task.Dest().KubeClient()
 	sftpPod := rsync.PrepareSshdPod(instance, sourcePvcInfo)
 	err := rsync.CreateSshdPodWaitTillRunning(sourceKubeClient, sftpPod)
 	if err != nil {
 		return err
 	}
-	createdService, err := rsync.CreateSshdService(instance, sourceKubeClient, sourcePvcInfo)
+	createdService, err := rsync.CreateSshdService(instance, sourcePvcInfo)
 	if err != nil {
 		return err
 	}
@@ -73,19 +73,19 @@ func (r *RsyncSshInClusterStrategy) Run(task *Task) error {
 	return nil
 }
 
-func buildRsyncJobOverSsh(task *Task, targetHost string) batchv1.Job {
+func buildRsyncJobOverSsh(task Task, targetHost string) batchv1.Job {
 	jobTtlSeconds := int32(600)
 	backoffLimit := int32(0)
-	instance := task.Id
+	instance := task.Id()
 	jobName := "pv-migrate-rsync-" + instance
-	destPvcInfo := task.Dest
+	destPvcInfo := task.Dest()
 
-	rsyncCommand := rsync.BuildRsyncCommand(task.Options.DeleteExtraneousFiles, &targetHost)
+	rsyncCommand := rsync.BuildRsyncCommand(task.Options().DeleteExtraneousFiles(), &targetHost)
 	log.WithField("rsyncCommand", rsyncCommand).Info("Built rsync command")
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
-			Namespace: destPvcInfo.Claim.Namespace,
+			Namespace: destPvcInfo.Claim().Namespace,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoffLimit,
@@ -94,7 +94,7 @@ func buildRsyncJobOverSsh(task *Task, targetHost string) batchv1.Job {
 
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      jobName,
-					Namespace: destPvcInfo.Claim.Namespace,
+					Namespace: destPvcInfo.Claim().Namespace,
 					Labels: map[string]string{
 						constants.AppLabelKey:      constants.AppLabelValue,
 						constants.InstanceLabelKey: instance,
@@ -107,7 +107,7 @@ func buildRsyncJobOverSsh(task *Task, targetHost string) batchv1.Job {
 							Name: "dest-vol",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: destPvcInfo.Claim.Name,
+									ClaimName: destPvcInfo.Claim().Name,
 								},
 							},
 						},
@@ -126,7 +126,7 @@ func buildRsyncJobOverSsh(task *Task, targetHost string) batchv1.Job {
 							},
 						},
 					},
-					NodeName:      destPvcInfo.MountedNode,
+					NodeName:      destPvcInfo.MountedNode(),
 					RestartPolicy: corev1.RestartPolicyNever,
 				},
 			},

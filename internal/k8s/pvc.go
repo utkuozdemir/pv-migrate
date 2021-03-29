@@ -9,16 +9,49 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type PvcInfo struct {
-	KubeClient  *kubernetes.Clientset
-	Claim       *corev1.PersistentVolumeClaim
-	MountedNode string
-	SupportsRWO bool
-	SupportsROX bool
-	SupportsRWX bool
+type PvcInfo interface {
+	KubeClient() *kubernetes.Clientset
+	Claim() *corev1.PersistentVolumeClaim
+	MountedNode() string
+	SupportsRWO() bool
+	SupportsROX() bool
+	SupportsRWX() bool
 }
 
-func BuildPvcInfo(kubeClient *kubernetes.Clientset, namespace string, name string) (*PvcInfo, error) {
+type pvcInfo struct {
+	kubeClient  *kubernetes.Clientset
+	claim       *corev1.PersistentVolumeClaim
+	mountedNode string
+	supportsRWO bool
+	supportsROX bool
+	supportsRWX bool
+}
+
+func (p *pvcInfo) KubeClient() *kubernetes.Clientset {
+	return p.kubeClient
+}
+
+func (p *pvcInfo) Claim() *corev1.PersistentVolumeClaim {
+	return p.claim
+}
+
+func (p *pvcInfo) MountedNode() string {
+	return p.mountedNode
+}
+
+func (p *pvcInfo) SupportsRWO() bool {
+	return p.supportsRWO
+}
+
+func (p *pvcInfo) SupportsROX() bool {
+	return p.supportsROX
+}
+
+func (p *pvcInfo) SupportsRWX() bool {
+	return p.supportsRWX
+}
+
+func BuildPvcInfo(kubeClient *kubernetes.Clientset, namespace string, name string) (PvcInfo, error) {
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), name, v1.GetOptions{})
 	if err != nil {
 		return nil, err
@@ -44,13 +77,13 @@ func BuildPvcInfo(kubeClient *kubernetes.Clientset, namespace string, name strin
 		}
 	}
 
-	return &PvcInfo{
-		KubeClient:  kubeClient,
-		Claim:       claim,
-		MountedNode: mountedNode,
-		SupportsRWO: supportsRWO,
-		SupportsROX: supportsROX,
-		SupportsRWX: supportsRWX,
+	return &pvcInfo{
+		kubeClient:  kubeClient,
+		claim:       claim,
+		mountedNode: mountedNode,
+		supportsRWO: supportsRWO,
+		supportsROX: supportsROX,
+		supportsRWX: supportsRWX,
 	}, nil
 }
 

@@ -7,7 +7,7 @@ import (
 type RsyncSshCrossClusterStrategy struct {
 }
 
-func (r *RsyncSshCrossClusterStrategy) Cleanup(task *Task) error {
+func (r *RsyncSshCrossClusterStrategy) Cleanup(task Task) error {
 	return errors.New("not implemented") // todo
 }
 
@@ -19,11 +19,11 @@ func (r *RsyncSshCrossClusterStrategy) Priority() int {
 	return 3000
 }
 
-func (r *RsyncSshCrossClusterStrategy) CanDo(task *Task) bool {
+func (r *RsyncSshCrossClusterStrategy) CanDo(task Task) bool {
 	return false // todo
 }
 
-func (r *RsyncSshCrossClusterStrategy) Run(task *Task) error {
+func (r *RsyncSshCrossClusterStrategy) Run(task Task) error {
 	if !r.CanDo(task) {
 		return errors.New("cannot do this task using this strategy")
 	}
