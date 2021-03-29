@@ -1,9 +1,11 @@
 package k8s
 
 import (
+	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	log "github.com/sirupsen/logrus"
+	"io"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -12,6 +14,11 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"time"
 )
+
+type podResult struct {
+	success bool
+	pod     *corev1.Pod
+}
 
 func GetServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) (string, error) {
 	// todo move commented-out logic to cross-cluster rsync code
@@ -36,10 +43,9 @@ func GetServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) (s
 }
 
 func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Job) error {
-	succeeded := make(chan bool)
-	defer close(succeeded)
-	stopCh := make(chan struct{})
-	defer close(stopCh)
+	channel := make(chan podResult)
+	defer close(channel)
+
 	sharedInformerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
 	sharedInformerFactory.Core().V1().Pods().Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
@@ -52,20 +58,22 @@ func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Jo
 							"jobName": job.Name,
 							"podName": newPod.Name,
 						}).Info("Job completed...")
-						succeeded <- true
+						channel <- podResult{true, newPod}
 					case corev1.PodRunning:
 						log.WithFields(log.Fields{
 							"jobName": job.Name,
 							"podName": newPod.Name,
 						}).Info("Job is running ")
 					case corev1.PodFailed, corev1.PodUnknown:
-						succeeded <- false
+						channel <- podResult{false, newPod}
 					}
 				}
 			},
 		},
 	)
 
+	stopCh := make(chan struct{})
+	defer close(stopCh)
 	sharedInformerFactory.Start(stopCh)
 
 	log.WithFields(log.Fields{
@@ -79,8 +87,38 @@ func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Jo
 	log.WithFields(log.Fields{
 		"jobName": job.Name,
 	}).Info("Waiting for rsync job to finish")
-	if !<-succeeded {
-		return errors.New("job did not succeed")
+
+	result := <-channel
+	if !result.success {
+		pod := result.pod
+		logs, err := getPodLogs(kubeClient, pod, 10)
+		if err != nil {
+			return fmt.Errorf("couldn't get logs for the pod of the failed job: %w", err)
+		}
+		return fmt.Errorf("job failed with pod logs: %v", logs)
 	}
 	return nil
+}
+
+func getPodLogs(kubeClient *kubernetes.Clientset, pod *corev1.Pod, lines int64) (string, error) {
+	podLogOpts := corev1.PodLogOptions{
+		TailLines: &lines,
+	}
+	req := kubeClient.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &podLogOpts)
+	podLogs, err := req.Stream(context.TODO())
+	if err != nil {
+		return "", err
+	}
+
+	defer func() {
+		err = podLogs.Close()
+	}()
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, podLogs)
+	if err != nil {
+		return "", err
+	}
+	str := buf.String()
+	return str, nil
 }

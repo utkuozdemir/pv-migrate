@@ -66,14 +66,14 @@ func main() {
 		logger.Warn("delete extraneous files from dest is enabled")
 	}
 
-	err := executeRequest(logger, &request)
+	err := executeRequest(logger, request)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to initialize the engine")
 		return
 	}
 }
 
-func executeRequest(logger *log.Entry, request *migration.Request) error {
+func executeRequest(logger *log.Entry, request migration.Request) error {
 	engine, err := migration.NewEngine(strategies)
 	if err != nil {
 		logger.WithError(err).Error("Failed to initialize the engine")

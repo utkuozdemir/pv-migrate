@@ -10,15 +10,15 @@ import (
 )
 
 type Engine interface {
-	Run(request *Request)
+	Run(request Request) error
 }
 
 type engine struct {
-	strategyMap map[string]*Strategy
+	strategyMap map[string]Strategy
 }
 
-func NewEngine(strategies []Strategy) (*engine, error) {
-	strategyMap := make(map[string]*Strategy)
+func NewEngine(strategies []Strategy) (Engine, error) {
+	strategyMap := make(map[string]Strategy)
 	for _, strategy := range strategies {
 		name := strategy.Name()
 
@@ -26,39 +26,40 @@ func NewEngine(strategies []Strategy) (*engine, error) {
 			return nil, errors.New("duplicate name in strategies")
 		}
 
-		strategyMap[name] = &strategy
+		strategyMap[name] = strategy
 	}
 
-	return &engine{strategyMap: strategyMap}, nil
+	return engine{strategyMap: strategyMap}, nil
 }
 
-func (e *engine) Run(request *Request) error {
-	err := e.validate(request)
+func (e engine) Run(request Request) error {
+	err := e.validate(&request)
 	if err != nil {
 		return err
 	}
 
-	task, err := e.buildTask(request)
+	task, err := e.buildTask(&request)
 	if err != nil {
 		return err
 	}
 
-	strategies := e.determineStrategies(request, task)
+	strategies := e.determineStrategies(&request, task)
 	logger := log.WithFields(request.LogFields())
 
 	if len(strategies) == 0 {
 		return errors.New("no strategy found that can handle the request")
 	}
 
+	strategyNames := getStrategyNames(strategies)
+	logger.WithField("strategies", strategyNames).Info()
 	for _, strategy := range strategies {
-		s := *strategy
 		logger = log.WithFields(log.Fields{
-			"strategy": s.Name(),
-			"priority": s.Priority(),
+			"strategy": strategy.Name(),
+			"priority": strategy.Priority(),
 		})
 
 		logger.Info("Executing strategy")
-		runErr := s.Run(task)
+		runErr := strategy.Run(task)
 		if runErr != nil {
 			logger.WithError(runErr).Warn("Migration failed, will try remaining strategies")
 		} else {
@@ -66,7 +67,7 @@ func (e *engine) Run(request *Request) error {
 		}
 
 		logger.Info("Cleaning up")
-		cleanupErr := s.Cleanup(task)
+		cleanupErr := strategy.Cleanup(task)
 		if cleanupErr != nil {
 			logger.WithError(cleanupErr).Warn("Cleanup failed, you might want to clean up manually")
 		}
@@ -128,27 +129,36 @@ func (e *engine) buildTask(request *Request) (*Task, error) {
 	}, nil
 }
 
-func (e *engine) determineStrategies(request *Request, task *Task) []*Strategy {
+func (e *engine) determineStrategies(request *Request, task *Task) []Strategy {
 	if len(request.Strategies) > 0 {
 		return e.findStrategies(request.Strategies)
 	}
 
-	var strategies []*Strategy
+	var strategies []Strategy
 	for _, strategy := range e.strategyMap {
-		if (*strategy).CanDo(task) {
+		if (strategy).CanDo(task) {
 			strategies = append(strategies, strategy)
 		}
 	}
 
 	sort.Slice(strategies, func(i, j int) bool {
-		return (*strategies[i]).Priority() < (*strategies[j]).Priority()
+		return strategies[i].Priority() < strategies[j].Priority()
 	})
 
 	return strategies
 }
 
-func (e *engine) findStrategies(strategyNames []string) []*Strategy {
-	var strategies []*Strategy
+func getStrategyNames(strategies []Strategy) []string {
+	var result []string
+	for _, strategy := range strategies {
+		name := strategy.Name()
+		result = append(result, name)
+	}
+	return result
+}
+
+func (e *engine) findStrategies(strategyNames []string) []Strategy {
+	var strategies []Strategy
 	for _, strategyName := range strategyNames {
 		strategy := e.strategyMap[strategyName]
 		strategies = append(strategies, strategy)
