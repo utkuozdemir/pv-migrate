@@ -10,7 +10,7 @@ import (
 )
 
 type PvcInfo interface {
-	KubeClient() *kubernetes.Clientset
+	KubeClient() kubernetes.Interface
 	Claim() *corev1.PersistentVolumeClaim
 	MountedNode() string
 	SupportsRWO() bool
@@ -19,7 +19,7 @@ type PvcInfo interface {
 }
 
 type pvcInfo struct {
-	kubeClient  *kubernetes.Clientset
+	kubeClient  kubernetes.Interface
 	claim       *corev1.PersistentVolumeClaim
 	mountedNode string
 	supportsRWO bool
@@ -27,7 +27,7 @@ type pvcInfo struct {
 	supportsRWX bool
 }
 
-func (p *pvcInfo) KubeClient() *kubernetes.Clientset {
+func (p *pvcInfo) KubeClient() kubernetes.Interface {
 	return p.kubeClient
 }
 
@@ -51,7 +51,7 @@ func (p *pvcInfo) SupportsRWX() bool {
 	return p.supportsRWX
 }
 
-func BuildPvcInfo(kubeClient *kubernetes.Clientset, namespace string, name string) (PvcInfo, error) {
+func BuildPvcInfo(kubeClient kubernetes.Interface, namespace string, name string) (PvcInfo, error) {
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), name, v1.GetOptions{})
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func BuildPvcInfo(kubeClient *kubernetes.Clientset, namespace string, name strin
 	}, nil
 }
 
-func findMountedNodeForPvc(kubeClient *kubernetes.Clientset, pvc *corev1.PersistentVolumeClaim) (string, error) {
+func findMountedNodeForPvc(kubeClient kubernetes.Interface, pvc *corev1.PersistentVolumeClaim) (string, error) {
 	podList, err := kubeClient.CoreV1().Pods(pvc.Namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return "", err

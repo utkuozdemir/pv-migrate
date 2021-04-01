@@ -109,7 +109,7 @@ func (e *engine) buildTask(request Request) (Task, error) {
 		return nil, err
 	}
 
-	var destClient *kubernetes.Clientset
+	var destClient kubernetes.Interface
 	if source.KubeconfigPath() == dest.KubeconfigPath() && source.Context() == dest.Context() {
 		destClient = sourceClient
 	} else {

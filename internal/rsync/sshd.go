@@ -53,7 +53,7 @@ func CreateSshdService(instance string, sourcePvcInfo k8s.PvcInfo) (*corev1.Serv
 	return createdService, nil
 }
 
-func CreateSshdPodWaitTillRunning(kubeClient *kubernetes.Clientset, pod *corev1.Pod) error {
+func CreateSshdPodWaitTillRunning(kubeClient kubernetes.Interface, pod *corev1.Pod) error {
 	running := make(chan bool)
 	defer close(running)
 	stopCh := make(chan struct{})

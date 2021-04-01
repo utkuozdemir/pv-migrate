@@ -7,7 +7,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func GetK8sClient(kubeconfigPath string, context string) (*kubernetes.Clientset, error) {
+func GetK8sClient(kubeconfigPath string, context string) (kubernetes.Interface, error) {
 	config, err := buildK8sConfig(kubeconfigPath, context)
 	sourceKubeClient, err := kubernetes.NewForConfig(config)
 	if err != nil {

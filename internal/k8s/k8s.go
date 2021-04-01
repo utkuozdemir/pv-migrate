@@ -20,7 +20,7 @@ type podResult struct {
 	pod     *corev1.Pod
 }
 
-func GetServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) (string, error) {
+func GetServiceAddress(svc *corev1.Service, kubeClient kubernetes.Interface) (string, error) {
 	// todo move commented-out logic to cross-cluster rsync code
 	//if svc.Spec.Type == corev1.ServiceTypeClusterIP {
 	return svc.Name + "." + svc.Namespace, nil
@@ -42,7 +42,7 @@ func GetServiceAddress(svc *corev1.Service, kubeClient *kubernetes.Clientset) (s
 	//}
 }
 
-func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Job) error {
+func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job batchv1.Job) error {
 	channel := make(chan podResult)
 	defer close(channel)
 
@@ -100,7 +100,7 @@ func CreateJobWaitTillCompleted(kubeClient *kubernetes.Clientset, job batchv1.Jo
 	return nil
 }
 
-func getPodLogs(kubeClient *kubernetes.Clientset, pod *corev1.Pod, lines int64) (string, error) {
+func getPodLogs(kubeClient kubernetes.Interface, pod *corev1.Pod, lines int64) (string, error) {
 	podLogOpts := corev1.PodLogOptions{
 		TailLines: &lines,
 	}

@@ -8,7 +8,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func CleanupForId(kubeClient *kubernetes.Clientset, namespace string, id string) error {
+func CleanupForId(kubeClient kubernetes.Interface, namespace string, id string) error {
 	pods := kubeClient.CoreV1().Pods(namespace)
 	jobs := kubeClient.BatchV1().Jobs(namespace)
 	services := kubeClient.CoreV1().Services(namespace)

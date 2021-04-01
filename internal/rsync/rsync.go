@@ -29,7 +29,7 @@ func BuildRsyncCommand(deleteExtraneousFiles bool, sshTargetHost *string) []stri
 	return rsyncCommand
 }
 
-func Cleanup(kubeClient *kubernetes.Clientset, instance string, namespace string) error {
+func Cleanup(kubeClient kubernetes.Interface, instance string, namespace string) error {
 	log.WithFields(log.Fields{
 		"instance":  instance,
 		"namespace": namespace,
