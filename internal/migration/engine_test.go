@@ -213,8 +213,8 @@ func TestRun(t *testing.T) {
 	err := engine.Run(request)
 	assert.Nil(t, err)
 	assert.Len(t, called, 2)
-	assert.Equal(t,"strategy2", called[0])
-	assert.Equal(t,"strategy1", called[1])
+	assert.Equal(t, "strategy2", called[0])
+	assert.Equal(t, "strategy1", called[1])
 }
 
 func testRequest(strategies ...string) Request {
