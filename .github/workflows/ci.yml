@@ -19,7 +19,11 @@ jobs:
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
       - name: Run unit tests
-        run: go test ./...
+        run: go test -v -coverprofile=profile.cov ./...
+      - name: Send coverage
+        uses: shogo82148/actions-goveralls@v1.4.3
+        with:
+          path-to-profile: profile.cov
       - name: Build with Goreleaser
         uses: goreleaser/goreleaser-action@v2.4.1
         with:
