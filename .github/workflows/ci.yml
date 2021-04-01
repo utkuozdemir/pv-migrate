@@ -3,7 +3,17 @@
 name: Continuous Integration
 on:  # yamllint disable-line rule:truthy
   push:
+    paths-ignore:
+      - "**.md"
+      - "docker/**"
+      - "samples/**"
+      - ".gitignore"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docker/**"
+      - "samples/**"
+      - ".gitignore"
 jobs:
   ci:
     runs-on: ubuntu-20.04
