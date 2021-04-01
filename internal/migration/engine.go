@@ -2,6 +2,7 @@ package migration
 
 import (
 	"errors"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
@@ -11,13 +12,22 @@ import (
 
 type Engine interface {
 	Run(request Request) error
+	validate(request Request) error
+	buildTask(request Request) (Task, error)
+	determineStrategies(request Request, task Task) ([]Strategy, error)
+	findStrategies(strategyNames ...string) ([]Strategy, error)
 }
 
 type engine struct {
-	strategyMap map[string]Strategy
+	kubernetesClientProvider k8s.KubernetesClientProvider
+	strategyMap              map[string]Strategy
 }
 
 func NewEngine(strategies []Strategy) (Engine, error) {
+	return NewEngineWithKubernetesClientProvider(strategies, k8s.NewKubernetesClientProvider())
+}
+
+func NewEngineWithKubernetesClientProvider(strategies []Strategy, kubernetesClientProvider k8s.KubernetesClientProvider) (Engine, error) {
 	if len(strategies) == 0 {
 		return nil, errors.New("no strategies passed")
 	}
@@ -33,7 +43,9 @@ func NewEngine(strategies []Strategy) (Engine, error) {
 		strategyMap[name] = strategy
 	}
 
-	return engine{strategyMap: strategyMap}, nil
+	return &engine{
+		kubernetesClientProvider: kubernetesClientProvider,
+		strategyMap:              strategyMap}, nil
 }
 
 func (e engine) Run(request Request) error {
@@ -47,7 +59,11 @@ func (e engine) Run(request Request) error {
 		return err
 	}
 
-	strategies := e.determineStrategies(request, task)
+	strategies, err := e.determineStrategies(request, task)
+	if err != nil {
+		return err
+	}
+
 	logger := log.WithFields(request.LogFields())
 
 	numStrategies := len(strategies)
@@ -104,7 +120,8 @@ func (e *engine) buildTask(request Request) (Task, error) {
 
 	source := request.Source()
 	dest := request.Dest()
-	var sourceClient, err = k8s.GetK8sClient(source.KubeconfigPath(), source.Context())
+	kubernetesClientProvider := e.kubernetesClientProvider
+	var sourceClient, err = kubernetesClientProvider.GetKubernetesClient(source.KubeconfigPath(), source.Context())
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +130,7 @@ func (e *engine) buildTask(request Request) (Task, error) {
 	if source.KubeconfigPath() == dest.KubeconfigPath() && source.Context() == dest.Context() {
 		destClient = sourceClient
 	} else {
-		destClient, err = k8s.GetK8sClient(dest.KubeconfigPath(), dest.Context())
+		destClient, err = kubernetesClientProvider.GetKubernetesClient(dest.KubeconfigPath(), dest.Context())
 		if err != nil {
 			return nil, err
 		}
@@ -133,9 +150,9 @@ func (e *engine) buildTask(request Request) (Task, error) {
 	return NewTask(id, sourcePvcInfo, destPvcInfo, taskOptions), nil
 }
 
-func (e *engine) determineStrategies(request Request, task Task) []Strategy {
+func (e *engine) determineStrategies(request Request, task Task) ([]Strategy, error) {
 	if len(request.Strategies()) > 0 {
-		return e.findStrategies(request.Strategies())
+		return e.findStrategies(request.Strategies()...)
 	}
 
 	var strategies []Strategy
@@ -149,15 +166,18 @@ func (e *engine) determineStrategies(request Request, task Task) []Strategy {
 		return strategies[i].Priority() < strategies[j].Priority()
 	})
 
-	return strategies
+	return strategies, nil
 }
 
-func (e *engine) findStrategies(strategyNames []string) []Strategy {
+func (e *engine) findStrategies(strategyNames ...string) ([]Strategy, error) {
 	var strategies []Strategy
 	for _, strategyName := range strategyNames {
-		strategy := e.strategyMap[strategyName]
+		strategy, exists := e.strategyMap[strategyName]
+		if !exists {
+			return nil, fmt.Errorf("strategy not found: %v", strategyName)
+		}
 		strategies = append(strategies, strategy)
 	}
 
-	return strategies
+	return strategies, nil
 }

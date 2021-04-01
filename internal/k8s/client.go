@@ -7,14 +7,24 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func GetK8sClient(kubeconfigPath string, context string) (kubernetes.Interface, error) {
+type KubernetesClientProvider interface {
+	GetKubernetesClient(kubeconfigPath string, context string) (kubernetes.Interface, error)
+}
+
+type kubernetesClientProvider struct {
+}
+
+func (k *kubernetesClientProvider) GetKubernetesClient(kubeconfigPath string, context string) (kubernetes.Interface, error) {
 	config, err := buildK8sConfig(kubeconfigPath, context)
-	sourceKubeClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		log.WithError(err).Error("Error building kubernetes client")
 		return nil, err
 	}
-	return sourceKubeClient, nil
+	return kubernetes.NewForConfig(config)
+}
+
+func NewKubernetesClientProvider() KubernetesClientProvider {
+	return &kubernetesClientProvider{}
 }
 
 func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config, error) {
@@ -25,14 +35,9 @@ func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config, error)
 		clientConfigLoadingRules = &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath}
 	}
 
-	config, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientConfigLoadingRules,
 		&clientcmd.ConfigOverrides{
 			CurrentContext: context,
 		}).ClientConfig()
-	if err != nil {
-		log.WithError(err).Error("Error building kubernetes config")
-		return nil, err
-	}
-	return config, err
 }
