@@ -1,7 +1,6 @@
 package k8s
 
 import (
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -17,7 +16,6 @@ type kubernetesClientProvider struct {
 func (k *kubernetesClientProvider) GetKubernetesClient(kubeconfigPath string, context string) (kubernetes.Interface, error) {
 	config, err := buildK8sConfig(kubeconfigPath, context)
 	if err != nil {
-		log.WithError(err).Error("Error building kubernetes client")
 		return nil, err
 	}
 	return kubernetes.NewForConfig(config)
