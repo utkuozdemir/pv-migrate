@@ -12,17 +12,13 @@ import (
 var testKubeconfig string
 
 func TestBuildK8sConfig(t *testing.T) {
-	config, err := buildK8sConfig("", "")
-	assert.Nil(t, err)
-	assert.NotNil(t, config)
-
 	testConfig, _ := ioutil.TempFile("", "pv-migrate-testconfig-*.yaml")
 	_, _ = testConfig.WriteString(testKubeconfig)
 	defer func() {
 		_ = os.Remove(testConfig.Name())
 	}()
 
-	config, err = buildK8sConfig(testConfig.Name(), "")
+	config, err := buildK8sConfig(testConfig.Name(), "")
 	assert.Nil(t, err)
 	assert.NotNil(t, config)
 	config, err = buildK8sConfig(testConfig.Name(), "context-2")
