@@ -1,12 +1,12 @@
 ---
 # Used ahmetb/kubectx as reference: https://github.com/ahmetb/kubectx
-name: Release
+name: release
 on:  # yamllint disable-line rule:truthy
   push:
     tags:
       - 'v*.*.*'
 jobs:
-  goreleaser:
+  release:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
