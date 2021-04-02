@@ -1,6 +1,6 @@
 ---
 # Used ahmetb/kubectx as reference: https://github.com/ahmetb/kubectx
-name: Continuous Integration
+name: build
 on:  # yamllint disable-line rule:truthy
   push:
     paths-ignore:
@@ -15,7 +15,7 @@ on:  # yamllint disable-line rule:truthy
       - "samples/**"
       - ".gitignore"
 jobs:
-  ci:
+  build:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
