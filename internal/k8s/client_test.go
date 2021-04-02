@@ -1,7 +1,7 @@
 package k8s
 
 import (
-     _ "embed"
+	_ "embed"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"

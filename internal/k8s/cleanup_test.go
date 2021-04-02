@@ -15,7 +15,7 @@ func TestCleanupForIdServiceDeleted(t *testing.T) {
 	id := "a1b2c"
 	svc1 := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "svc1",
+			Name:      "svc1",
 			Namespace: "namespace1",
 			Labels: map[string]string{
 				constants.AppLabelKey:      constants.AppLabelValue,
@@ -36,7 +36,7 @@ func TestCleanupForIdOtherServicesNotDeleted(t *testing.T) {
 	id := "a1b2c"
 	svc1 := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "svc1",
+			Name:      "svc1",
 			Namespace: "namespace1",
 			Labels: map[string]string{
 				constants.AppLabelKey:      constants.AppLabelValue,
@@ -47,18 +47,17 @@ func TestCleanupForIdOtherServicesNotDeleted(t *testing.T) {
 
 	svc2 := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "svc2",
+			Name:      "svc2",
 			Namespace: "namespace1",
 		},
 	}
 
 	svc3 := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "svc3",
+			Name:      "svc3",
 			Namespace: "namespace3",
 		},
 	}
-
 
 	kubeClient := fake.NewSimpleClientset(&svc1, &svc2, &svc3)
 	err := CleanupForId(kubeClient, "namespace1", id)
@@ -85,7 +84,7 @@ func TestCleanupForIdNoError(t *testing.T) {
 
 	job1 := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "job1",
+			Name:      "job1",
 			Namespace: "namespace1",
 			Labels: map[string]string{
 				constants.AppLabelKey:      constants.AppLabelValue,
@@ -96,7 +95,7 @@ func TestCleanupForIdNoError(t *testing.T) {
 
 	svc1 := v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "svc1",
+			Name:      "svc1",
 			Namespace: "namespace1",
 			Labels: map[string]string{
 				constants.AppLabelKey:      constants.AppLabelValue,
@@ -109,5 +108,3 @@ func TestCleanupForIdNoError(t *testing.T) {
 	err := CleanupForId(kubeClient, "namespace1", id)
 	assert.Nil(t, err)
 }
-
-
