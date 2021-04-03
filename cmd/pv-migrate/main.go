@@ -3,7 +3,12 @@ package main
 import (
 	"flag"
 	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/migration"
+	"github.com/utkuozdemir/pv-migrate/internal/engine"
+	"github.com/utkuozdemir/pv-migrate/internal/mountboth"
+	"github.com/utkuozdemir/pv-migrate/internal/request"
+	"github.com/utkuozdemir/pv-migrate/internal/rsyncsshcrosscluster"
+	"github.com/utkuozdemir/pv-migrate/internal/rsyncsshincluster"
+	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"math/rand"
 	"os"
 	"time"
@@ -12,10 +17,10 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
-var strategies = []migration.Strategy{
-	&migration.MountBothStrategy{},
-	&migration.RsyncSshInClusterStrategy{},
-	&migration.RsyncSshCrossClusterStrategy{},
+var strategies = []strategy.Strategy{
+	&mountboth.MountBoth{},
+	&rsyncsshincluster.RsyncSshInCluster{},
+	&rsyncsshcrosscluster.RsyncSshCrossCluster{},
 }
 
 func init() {
@@ -44,11 +49,11 @@ func main() {
 		return
 	}
 
-	sourceRequestPvc := migration.NewRequestPvc(*kubeconfig, *sourceContext, *sourceNamespace, *source)
-	destRequestPvc := migration.NewRequestPvc(*kubeconfig, *destContext, *destNamespace, *dest)
-	requestOptions := migration.NewRequestOptions(*deleteExtraneousFromDest)
+	sourceRequestPvc := request.NewPvc(*kubeconfig, *sourceContext, *sourceNamespace, *source)
+	destRequestPvc := request.NewPvc(*kubeconfig, *destContext, *destNamespace, *dest)
+	requestOptions := request.NewOptions(*deleteExtraneousFromDest)
 
-	request := migration.NewRequest(sourceRequestPvc, destRequestPvc, requestOptions, nil)
+	request := request.New(sourceRequestPvc, destRequestPvc, requestOptions, nil)
 	logger := log.WithFields(request.LogFields())
 
 	if *deleteExtraneousFromDest {
@@ -62,15 +67,15 @@ func main() {
 	}
 }
 
-func executeRequest(logger *log.Entry, request migration.Request) error {
-	engine, err := migration.NewEngine(strategies)
+func executeRequest(logger *log.Entry, request request.Request) error {
+	engine, err := engine.New(strategies)
 	if err != nil {
 		logger.WithError(err).Error("Failed to initialize the engine")
 		return err
 	}
 
 	numStrategies := len(strategies)
-	strategyNames := migration.StrategyNames(strategies)
+	strategyNames := strategy.Names(strategies)
 	logger.WithField("strategies", strategyNames).Infof("Engine initialized with %v total strategies", numStrategies)
 
 	err = engine.Run(request)

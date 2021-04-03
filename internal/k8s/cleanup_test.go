@@ -3,7 +3,7 @@ package k8s
 import (
 	"context"
 	"github.com/stretchr/testify/assert"
-	"github.com/utkuozdemir/pv-migrate/internal/constants"
+	"github.com/utkuozdemir/pv-migrate/internal/common"
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,8 +18,8 @@ func TestCleanupForIdServiceDeleted(t *testing.T) {
 			Name:      "svc1",
 			Namespace: "namespace1",
 			Labels: map[string]string{
-				constants.AppLabelKey:      constants.AppLabelValue,
-				constants.InstanceLabelKey: id,
+				common.AppLabelKey:      common.AppLabelValue,
+				common.InstanceLabelKey: id,
 			},
 		},
 	}
@@ -39,8 +39,8 @@ func TestCleanupForIdOtherServicesNotDeleted(t *testing.T) {
 			Name:      "svc1",
 			Namespace: "namespace1",
 			Labels: map[string]string{
-				constants.AppLabelKey:      constants.AppLabelValue,
-				constants.InstanceLabelKey: "x1y1z",
+				common.AppLabelKey:      common.AppLabelValue,
+				common.InstanceLabelKey: "x1y1z",
 			},
 		},
 	}
@@ -76,8 +76,8 @@ func TestCleanupForIdNoError(t *testing.T) {
 			Name:      "pod1",
 			Namespace: "namespace1",
 			Labels: map[string]string{
-				constants.AppLabelKey:      constants.AppLabelValue,
-				constants.InstanceLabelKey: id,
+				common.AppLabelKey:      common.AppLabelValue,
+				common.InstanceLabelKey: id,
 			},
 		},
 	}
@@ -87,8 +87,8 @@ func TestCleanupForIdNoError(t *testing.T) {
 			Name:      "job1",
 			Namespace: "namespace1",
 			Labels: map[string]string{
-				constants.AppLabelKey:      constants.AppLabelValue,
-				constants.InstanceLabelKey: id,
+				common.AppLabelKey:      common.AppLabelValue,
+				common.InstanceLabelKey: id,
 			},
 		},
 	}
@@ -98,8 +98,8 @@ func TestCleanupForIdNoError(t *testing.T) {
 			Name:      "svc1",
 			Namespace: "namespace1",
 			Labels: map[string]string{
-				constants.AppLabelKey:      constants.AppLabelValue,
-				constants.InstanceLabelKey: id,
+				common.AppLabelKey:      common.AppLabelValue,
+				common.InstanceLabelKey: id,
 			},
 		},
 	}

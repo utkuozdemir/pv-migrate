@@ -1,4 +1,4 @@
-package k8s
+package pvc
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type PvcInfo interface {
+type Info interface {
 	KubeClient() kubernetes.Interface
 	Claim() *corev1.PersistentVolumeClaim
 	MountedNode() string
@@ -17,7 +17,7 @@ type PvcInfo interface {
 	SupportsRWX() bool
 }
 
-type pvcInfo struct {
+type info struct {
 	kubeClient  kubernetes.Interface
 	claim       *corev1.PersistentVolumeClaim
 	mountedNode string
@@ -26,37 +26,37 @@ type pvcInfo struct {
 	supportsRWX bool
 }
 
-func (p *pvcInfo) KubeClient() kubernetes.Interface {
+func (p *info) KubeClient() kubernetes.Interface {
 	return p.kubeClient
 }
 
-func (p *pvcInfo) Claim() *corev1.PersistentVolumeClaim {
+func (p *info) Claim() *corev1.PersistentVolumeClaim {
 	return p.claim
 }
 
-func (p *pvcInfo) MountedNode() string {
+func (p *info) MountedNode() string {
 	return p.mountedNode
 }
 
-func (p *pvcInfo) SupportsRWO() bool {
+func (p *info) SupportsRWO() bool {
 	return p.supportsRWO
 }
 
-func (p *pvcInfo) SupportsROX() bool {
+func (p *info) SupportsROX() bool {
 	return p.supportsROX
 }
 
-func (p *pvcInfo) SupportsRWX() bool {
+func (p *info) SupportsRWX() bool {
 	return p.supportsRWX
 }
 
-func BuildPvcInfo(kubeClient kubernetes.Interface, namespace string, name string) (PvcInfo, error) {
+func New(kubeClient kubernetes.Interface, namespace string, name string) (Info, error) {
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	mountedNode, err := findMountedNodeForPvc(kubeClient, claim)
+	mountedNode, err := findMountedNode(kubeClient, claim)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +76,7 @@ func BuildPvcInfo(kubeClient kubernetes.Interface, namespace string, name string
 		}
 	}
 
-	return &pvcInfo{
+	return &info{
 		kubeClient:  kubeClient,
 		claim:       claim,
 		mountedNode: mountedNode,
@@ -86,7 +86,7 @@ func BuildPvcInfo(kubeClient kubernetes.Interface, namespace string, name string
 	}, nil
 }
 
-func findMountedNodeForPvc(kubeClient kubernetes.Interface, pvc *corev1.PersistentVolumeClaim) (string, error) {
+func findMountedNode(kubeClient kubernetes.Interface, pvc *corev1.PersistentVolumeClaim) (string, error) {
 	podList, err := kubeClient.CoreV1().Pods(pvc.Namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return "", err

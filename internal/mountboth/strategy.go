@@ -1,32 +1,33 @@
-package migration
+package mountboth
 
 import (
 	"errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/constants"
+	"github.com/utkuozdemir/pv-migrate/internal/common"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
+	"github.com/utkuozdemir/pv-migrate/internal/task"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type MountBothStrategy struct {
+type MountBoth struct {
 }
 
-func (r *MountBothStrategy) Cleanup(task Task) error {
+func (r *MountBoth) Cleanup(task task.Task) error {
 	return k8s.CleanupForId(task.Source().KubeClient(), task.Source().Claim().Namespace, task.Id())
 }
 
-func (r *MountBothStrategy) Name() string {
+func (r *MountBoth) Name() string {
 	return "mount-both"
 }
 
-func (r *MountBothStrategy) Priority() int {
+func (r *MountBoth) Priority() int {
 	return 1000
 }
 
-func (r *MountBothStrategy) CanDo(task Task) bool {
+func (r *MountBoth) CanDo(task task.Task) bool {
 	sameCluster := task.Source().KubeClient() == task.Dest().KubeClient()
 	if !sameCluster {
 		return false
@@ -41,7 +42,7 @@ func (r *MountBothStrategy) CanDo(task Task) bool {
 	return sameNode || task.Source().SupportsROX() || task.Source().SupportsRWX() || task.Dest().SupportsRWX()
 }
 
-func (r *MountBothStrategy) Run(task Task) error {
+func (r *MountBoth) Run(task task.Task) error {
 	if !r.CanDo(task) {
 		return errors.New("cannot do this task using this strategy")
 	}
@@ -51,7 +52,7 @@ func (r *MountBothStrategy) Run(task Task) error {
 	return k8s.CreateJobWaitTillCompleted(task.Source().KubeClient(), job)
 }
 
-func determineTargetNode(task Task) string {
+func determineTargetNode(task task.Task) string {
 	if (task.Source().SupportsROX() || task.Source().SupportsRWX()) && task.Dest().SupportsRWX() {
 		return ""
 	}
@@ -61,7 +62,7 @@ func determineTargetNode(task Task) string {
 	return task.Dest().MountedNode()
 }
 
-func buildRsyncJob(task Task, node string) batchv1.Job {
+func buildRsyncJob(task task.Task, node string) batchv1.Job {
 	jobTtlSeconds := int32(600)
 	backoffLimit := int32(0)
 	instance := task.Id()
@@ -82,8 +83,8 @@ func buildRsyncJob(task Task, node string) batchv1.Job {
 					Name:      jobName,
 					Namespace: task.Dest().Claim().Namespace,
 					Labels: map[string]string{
-						constants.AppLabelKey:      constants.AppLabelValue,
-						constants.InstanceLabelKey: instance,
+						common.AppLabelKey:      common.AppLabelValue,
+						common.InstanceLabelKey: instance,
 					},
 				},
 				Spec: corev1.PodSpec{

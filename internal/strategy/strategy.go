@@ -1,4 +1,8 @@
-package migration
+package strategy
+
+import (
+	"github.com/utkuozdemir/pv-migrate/internal/task"
+)
 
 type Strategy interface {
 	// Unique name of the strategy.
@@ -16,12 +20,12 @@ type Strategy interface {
 	// True if this strategy can execute the task.
 	//
 	// Needs to evaluate the input and return if it can execute the task or not.
-	CanDo(task Task) bool
+	CanDo(task task.Task) bool
 
 	// Execute the migration for the given task.
 	//
 	// Actual implementation of the migration.
-	Run(task Task) error
+	Run(task task.Task) error
 
 	// Clean up the created resources.
 	//
@@ -29,10 +33,10 @@ type Strategy interface {
 	// It is recommended to implement this as best-effort, meaning that if it fails to remove one resource,
 	// it shouldn't immediately return but proceed with the cleanup and
 	// return all of the encountered errors combined at the end.
-	Cleanup(task Task) error
+	Cleanup(task task.Task) error
 }
 
-func StrategyNames(strategies []Strategy) []string {
+func Names(strategies []Strategy) []string {
 	var result []string
 	for _, strategy := range strategies {
 		name := strategy.Name()

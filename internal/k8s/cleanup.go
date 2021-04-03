@@ -3,7 +3,7 @@ package k8s
 import (
 	"context"
 	"github.com/hashicorp/go-multierror"
-	"github.com/utkuozdemir/pv-migrate/internal/constants"
+	"github.com/utkuozdemir/pv-migrate/internal/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -13,7 +13,7 @@ func CleanupForId(kubeClient kubernetes.Interface, namespace string, id string) 
 	jobs := kubeClient.BatchV1().Jobs(namespace)
 	services := kubeClient.CoreV1().Services(namespace)
 	deleteOptions := metav1.DeleteOptions{}
-	labelSelector := constants.LabelSelectorPrefix + id
+	labelSelector := common.LabelSelectorPrefix + id
 	listOptions := metav1.ListOptions{
 		LabelSelector: labelSelector,
 	}

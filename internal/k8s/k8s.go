@@ -20,7 +20,7 @@ type podResult struct {
 	pod     *corev1.Pod
 }
 
-func GetServiceAddress(svc *corev1.Service, kubeClient kubernetes.Interface) (string, error) {
+func GetServiceAddress(svc *corev1.Service, _ kubernetes.Interface) (string, error) {
 	// todo move commented-out logic to cross-cluster rsync code
 	//if svc.Spec.Type == corev1.ServiceTypeClusterIP {
 	return svc.Name + "." + svc.Namespace, nil

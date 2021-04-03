@@ -1,39 +1,39 @@
-package migration
+package request
 
 import log "github.com/sirupsen/logrus"
 
-type RequestPvc interface {
+type PVC interface {
 	KubeconfigPath() string
 	Context() string
 	Namespace() string
 	Name() string
 }
 
-type requestPvc struct {
+type pvc struct {
 	kubeconfigPath string
 	context        string
 	namespace      string
 	name           string
 }
 
-func (r *requestPvc) KubeconfigPath() string {
+func (r *pvc) KubeconfigPath() string {
 	return r.kubeconfigPath
 }
 
-func (r *requestPvc) Context() string {
+func (r *pvc) Context() string {
 	return r.context
 }
 
-func (r *requestPvc) Namespace() string {
+func (r *pvc) Namespace() string {
 	return r.namespace
 }
 
-func (r *requestPvc) Name() string {
+func (r *pvc) Name() string {
 	return r.name
 }
 
-func NewRequestPvc(kubeconfigPath string, context string, namespace string, name string) RequestPvc {
-	return &requestPvc{
+func NewPvc(kubeconfigPath string, context string, namespace string, name string) PVC {
+	return &pvc{
 		kubeconfigPath: kubeconfigPath,
 		context:        context,
 		namespace:      namespace,
@@ -42,29 +42,29 @@ func NewRequestPvc(kubeconfigPath string, context string, namespace string, name
 }
 
 type Request interface {
-	Source() RequestPvc
-	Dest() RequestPvc
-	Options() RequestOptions
+	Source() PVC
+	Dest() PVC
+	Options() Options
 	Strategies() []string
 	LogFields() log.Fields
 }
 
 type request struct {
-	source     RequestPvc
-	dest       RequestPvc
-	options    RequestOptions
+	source     PVC
+	dest       PVC
+	options    Options
 	strategies []string
 }
 
-func (r *request) Source() RequestPvc {
+func (r *request) Source() PVC {
 	return r.source
 }
 
-func (r *request) Dest() RequestPvc {
+func (r *request) Dest() PVC {
 	return r.dest
 }
 
-func (r *request) Options() RequestOptions {
+func (r *request) Options() Options {
 	return r.options
 }
 
@@ -79,7 +79,7 @@ func (r *request) LogFields() log.Fields {
 	}
 }
 
-func NewRequest(source RequestPvc, dest RequestPvc, options RequestOptions, strategies []string) Request {
+func New(source PVC, dest PVC, options Options, strategies []string) Request {
 	return &request{
 		source:     source,
 		dest:       dest,
@@ -88,18 +88,18 @@ func NewRequest(source RequestPvc, dest RequestPvc, options RequestOptions, stra
 	}
 }
 
-type RequestOptions interface {
+type Options interface {
 	DeleteExtraneousFiles() bool
 }
 
-type requestOptions struct {
+type options struct {
 	deleteExtraneousFiles bool
 }
 
-func NewRequestOptions(deleteExtraneousFiles bool) RequestOptions {
-	return &requestOptions{deleteExtraneousFiles: deleteExtraneousFiles}
+func NewOptions(deleteExtraneousFiles bool) Options {
+	return &options{deleteExtraneousFiles: deleteExtraneousFiles}
 }
 
-func (r *requestOptions) DeleteExtraneousFiles() bool {
+func (r *options) DeleteExtraneousFiles() bool {
 	return r.deleteExtraneousFiles
 }

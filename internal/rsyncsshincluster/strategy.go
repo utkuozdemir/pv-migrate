@@ -1,21 +1,22 @@
-package migration
+package rsyncsshincluster
 
 import (
 	"errors"
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/constants"
+	"github.com/utkuozdemir/pv-migrate/internal/common"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
+	"github.com/utkuozdemir/pv-migrate/internal/task"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type RsyncSshInClusterStrategy struct {
+type RsyncSshInCluster struct {
 }
 
-func (r *RsyncSshInClusterStrategy) Cleanup(task Task) error {
+func (r *RsyncSshInCluster) Cleanup(task task.Task) error {
 	var result *multierror.Error
 	err := k8s.CleanupForId(task.Source().KubeClient(), task.Source().Claim().Namespace, task.Id())
 	if err != nil {
@@ -29,20 +30,20 @@ func (r *RsyncSshInClusterStrategy) Cleanup(task Task) error {
 	return result.ErrorOrNil()
 }
 
-func (r *RsyncSshInClusterStrategy) Name() string {
+func (r *RsyncSshInCluster) Name() string {
 	return "rsync-ssh-in-cluster"
 }
 
-func (r *RsyncSshInClusterStrategy) Priority() int {
+func (r *RsyncSshInCluster) Priority() int {
 	return 2000
 }
 
-func (r *RsyncSshInClusterStrategy) CanDo(task Task) bool {
+func (r *RsyncSshInCluster) CanDo(task task.Task) bool {
 	sameCluster := task.Source().KubeClient() == task.Dest().KubeClient()
 	return sameCluster
 }
 
-func (r *RsyncSshInClusterStrategy) Run(task Task) error {
+func (r *RsyncSshInCluster) Run(task task.Task) error {
 	if !r.CanDo(task) {
 		return errors.New("cannot do this task using this strategy")
 	}
@@ -73,7 +74,7 @@ func (r *RsyncSshInClusterStrategy) Run(task Task) error {
 	return nil
 }
 
-func buildRsyncJobOverSsh(task Task, targetHost string) batchv1.Job {
+func buildRsyncJobOverSsh(task task.Task, targetHost string) batchv1.Job {
 	jobTtlSeconds := int32(600)
 	backoffLimit := int32(0)
 	instance := task.Id()
@@ -96,9 +97,9 @@ func buildRsyncJobOverSsh(task Task, targetHost string) batchv1.Job {
 					Name:      jobName,
 					Namespace: destPvcInfo.Claim().Namespace,
 					Labels: map[string]string{
-						constants.AppLabelKey:      constants.AppLabelValue,
-						constants.InstanceLabelKey: instance,
-						"component":                "rsync",
+						common.AppLabelKey:      common.AppLabelValue,
+						common.InstanceLabelKey: instance,
+						"component":             "rsync",
 					},
 				},
 				Spec: corev1.PodSpec{
