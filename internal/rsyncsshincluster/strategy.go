@@ -66,7 +66,7 @@ func (r *RsyncSshInCluster) Run(task task.Task) error {
 		return err
 	}
 	log.Infof("use service address %s to connect to rsync server", targetServiceAddress)
-	rsyncJob := buildRsyncJobOverSsh(task, targetServiceAddress)
+	rsyncJob := buildRsyncJob(task, targetServiceAddress)
 	err = k8s.CreateJobWaitTillCompleted(destKubeClient, rsyncJob)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func (r *RsyncSshInCluster) Run(task task.Task) error {
 	return nil
 }
 
-func buildRsyncJobOverSsh(task task.Task, targetHost string) batchv1.Job {
+func buildRsyncJob(task task.Task, targetHost string) batchv1.Job {
 	jobTtlSeconds := int32(600)
 	backoffLimit := int32(0)
 	instance := task.Id()
