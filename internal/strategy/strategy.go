@@ -36,6 +36,7 @@ type Strategy interface {
 	Cleanup(task task.Task) error
 }
 
+// Names extracts a slice of names of the given strategies.
 func Names(strategies []Strategy) []string {
 	var result []string
 	for _, strategy := range strategies {

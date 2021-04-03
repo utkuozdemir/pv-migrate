@@ -16,7 +16,7 @@ type MountBoth struct {
 }
 
 func (r *MountBoth) Cleanup(task task.Task) error {
-	return k8s.CleanupForId(task.Source().KubeClient(), task.Source().Claim().Namespace, task.Id())
+	return k8s.CleanupForID(task.Source().KubeClient(), task.Source().Claim().Namespace, task.ID())
 }
 
 func (r *MountBoth) Name() string {
@@ -63,9 +63,9 @@ func determineTargetNode(task task.Task) string {
 }
 
 func buildRsyncJob(task task.Task, node string) batchv1.Job {
-	jobTtlSeconds := int32(600)
+	jobTTLSeconds := int32(600)
 	backoffLimit := int32(0)
-	instance := task.Id()
+	instance := task.ID()
 	jobName := "pv-migrate-rsync-" + instance
 	rsyncCommand := rsync.BuildRsyncCommand(task.Options().DeleteExtraneousFiles(), nil)
 	log.WithField("rsyncCommand", rsyncCommand).Info("Built rsync command")
@@ -76,7 +76,7 @@ func buildRsyncJob(task task.Task, node string) batchv1.Job {
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoffLimit,
-			TTLSecondsAfterFinished: &jobTtlSeconds,
+			TTLSecondsAfterFinished: &jobTTLSeconds,
 			Template: corev1.PodTemplateSpec{
 
 				ObjectMeta: metav1.ObjectMeta{

@@ -25,7 +25,7 @@ func TestCleanupForIdServiceDeleted(t *testing.T) {
 	}
 
 	kubeClient := fake.NewSimpleClientset(&svc1)
-	err := CleanupForId(kubeClient, "namespace1", id)
+	err := CleanupForID(kubeClient, "namespace1", id)
 	assert.Nil(t, err)
 
 	services, _ := kubeClient.CoreV1().Services("namespace1").List(context.TODO(), metav1.ListOptions{})
@@ -60,7 +60,7 @@ func TestCleanupForIdOtherServicesNotDeleted(t *testing.T) {
 	}
 
 	kubeClient := fake.NewSimpleClientset(&svc1, &svc2, &svc3)
-	err := CleanupForId(kubeClient, "namespace1", id)
+	err := CleanupForID(kubeClient, "namespace1", id)
 	assert.Nil(t, err)
 
 	services, _ := kubeClient.CoreV1().Services("").List(context.TODO(), metav1.ListOptions{})
@@ -105,6 +105,6 @@ func TestCleanupForIdNoError(t *testing.T) {
 	}
 
 	kubeClient := fake.NewSimpleClientset(&pod1, &job1, &svc1)
-	err := CleanupForId(kubeClient, "namespace1", id)
+	err := CleanupForID(kubeClient, "namespace1", id)
 	assert.Nil(t, err)
 }

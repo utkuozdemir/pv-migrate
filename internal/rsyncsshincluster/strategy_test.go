@@ -15,7 +15,7 @@ func TestCanDoSameCluster(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := RsyncSshInCluster{}
+	strategy := RsyncSSSHInCluster{}
 	strategies := []strategy2.Strategy{&strategy}
 	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PvcWithAccessModes("namespace2", "pvc2", v1.ReadWriteOnce)
@@ -23,8 +23,8 @@ func TestCanDoSameCluster(t *testing.T) {
 	podB := test.Pod("namespace2", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPvc(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPvc(kubeconfig, "context1", "namespace2", "pvc2")
+	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request2.NewPVC(kubeconfig, "context1", "namespace2", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
 	task, _ := e.BuildTask(request)
 	canDo := strategy.CanDo(task)
@@ -35,7 +35,7 @@ func TestCannotDoDifferentContext(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := RsyncSshInCluster{}
+	strategy := RsyncSSSHInCluster{}
 	strategies := []strategy2.Strategy{&strategy}
 	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
@@ -43,8 +43,8 @@ func TestCannotDoDifferentContext(t *testing.T) {
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPvc(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPvc(kubeconfig, "context2", "namespace1", "pvc2")
+	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request2.NewPVC(kubeconfig, "context2", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
 	task, _ := e.BuildTask(request)
 	canDo := strategy.CanDo(task)
@@ -58,7 +58,7 @@ func TestCannotDoDifferentKubeconfigs(t *testing.T) {
 	kubeconfig2 := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig2)
 
-	strategy := RsyncSshInCluster{}
+	strategy := RsyncSSSHInCluster{}
 	strategies := []strategy2.Strategy{&strategy}
 	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
@@ -66,8 +66,8 @@ func TestCannotDoDifferentKubeconfigs(t *testing.T) {
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPvc(kubeconfig1, "context1", "namespace1", "pvc1")
-	dest := request2.NewPvc(kubeconfig2, "context1", "namespace1", "pvc2")
+	source := request2.NewPVC(kubeconfig1, "context1", "namespace1", "pvc1")
+	dest := request2.NewPVC(kubeconfig2, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
 	task, _ := e.BuildTask(request)
 	canDo := strategy.CanDo(task)
@@ -75,14 +75,14 @@ func TestCannotDoDifferentKubeconfigs(t *testing.T) {
 }
 
 func TestNameConstant(t *testing.T) {
-	strategy := RsyncSshInCluster{}
+	strategy := RsyncSSSHInCluster{}
 	name1 := strategy.Name()
 	name2 := strategy.Name()
 	assert.Equal(t, name1, name2)
 }
 
 func TestPriorityConstant(t *testing.T) {
-	strategy := RsyncSshInCluster{}
+	strategy := RsyncSSSHInCluster{}
 	priority1 := strategy.Priority()
 	priority2 := strategy.Priority()
 	assert.Equal(t, priority1, priority2)
@@ -92,7 +92,7 @@ func TestBuildRsyncJob(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := RsyncSshInCluster{}
+	strategy := RsyncSSSHInCluster{}
 	strategies := []strategy2.Strategy{&strategy}
 	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
@@ -100,8 +100,8 @@ func TestBuildRsyncJob(t *testing.T) {
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPvc(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPvc(kubeconfig, "context1", "namespace1", "pvc2")
+	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
 	task, _ := e.BuildTask(request)
 	rsyncJob := buildRsyncJob(task, "target-host")

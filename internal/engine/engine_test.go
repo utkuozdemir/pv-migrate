@@ -48,7 +48,7 @@ func TestBuildTask(t *testing.T) {
 	testTask, err := testEngine.BuildTask(testRequest)
 	assert.Nil(t, err)
 
-	assert.Len(t, testTask.Id(), 5)
+	assert.Len(t, testTask.ID(), 5)
 
 	assert.True(t, testTask.Options().DeleteExtraneousFiles())
 	assert.Equal(t, "namespace1", testTask.Source().Claim().Namespace)
@@ -218,8 +218,8 @@ func TestRun(t *testing.T) {
 }
 
 func testRequest(strategies ...string) request.Request {
-	source := request.NewPvc("/kubeconfig1", "context1", "namespace1", "pvc1")
-	dest := request.NewPvc("/kubeconfig2", "context2", "namespace2", "pvc2")
+	source := request.NewPVC("/kubeconfig1", "context1", "namespace1", "pvc1")
+	dest := request.NewPVC("/kubeconfig2", "context2", "namespace2", "pvc2")
 	options := request.NewOptions(true)
 	newRequest := request.New(source, dest, options, strategies)
 	return newRequest

@@ -1,6 +1,7 @@
 package test
 
 import (
+	// for go:embed directive to work
 	_ "embed"
 	"io/ioutil"
 	v1 "k8s.io/api/core/v1"

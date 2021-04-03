@@ -32,7 +32,7 @@ func (r *pvc) Name() string {
 	return r.name
 }
 
-func NewPvc(kubeconfigPath string, context string, namespace string, name string) PVC {
+func NewPVC(kubeconfigPath string, context string, namespace string, name string) PVC {
 	return &pvc{
 		kubeconfigPath: kubeconfigPath,
 		context:        context,

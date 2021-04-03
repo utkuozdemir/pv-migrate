@@ -13,16 +13,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type RsyncSshInCluster struct {
+type RsyncSSSHInCluster struct {
 }
 
-func (r *RsyncSshInCluster) Cleanup(task task.Task) error {
+func (r *RsyncSSSHInCluster) Cleanup(task task.Task) error {
 	var result *multierror.Error
-	err := k8s.CleanupForId(task.Source().KubeClient(), task.Source().Claim().Namespace, task.Id())
+	err := k8s.CleanupForID(task.Source().KubeClient(), task.Source().Claim().Namespace, task.ID())
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
-	err = k8s.CleanupForId(task.Dest().KubeClient(), task.Dest().Claim().Namespace, task.Id())
+	err = k8s.CleanupForID(task.Dest().KubeClient(), task.Dest().Claim().Namespace, task.ID())
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
@@ -30,25 +30,25 @@ func (r *RsyncSshInCluster) Cleanup(task task.Task) error {
 	return result.ErrorOrNil()
 }
 
-func (r *RsyncSshInCluster) Name() string {
+func (r *RsyncSSSHInCluster) Name() string {
 	return "rsync-ssh-in-cluster"
 }
 
-func (r *RsyncSshInCluster) Priority() int {
+func (r *RsyncSSSHInCluster) Priority() int {
 	return 2000
 }
 
-func (r *RsyncSshInCluster) CanDo(task task.Task) bool {
+func (r *RsyncSSSHInCluster) CanDo(task task.Task) bool {
 	sameCluster := task.Source().KubeClient() == task.Dest().KubeClient()
 	return sameCluster
 }
 
-func (r *RsyncSshInCluster) Run(task task.Task) error {
+func (r *RsyncSSSHInCluster) Run(task task.Task) error {
 	if !r.CanDo(task) {
 		return errors.New("cannot do this task using this strategy")
 	}
 
-	instance := task.Id()
+	instance := task.ID()
 	sourcePvcInfo := task.Source()
 	sourceKubeClient := task.Source().KubeClient()
 	destKubeClient := task.Dest().KubeClient()
@@ -75,9 +75,9 @@ func (r *RsyncSshInCluster) Run(task task.Task) error {
 }
 
 func buildRsyncJob(task task.Task, targetHost string) batchv1.Job {
-	jobTtlSeconds := int32(600)
+	jobTTLSeconds := int32(600)
 	backoffLimit := int32(0)
-	instance := task.Id()
+	instance := task.ID()
 	jobName := "pv-migrate-rsync-" + instance
 	destPvcInfo := task.Dest()
 
@@ -90,7 +90,7 @@ func buildRsyncJob(task task.Task, targetHost string) batchv1.Job {
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoffLimit,
-			TTLSecondsAfterFinished: &jobTtlSeconds,
+			TTLSecondsAfterFinished: &jobTTLSeconds,
 			Template: corev1.PodTemplateSpec{
 
 				ObjectMeta: metav1.ObjectMeta{

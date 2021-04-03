@@ -6,6 +6,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+// KubernetesClientProvider provides a kubernetes.Interface instance for the given kubeconfig path and the context.
 type KubernetesClientProvider interface {
 	GetKubernetesClient(kubeconfigPath string, context string) (kubernetes.Interface, error)
 }
@@ -21,6 +22,7 @@ func (k *kubernetesClientProvider) GetKubernetesClient(kubeconfigPath string, co
 	return kubernetes.NewForConfig(config)
 }
 
+// NewKubernetesClientProvider creates a new KubernetesClientProvider that provides "real" kubernetes api clients.
 func NewKubernetesClientProvider() KubernetesClientProvider {
 	return &kubernetesClientProvider{}
 }

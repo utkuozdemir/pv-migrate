@@ -19,8 +19,8 @@ import (
 
 var strategies = []strategy.Strategy{
 	&mountboth.MountBoth{},
-	&rsyncsshincluster.RsyncSshInCluster{},
-	&rsyncsshcrosscluster.RsyncSshCrossCluster{},
+	&rsyncsshincluster.RsyncSSSHInCluster{},
+	&rsyncsshcrosscluster.RsyncSSHCrossCluster{},
 }
 
 func init() {
@@ -49,8 +49,8 @@ func main() {
 		return
 	}
 
-	sourceRequestPvc := request.NewPvc(*kubeconfig, *sourceContext, *sourceNamespace, *source)
-	destRequestPvc := request.NewPvc(*kubeconfig, *destContext, *destNamespace, *dest)
+	sourceRequestPvc := request.NewPVC(*kubeconfig, *sourceContext, *sourceNamespace, *source)
+	destRequestPvc := request.NewPVC(*kubeconfig, *destContext, *destNamespace, *dest)
 	requestOptions := request.NewOptions(*deleteExtraneousFromDest)
 
 	request := request.New(sourceRequestPvc, destRequestPvc, requestOptions, nil)

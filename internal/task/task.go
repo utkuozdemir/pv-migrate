@@ -5,7 +5,7 @@ import (
 )
 
 type Task interface {
-	Id() string
+	ID() string
 	Source() pvc.Info
 	Dest() pvc.Info
 	Options() Options
@@ -18,7 +18,7 @@ type task struct {
 	options Options
 }
 
-func (t *task) Id() string {
+func (t *task) ID() string {
 	return t.id
 }
 

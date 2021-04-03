@@ -14,9 +14,14 @@ import (
 	"sort"
 )
 
+// Engine is the main component that coordinates and runs the migration.
+// It is responsible of processing the request, building a migration task, determine the execution order
+// of the strategies and execute them until one of them succeeds.
 type Engine interface {
+	// Run runs the migration
 	Run(request request.Request) error
 	validate(request request.Request) error
+	// BuildTask builds a Request from a Task
 	BuildTask(request request.Request) (task.Task, error)
 	determineStrategies(request request.Request, task task.Task) ([]strategy.Strategy, error)
 	findStrategies(strategyNames ...string) ([]strategy.Strategy, error)
@@ -27,10 +32,12 @@ type engine struct {
 	strategyMap              map[string]strategy.Strategy
 }
 
+// New creates a new engine with the given strategies
 func New(strategies []strategy.Strategy) (Engine, error) {
 	return NewWithKubernetesClientProvider(strategies, k8s.NewKubernetesClientProvider())
 }
 
+// NewWithKubernetesClientProvider creates a new engine with the given strategies and the kubernetes client provider
 func NewWithKubernetesClientProvider(strategies []strategy.Strategy, kubernetesClientProvider k8s.KubernetesClientProvider) (Engine, error) {
 	if len(strategies) == 0 {
 		return nil, errors.New("no strategies passed")
