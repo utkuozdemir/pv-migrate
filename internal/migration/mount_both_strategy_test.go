@@ -131,7 +131,7 @@ func TestCannotDoDifferentKubeconfigs(t *testing.T) {
 	assert.False(t, canDo)
 }
 
-func TestDetermineTargetNodeDestRwo(t *testing.T) {
+func TestDetermineTargetNodeDestRWO(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
@@ -151,7 +151,27 @@ func TestDetermineTargetNodeDestRwo(t *testing.T) {
 	assert.Equal(t, "node2", targetNode)
 }
 
-func TestDetermineTargetNodeSourceRwo(t *testing.T) {
+func TestDetermineTargetNodeSourceRWO(t *testing.T) {
+	kubeconfig := test.PrepareKubeconfig()
+	defer test.DeleteKubeconfig(kubeconfig)
+
+	strategy := MountBothStrategy{}
+	strategies := []Strategy{&strategy}
+	pvcA := pvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteMany)
+	pvcB := pvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteMany)
+	podA := pod("namespace1", "pod1", "node1", "pvc1")
+	podB := pod("namespace1", "pod2", "node2", "pvc2")
+	kubernetesClientProvider := testKubernetesClientProvider{objects: []runtime.Object{pvcA, pvcB, podA, podB}}
+	engine, _ := NewEngineWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
+	source := NewRequestPvc(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := NewRequestPvc(kubeconfig, "context1", "namespace1", "pvc2")
+	request := NewRequest(source, dest, NewRequestOptions(true), []string{})
+	task, _ := engine.buildTask(request)
+	targetNode := determineTargetNode(task)
+	assert.Equal(t, "", targetNode)
+}
+
+func TestDetermineTargetNodeBothRWX(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
@@ -169,6 +189,20 @@ func TestDetermineTargetNodeSourceRwo(t *testing.T) {
 	task, _ := engine.buildTask(request)
 	targetNode := determineTargetNode(task)
 	assert.Equal(t, "node1", targetNode)
+}
+
+func TestNameConstant(t *testing.T) {
+	strategy := MountBothStrategy{}
+	name1 := strategy.Name()
+	name2 := strategy.Name()
+	assert.Equal(t, name1, name2)
+}
+
+func TestPriorityConstant(t *testing.T) {
+	strategy := MountBothStrategy{}
+	priority1 := strategy.Priority()
+	priority2 := strategy.Priority()
+	assert.Equal(t, priority1, priority2)
 }
 
 func TestBuildRsyncJob(t *testing.T) {
