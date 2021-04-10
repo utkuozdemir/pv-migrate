@@ -1,22 +1,22 @@
 terraform {
   backend "gcs" {
-    bucket = "pv-migrate-terraform-backend"
+    bucket      = "pv-migrate-terraform-backend"
     credentials = ".serviceaccount.json"
   }
 }
 
 provider "google" {
   credentials = file(".serviceaccount.json")
-  project = var.gcp_project_id
-  region = var.gcp_region
-  zone = var.gcp_zone
+  project     = var.gcp_project_id
+  region      = var.gcp_region
+  zone        = var.gcp_zone
 }
 
 resource "google_container_cluster" "cluster_1" {
-  name = "pv-migrate-test-1"
-  location = var.gcp_zone
+  name               = "pv-migrate-test-1"
+  location           = var.gcp_zone
   initial_node_count = 1
-  logging_service = "none"
+  logging_service    = "none"
   monitoring_service = "none"
   cluster_autoscaling {
     enabled = false
@@ -31,10 +31,10 @@ resource "google_container_cluster" "cluster_1" {
 }
 
 resource "google_container_cluster" "cluster_2" {
-  name = "pv-migrate-test-2"
-  location = var.gcp_zone
+  name               = "pv-migrate-test-2"
+  location           = var.gcp_zone
   initial_node_count = 1
-  logging_service = "none"
+  logging_service    = "none"
   monitoring_service = "none"
   cluster_autoscaling {
     enabled = false
