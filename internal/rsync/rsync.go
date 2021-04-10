@@ -1,12 +1,14 @@
 package rsync
 
 import (
-	"context"
 	"fmt"
-	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
+	"github.com/utkuozdemir/pv-migrate/internal/common"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/task"
+	batchv1 "k8s.io/api/batch/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 )
 
 func BuildRsyncCommand(deleteExtraneousFiles bool, sshTargetHost *string) []string {
@@ -29,46 +31,91 @@ func BuildRsyncCommand(deleteExtraneousFiles bool, sshTargetHost *string) []stri
 	return rsyncCommand
 }
 
-func Cleanup(kubeClient kubernetes.Interface, instance string, namespace string) error {
-	log.WithFields(log.Fields{
-		"instance":  instance,
-		"namespace": namespace,
-	}).Info("Doing cleanup")
+func buildRsyncJobDest(task task.Task, targetHost string) batchv1.Job {
+	jobTTLSeconds := int32(600)
+	backoffLimit := int32(0)
+	instance := task.ID()
+	jobName := "pv-migrate-rsync-" + instance
+	destPvcInfo := task.Dest()
 
-	var result *multierror.Error
-	err := kubeClient.BatchV1().Jobs(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{
-		LabelSelector: "app=pv-migrate,instance=" + instance,
-	})
+	rsyncCommand := BuildRsyncCommand(task.Options().DeleteExtraneousFiles(), &targetHost)
+	log.WithField("rsyncCommand", rsyncCommand).Info("Built rsync command")
+	job := batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: destPvcInfo.Claim().Namespace,
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoffLimit,
+			TTLSecondsAfterFinished: &jobTTLSeconds,
+			Template: corev1.PodTemplateSpec{
+
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      jobName,
+					Namespace: destPvcInfo.Claim().Namespace,
+					Labels: map[string]string{
+						common.AppLabelKey:      common.AppLabelValue,
+						common.InstanceLabelKey: instance,
+						"component":             "rsync",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Volumes: []corev1.Volume{
+						{
+							Name: "dest-vol",
+							VolumeSource: corev1.VolumeSource{
+								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+									ClaimName: destPvcInfo.Claim().Name,
+								},
+							},
+						},
+					},
+					Containers: []corev1.Container{
+						{
+							Name:            "app",
+							Image:           "docker.io/utkuozdemir/pv-migrate-rsync:v0.1.0",
+							ImagePullPolicy: corev1.PullIfNotPresent,
+							Command:         rsyncCommand,
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "dest-vol",
+									MountPath: "/dest",
+								},
+							},
+						},
+					},
+					NodeName:      destPvcInfo.MountedNode(),
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+		},
+	}
+	return job
+}
+
+func RunRsyncJobOverSsh(task task.Task, serviceType corev1.ServiceType) error {
+	instance := task.ID()
+	sourcePvcInfo := task.Source()
+	sourceKubeClient := task.Source().KubeClient()
+	destKubeClient := task.Dest().KubeClient()
+	sftpPod := PrepareSshdPod(instance, sourcePvcInfo)
+	err := CreateSshdPodWaitTillRunning(sourceKubeClient, sftpPod)
 	if err != nil {
-		result = multierror.Append(result, err)
+		return err
 	}
-
-	err = kubeClient.CoreV1().Pods(namespace).DeleteCollection(context.TODO(), metav1.DeleteOptions{}, metav1.ListOptions{
-		LabelSelector: "app=pv-migrate,instance=" + instance,
-	})
+	createdService, err := CreateSshdService(instance, sourcePvcInfo, serviceType)
 	if err != nil {
-		result = multierror.Append(result, err)
+		return err
 	}
-
-	serviceClient := kubeClient.CoreV1().Services(namespace)
-	serviceList, err := serviceClient.List(context.TODO(), metav1.ListOptions{
-		LabelSelector: "app=pv-migrate,instance=" + instance,
-	})
+	targetServiceAddress, err := k8s.GetServiceAddress(createdService, sourceKubeClient)
 	if err != nil {
-		result = multierror.Append(result, err)
+		return err
 	}
-
-	for _, service := range serviceList.Items {
-		err = serviceClient.Delete(context.TODO(), service.Name, metav1.DeleteOptions{})
-		if err != nil {
-			result = multierror.Append(result, err)
-		}
+	log.Infof("use service address %s to connect to rsync server", targetServiceAddress)
+	rsyncJob := buildRsyncJobDest(task, targetServiceAddress)
+	err = k8s.CreateJobWaitTillCompleted(destKubeClient, rsyncJob)
+	if err != nil {
+		return err
 	}
-
-	log.WithFields(log.Fields{
-		"instance": instance,
-	}).Info("Finished cleanup")
-
-	//goland:noinspection GoNilness
-	return result.ErrorOrNil()
+	return nil
 }

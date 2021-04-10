@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-func CreateSshdService(instance string, sourcePvcInfo pvc.Info) (*corev1.Service, error) {
+func CreateSshdService(instance string, sourcePvcInfo pvc.Info, serviceType corev1.ServiceType) (*corev1.Service, error) {
 	kubeClient := sourcePvcInfo.KubeClient()
 	serviceName := "pv-migrate-sshd-" + instance
 	createdService, err := kubeClient.CoreV1().Services(sourcePvcInfo.Claim().Namespace).Create(
@@ -31,6 +31,7 @@ func CreateSshdService(instance string, sourcePvcInfo pvc.Info) (*corev1.Service
 				},
 			},
 			Spec: corev1.ServiceSpec{
+				Type: serviceType,
 				Ports: []corev1.ServicePort{
 					{
 						Port:       22,

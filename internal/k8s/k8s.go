@@ -3,6 +3,7 @@ package k8s
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"io"
@@ -15,31 +16,41 @@ import (
 	"time"
 )
 
+const (
+	serviceLbCheckInterval = 5 * time.Second
+	serviceLbCheckTimeout  = 2 * time.Minute
+)
+
 type podResult struct {
 	success bool
 	pod     *corev1.Pod
 }
 
-func GetServiceAddress(svc *corev1.Service, _ kubernetes.Interface) (string, error) {
-	// todo move commented-out logic to cross-cluster rsync code
-	//if svc.Spec.Type == corev1.ServiceTypeClusterIP {
-	return svc.Name + "." + svc.Namespace, nil
-	//}
+func GetServiceAddress(service *corev1.Service, kubeClient kubernetes.Interface) (string, error) {
+	if service.Spec.Type == corev1.ServiceTypeClusterIP {
+		return service.Name + "." + service.Namespace, nil
+	}
 
-	//for {
-	//	createdService, err := kubeClient.CoreV1().Services(svc.Namespace).Get(context.TODO(), svc.Name, v1.GetOptions{})
-	//	if err != nil {
-	//		return "", err
-	//	}
-	//
-	//	if len(createdService.Status.LoadBalancer.Ingress) == 0 {
-	//		sleepInterval := 10 * time.Second
-	//		log.Infof("wait for external ip, sleep %s", sleepInterval)
-	//		time.Sleep(sleepInterval)
-	//		continue
-	//	}
-	//	return createdService.Status.LoadBalancer.Ingress[0].IP, nil
-	//}
+	services := kubeClient.CoreV1().Services(service.Namespace)
+	getOptions := metav1.GetOptions{}
+	timeout := time.After(serviceLbCheckTimeout)
+	tick := time.Tick(serviceLbCheckInterval)
+	for {
+		select {
+		case <-timeout:
+			return "", errors.New("timed out waiting for the loadbalancer service address")
+
+		case <-tick:
+			lbService, err := services.Get(context.TODO(), service.Name, getOptions)
+			if err != nil {
+				return "", err
+			}
+
+			if len(lbService.Status.LoadBalancer.Ingress) > 0 {
+				return lbService.Status.LoadBalancer.Ingress[0].IP, nil
+			}
+		}
+	}
 }
 
 func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job batchv1.Job) error {

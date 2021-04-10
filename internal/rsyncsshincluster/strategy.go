@@ -3,14 +3,10 @@ package rsyncsshincluster
 import (
 	"errors"
 	"github.com/hashicorp/go-multierror"
-	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/common"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type RsyncSSSHInCluster struct {
@@ -47,91 +43,5 @@ func (r *RsyncSSSHInCluster) Run(task task.Task) error {
 	if !r.CanDo(task) {
 		return errors.New("cannot do this task using this strategy")
 	}
-
-	instance := task.ID()
-	sourcePvcInfo := task.Source()
-	sourceKubeClient := task.Source().KubeClient()
-	destKubeClient := task.Dest().KubeClient()
-	sftpPod := rsync.PrepareSshdPod(instance, sourcePvcInfo)
-	err := rsync.CreateSshdPodWaitTillRunning(sourceKubeClient, sftpPod)
-	if err != nil {
-		return err
-	}
-	createdService, err := rsync.CreateSshdService(instance, sourcePvcInfo)
-	if err != nil {
-		return err
-	}
-	targetServiceAddress, err := k8s.GetServiceAddress(createdService, sourceKubeClient)
-	if err != nil {
-		return err
-	}
-	log.Infof("use service address %s to connect to rsync server", targetServiceAddress)
-	rsyncJob := buildRsyncJob(task, targetServiceAddress)
-	err = k8s.CreateJobWaitTillCompleted(destKubeClient, rsyncJob)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func buildRsyncJob(task task.Task, targetHost string) batchv1.Job {
-	jobTTLSeconds := int32(600)
-	backoffLimit := int32(0)
-	instance := task.ID()
-	jobName := "pv-migrate-rsync-" + instance
-	destPvcInfo := task.Dest()
-
-	rsyncCommand := rsync.BuildRsyncCommand(task.Options().DeleteExtraneousFiles(), &targetHost)
-	log.WithField("rsyncCommand", rsyncCommand).Info("Built rsync command")
-	job := batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      jobName,
-			Namespace: destPvcInfo.Claim().Namespace,
-		},
-		Spec: batchv1.JobSpec{
-			BackoffLimit:            &backoffLimit,
-			TTLSecondsAfterFinished: &jobTTLSeconds,
-			Template: corev1.PodTemplateSpec{
-
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      jobName,
-					Namespace: destPvcInfo.Claim().Namespace,
-					Labels: map[string]string{
-						common.AppLabelKey:      common.AppLabelValue,
-						common.InstanceLabelKey: instance,
-						"component":             "rsync",
-					},
-				},
-				Spec: corev1.PodSpec{
-					Volumes: []corev1.Volume{
-						{
-							Name: "dest-vol",
-							VolumeSource: corev1.VolumeSource{
-								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: destPvcInfo.Claim().Name,
-								},
-							},
-						},
-					},
-					Containers: []corev1.Container{
-						{
-							Name:            "app",
-							Image:           "docker.io/utkuozdemir/pv-migrate-rsync:v0.1.0",
-							ImagePullPolicy: corev1.PullAlways,
-							Command:         rsyncCommand,
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "dest-vol",
-									MountPath: "/dest",
-								},
-							},
-						},
-					},
-					NodeName:      destPvcInfo.MountedNode(),
-					RestartPolicy: corev1.RestartPolicyNever,
-				},
-			},
-		},
-	}
-	return job
+	return rsync.RunRsyncJobOverSsh(task, corev1.ServiceTypeClusterIP)
 }
