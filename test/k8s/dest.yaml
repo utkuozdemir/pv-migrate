@@ -1,0 +1,58 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dest
+  namespace: dest
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: dest
+  template:
+    metadata:
+      labels:
+        app: dest
+    spec:
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: dest
+          image: docker.io/busybox:stable
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - echo "generating some files and directories";
+              mkdir -p /dest/dir1/subdir1;
+              mkdir -p /dest/dir2;
+              fallocate -l $((50*1024*1024)) /dest/d50mb.dat;
+              fallocate -l $((10*1024*1024)) /dest/dir1/d10mb.dat;
+              fallocate -l $((20*1024*1024)) /dest/dir1/d20mb.dat;
+              fallocate -l $((10*1024*1024)) /dest/dir1/subdir1/d10mb.dat;
+              fallocate -l $((10*1024*1024)) /dest/dir2/d50mb.dat;
+              echo "done";
+              tail -f /dev/null;
+          volumeMounts:
+            - mountPath: /dest
+              name: dest
+      volumes:
+        - name: dest
+          persistentVolumeClaim:
+            claimName: dest
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dest
+  namespace: dest
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 512Mi
