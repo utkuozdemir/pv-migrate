@@ -11,6 +11,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 	// needed for k8s oidc and gcp auth
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -77,7 +78,8 @@ func executeRequest(logger *log.Entry, request request.Request) error {
 
 	numStrategies := len(strategies)
 	strategyNames := strategy.Names(strategies)
-	logger.WithField("strategies", strategyNames).Infof("Engine initialized with %v total strategies", numStrategies)
+	logger.WithField("strategies", strings.Join(strategyNames, " ")).
+		Infof("Engine initialized with %v total strategies", numStrategies)
 
 	err = engine.Run(request)
 	if err != nil {

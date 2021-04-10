@@ -12,6 +12,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"k8s.io/client-go/kubernetes"
 	"sort"
+	"strings"
 )
 
 // Engine is the main component that coordinates and runs the migration.
@@ -82,7 +83,7 @@ func (e engine) Run(request request.Request) error {
 
 	strategyNames := strategy.Names(strategies)
 	logger.
-		WithField("strategies", strategyNames).
+		WithField("strategies", strings.Join(strategyNames, " ")).
 		Infof("Determined %v strategies to be attempted", numStrategies)
 
 	for _, s := range strategies {

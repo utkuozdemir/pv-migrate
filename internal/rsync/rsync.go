@@ -8,6 +8,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
 func BuildRsyncCommand(deleteExtraneousFiles bool, sshTargetHost *string) []string {
@@ -38,7 +39,7 @@ func buildRsyncJobDest(task task.Task, targetHost string) batchv1.Job {
 	destPvcInfo := task.Dest()
 
 	rsyncCommand := BuildRsyncCommand(task.Options().DeleteExtraneousFiles(), &targetHost)
-	log.WithField("rsyncCommand", rsyncCommand).Info("Built rsync command")
+	log.WithField("rsyncCommand", strings.Join(rsyncCommand, " ")).Info("Built rsync command")
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -102,12 +103,12 @@ func RunRsyncJobOverSsh(task task.Task, serviceType corev1.ServiceType) error {
 	if err != nil {
 		return err
 	}
-	targetServiceAddress, err := k8s.GetServiceAddress(createdService, sourceKubeClient)
+	targetHost, err := k8s.GetServiceAddress(createdService, sourceKubeClient)
 	if err != nil {
 		return err
 	}
-	log.Infof("use service address %s to connect to rsync server", targetServiceAddress)
-	rsyncJob := buildRsyncJobDest(task, targetServiceAddress)
+	log.WithField("targetHost", targetHost).Info("Connect to rsync server")
+	rsyncJob := buildRsyncJobDest(task, targetHost)
 	err = k8s.CreateJobWaitTillCompleted(destKubeClient, rsyncJob)
 	if err != nil {
 		return err

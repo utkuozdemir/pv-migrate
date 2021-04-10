@@ -17,8 +17,10 @@ import (
 )
 
 const (
-	serviceLbCheckInterval = 5 * time.Second
-	serviceLbCheckTimeout  = 2 * time.Minute
+	serviceLbCheckIntervalSeconds = 5
+	serviceLbCheckInterval        = serviceLbCheckIntervalSeconds * time.Second
+	serviceLbCheckTimeoutSeconds  = 120
+	serviceLbCheckTimeout         = serviceLbCheckTimeoutSeconds * time.Second
 )
 
 type podResult struct {
@@ -35,12 +37,14 @@ func GetServiceAddress(service *corev1.Service, kubeClient kubernetes.Interface)
 	getOptions := metav1.GetOptions{}
 	timeout := time.After(serviceLbCheckTimeout)
 	ticker := time.NewTicker(serviceLbCheckInterval)
+	elapsedSecs := 0
 	for {
 		select {
 		case <-timeout:
-			return "", errors.New("timed out waiting for the loadbalancer service address")
+			return "", errors.New("timed out waiting for the LoadBalancer service address")
 
 		case <-ticker.C:
+			elapsedSecs += serviceLbCheckIntervalSeconds
 			lbService, err := services.Get(context.TODO(), service.Name, getOptions)
 			if err != nil {
 				return "", err
@@ -49,6 +53,12 @@ func GetServiceAddress(service *corev1.Service, kubeClient kubernetes.Interface)
 			if len(lbService.Status.LoadBalancer.Ingress) > 0 {
 				return lbService.Status.LoadBalancer.Ingress[0].IP, nil
 			}
+
+			log.WithField("service", service.Name).
+				WithField("elapsedSecs", serviceLbCheckIntervalSeconds).
+				WithField("intervalSecs", elapsedSecs).
+				WithField("timeoutSecs", serviceLbCheckTimeoutSeconds).
+				Info("Waiting for LoadBalancer IP")
 		}
 	}
 }
