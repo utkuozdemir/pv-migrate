@@ -1,5 +1,5 @@
-.gitignore.io/api/go,jetbrains+all
-# Edit at https://www.gitignore.io/?templates=go,jetbrains+all
+# Created by https://www.toptal.com/developers/gitignore/api/go,jetbrains+all,terraform
+# Edit at https://www.toptal.com/developers/gitignore?templates=go,jetbrains+all,terraform
 
 ### Go ###
 # Binaries for programs and plugins
@@ -9,18 +9,21 @@
 *.so
 *.dylib
 
-# Test binary, build with `go test -c`
+# Test binary, built with `go test -c`
 *.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
 
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
 ### Go Patch ###
-#/vendor/
-#/Godeps/
+/vendor/
+/Godeps/
 
 ### JetBrains+all ###
-# Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio and WebStorm
+# Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm, CLion, Android Studio, WebStorm and Rider
 # Reference: https://intellij-support.jetbrains.com/hc/en-us/articles/206544839
 
 # User-specific stuff
@@ -50,9 +53,14 @@
 # When using Gradle or Maven with auto-import, you should exclude module files,
 # since they will be recreated, and may cause churn.  Uncomment if using
 # auto-import.
+# .idea/artifacts
+# .idea/compiler.xml
+# .idea/jarRepositories.xml
 # .idea/modules.xml
 # .idea/*.iml
 # .idea/modules
+# *.iml
+# *.ipr
 
 # CMake
 cmake-build-*/
@@ -100,6 +108,39 @@ modules.xml
 .idea/misc.xml
 *.ipr
 
-# End of https://www.gitignore.io/api/go,jetbrains+all
+# Sonarlint plugin
+.idea/sonarlint
+
+### Terraform ###
+# Local .terraform directories
+**/.terraform/*
+
+# .tfstate files
+*.tfstate
+*.tfstate.*
+
+# Crash log files
+crash.log
+
+# Ignore any .tfvars files that are generated automatically for each Terraform run. Most
+# .tfvars files are managed as part of configuration and so should be included in
+# version control.
+#
+# example.tfvars
+
+# Ignore override files as they are usually used to override resources locally and so
+# are not checked in
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Include override files you do wish to add to version control using negated pattern
+# !example_override.tf
+
+# Include tfplan files to ignore the plan output of command: terraform plan -out=tfplan
+# example: *tfplan*
+
+# End of https://www.toptal.com/developers/gitignore/api/go,jetbrains+all,terraform
 
 /dist
