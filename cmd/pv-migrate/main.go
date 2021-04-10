@@ -34,10 +34,11 @@ func init() {
 }
 
 func main() {
-	kubeconfig := flag.String("kubeconfig", "", "(optional) absolute path to the kubeconfig file")
+	sourceKubeconfig := flag.String("source-kubeconfig", "", "(optional) absolute path to the source kubeconfig file")
 	source := flag.String("source", "", "Source persistent volume claim")
 	sourceNamespace := flag.String("source-namespace", "", "Source namespace")
 	sourceContext := flag.String("source-context", "", "(optional) Source context")
+	destKubeconfig := flag.String("dest-kubeconfig", "", "(optional) absolute path to the destination kubeconfig file")
 	dest := flag.String("dest", "", "Destination persistent volume claim")
 	destNamespace := flag.String("dest-namespace", "", "Destination namespace")
 	destContext := flag.String("dest-context", "", "(optional) Destination context")
@@ -49,18 +50,18 @@ func main() {
 		return
 	}
 
-	sourceRequestPvc := request.NewPVC(*kubeconfig, *sourceContext, *sourceNamespace, *source)
-	destRequestPvc := request.NewPVC(*kubeconfig, *destContext, *destNamespace, *dest)
+	sourceRequestPvc := request.NewPVC(*sourceKubeconfig, *sourceContext, *sourceNamespace, *source)
+	destRequestPvc := request.NewPVC(*destKubeconfig, *destContext, *destNamespace, *dest)
 	requestOptions := request.NewOptions(*deleteExtraneousFromDest)
 
-	request := request.New(sourceRequestPvc, destRequestPvc, requestOptions, nil)
-	logger := log.WithFields(request.LogFields())
+	req := request.New(sourceRequestPvc, destRequestPvc, requestOptions, nil)
+	logger := log.WithFields(req.LogFields())
 
 	if *deleteExtraneousFromDest {
 		logger.Warn("delete extraneous files from dest is enabled")
 	}
 
-	err := executeRequest(logger, request)
+	err := executeRequest(logger, req)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to initialize the engine")
 		return
