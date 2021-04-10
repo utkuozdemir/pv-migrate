@@ -6,13 +6,13 @@ on:  # yamllint disable-line rule:truthy
     paths-ignore:
       - "**.md"
       - "docker/**"
-      - "samples/**"
+      - "test/**"
       - ".gitignore"
   pull_request:
     paths-ignore:
       - "**.md"
       - "docker/**"
-      - "samples/**"
+      - "test/**"
       - ".gitignore"
 jobs:
   build:
