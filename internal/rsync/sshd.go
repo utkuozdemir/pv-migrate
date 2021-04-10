@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/common"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,20 +15,16 @@ import (
 	"time"
 )
 
-func CreateSshdService(instance string, sourcePvcInfo pvc.Info, serviceType corev1.ServiceType) (*corev1.Service, error) {
+func CreateSshdService(instanceId string, sourcePvcInfo pvc.Info, serviceType corev1.ServiceType) (*corev1.Service, error) {
 	kubeClient := sourcePvcInfo.KubeClient()
-	serviceName := "pv-migrate-sshd-" + instance
+	serviceName := "pv-migrate-sshd-" + instanceId
 	createdService, err := kubeClient.CoreV1().Services(sourcePvcInfo.Claim().Namespace).Create(
 		context.TODO(),
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      serviceName,
 				Namespace: sourcePvcInfo.Claim().Namespace,
-				Labels: map[string]string{
-					common.AppLabelKey:      common.AppLabelValue,
-					common.InstanceLabelKey: instance,
-					"component":             "sshd",
-				},
+				Labels:    k8s.ComponentLabels(instanceId, k8s.Sshd),
 			},
 			Spec: corev1.ServiceSpec{
 				Type: serviceType,
@@ -38,11 +34,7 @@ func CreateSshdService(instance string, sourcePvcInfo pvc.Info, serviceType core
 						TargetPort: intstr.FromInt(22),
 					},
 				},
-				Selector: map[string]string{
-					common.AppLabelKey:      common.AppLabelValue,
-					common.InstanceLabelKey: instance,
-					"component":             "sshd",
-				},
+				Selector: k8s.ComponentLabels(instanceId, k8s.Sshd),
 			},
 		},
 		metav1.CreateOptions{},
@@ -94,17 +86,13 @@ func CreateSshdPodWaitTillRunning(kubeClient kubernetes.Interface, pod *corev1.P
 	return nil
 }
 
-func PrepareSshdPod(instance string, sourcePvcInfo pvc.Info) *corev1.Pod {
-	podName := "pv-migrate-sshd-" + instance
+func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info) *corev1.Pod {
+	podName := "pv-migrate-sshd-" + instanceId
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
 			Namespace: sourcePvcInfo.Claim().Namespace,
-			Labels: map[string]string{
-				common.AppLabelKey:      common.AppLabelValue,
-				common.InstanceLabelKey: instance,
-				"component":             "sshd",
-			},
+			Labels:    k8s.ComponentLabels(instanceId, k8s.Sshd),
 		},
 		Spec: corev1.PodSpec{
 			Volumes: []corev1.Volume{

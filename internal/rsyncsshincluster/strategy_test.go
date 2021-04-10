@@ -87,28 +87,3 @@ func TestPriorityConstant(t *testing.T) {
 	priority2 := strategy.Priority()
 	assert.Equal(t, priority1, priority2)
 }
-
-func TestBuildRsyncJob(t *testing.T) {
-	kubeconfig := test.PrepareKubeconfig()
-	defer test.DeleteKubeconfig(kubeconfig)
-
-	strategy := RsyncSSSHInCluster{}
-	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
-	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
-	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
-	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
-	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
-	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
-	rsyncJob := buildRsyncJob(task, "target-host")
-	jobTemplate := rsyncJob.Spec.Template
-	podSpec := jobTemplate.Spec
-	container := podSpec.Containers[0]
-	assert.Len(t, container.VolumeMounts, 1)
-	assert.Len(t, podSpec.Volumes, 1)
-	assert.Equal(t, "pvc2", podSpec.Volumes[0].PersistentVolumeClaim.ClaimName)
-}

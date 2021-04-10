@@ -3,7 +3,6 @@ package rsync
 import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/common"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	batchv1 "k8s.io/api/batch/v1"
@@ -34,8 +33,8 @@ func BuildRsyncCommand(deleteExtraneousFiles bool, sshTargetHost *string) []stri
 func buildRsyncJobDest(task task.Task, targetHost string) batchv1.Job {
 	jobTTLSeconds := int32(600)
 	backoffLimit := int32(0)
-	instance := task.ID()
-	jobName := "pv-migrate-rsync-" + instance
+	id := task.ID()
+	jobName := "pv-migrate-rsync-" + id
 	destPvcInfo := task.Dest()
 
 	rsyncCommand := BuildRsyncCommand(task.Options().DeleteExtraneousFiles(), &targetHost)
@@ -53,11 +52,7 @@ func buildRsyncJobDest(task task.Task, targetHost string) batchv1.Job {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      jobName,
 					Namespace: destPvcInfo.Claim().Namespace,
-					Labels: map[string]string{
-						common.AppLabelKey:      common.AppLabelValue,
-						common.InstanceLabelKey: instance,
-						"component":             "rsync",
-					},
+					Labels:    k8s.ComponentLabels(id, k8s.Rsync),
 				},
 				Spec: corev1.PodSpec{
 					Volumes: []corev1.Volume{
@@ -94,16 +89,16 @@ func buildRsyncJobDest(task task.Task, targetHost string) batchv1.Job {
 }
 
 func RunRsyncJobOverSsh(task task.Task, serviceType corev1.ServiceType) error {
-	instance := task.ID()
+	instanceId := task.ID()
 	sourcePvcInfo := task.Source()
 	sourceKubeClient := task.Source().KubeClient()
 	destKubeClient := task.Dest().KubeClient()
-	sftpPod := PrepareSshdPod(instance, sourcePvcInfo)
+	sftpPod := PrepareSshdPod(instanceId, sourcePvcInfo)
 	err := CreateSshdPodWaitTillRunning(sourceKubeClient, sftpPod)
 	if err != nil {
 		return err
 	}
-	createdService, err := CreateSshdService(instance, sourcePvcInfo, serviceType)
+	createdService, err := CreateSshdService(instanceId, sourcePvcInfo, serviceType)
 	if err != nil {
 		return err
 	}

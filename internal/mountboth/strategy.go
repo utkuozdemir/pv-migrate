@@ -3,7 +3,6 @@ package mountboth
 import (
 	"errors"
 	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/common"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
@@ -65,8 +64,8 @@ func determineTargetNode(task task.Task) string {
 func buildRsyncJob(task task.Task, node string) batchv1.Job {
 	jobTTLSeconds := int32(600)
 	backoffLimit := int32(0)
-	instance := task.ID()
-	jobName := "pv-migrate-rsync-" + instance
+	id := task.ID()
+	jobName := "pv-migrate-rsync-" + id
 	rsyncCommand := rsync.BuildRsyncCommand(task.Options().DeleteExtraneousFiles(), nil)
 	log.WithField("rsyncCommand", rsyncCommand).Info("Built rsync command")
 	job := batchv1.Job{
@@ -82,10 +81,7 @@ func buildRsyncJob(task task.Task, node string) batchv1.Job {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      jobName,
 					Namespace: task.Dest().Claim().Namespace,
-					Labels: map[string]string{
-						common.AppLabelKey:      common.AppLabelValue,
-						common.InstanceLabelKey: instance,
-					},
+					Labels:    k8s.Labels(id),
 				},
 				Spec: corev1.PodSpec{
 					Volumes: []corev1.Volume{
