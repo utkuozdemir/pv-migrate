@@ -34,13 +34,13 @@ func GetServiceAddress(service *corev1.Service, kubeClient kubernetes.Interface)
 	services := kubeClient.CoreV1().Services(service.Namespace)
 	getOptions := metav1.GetOptions{}
 	timeout := time.After(serviceLbCheckTimeout)
-	tick := time.Tick(serviceLbCheckInterval)
+	ticker := time.NewTicker(serviceLbCheckInterval)
 	for {
 		select {
 		case <-timeout:
 			return "", errors.New("timed out waiting for the loadbalancer service address")
 
-		case <-tick:
+		case <-ticker.C:
 			lbService, err := services.Get(context.TODO(), service.Name, getOptions)
 			if err != nil {
 				return "", err
