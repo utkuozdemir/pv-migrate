@@ -155,6 +155,10 @@ func (e *engine) BuildTask(request request.Request) (task.Task, error) {
 		return nil, err
 	}
 
+	if !(destPvcInfo.SupportsRWO() || destPvcInfo.SupportsRWX()) {
+		return nil, errors.New("destination pvc is not writeable")
+	}
+
 	taskOptions := task.NewOptions(request.Options().DeleteExtraneousFiles())
 	return task.New(id, sourcePvcInfo, destPvcInfo, taskOptions), nil
 }
