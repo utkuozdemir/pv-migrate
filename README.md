@@ -9,7 +9,7 @@
 [![GitHub forks](https://img.shields.io/github/forks/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/network)
 [![GitHub issues](https://img.shields.io/github/issues/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/issues)
 
-This is a cli tool/kubectl plugin to easily migrate 
+This is a CLI tool/kubectl plugin to easily migrate 
 the contents of one Kubernetes `PersistentVolume` to another.
 
 Common use case: You have a database with a bound 50gb PersistentVolumeClaim.
@@ -50,26 +50,6 @@ INFO[0018] Doing cleanup                                 instance=amcsl namespac
 INFO[0018] Finished cleanup                              instance=amcsl
 ```
 
-
 **Note:** For it to run as kubectl plugin via `kubectl pv-migrate`, 
 put the binary with name `kubectl-pv_migrate` under your `PATH`.  
 To use it standalone, simply run it like `./pv-migrate --source-namespace ....`
-
-## Building
-
-To build for your platform
-```bash
-$ make build
-```
-
-To build for all major platforms and prepare release archives:
-```bash
-$ make build-all
-```
-
-## Notes
-
-* This version has a **hardcoded RSA public/private 
-key pair** in the sshd/rsync docker images and in the codebase. 
-This is intentional, since security is not a concern at this release.
-In the future, a key pair will probably be generated on the client and be used instead.
