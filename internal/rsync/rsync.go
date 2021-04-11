@@ -100,10 +100,9 @@ func buildRsyncJobDest(task task.Task, targetHost string, privateKeySecretName s
 					},
 					Containers: []corev1.Container{
 						{
-							Name:            "app",
-							Image:           "docker.io/instrumentisto/rsync-ssh:alpine",
-							ImagePullPolicy: corev1.PullIfNotPresent,
-							Command:         rsyncCommand,
+							Name:    "app",
+							Image:   "docker.io/instrumentisto/rsync-ssh:alpine",
+							Command: rsyncCommand,
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "dest-vol",
