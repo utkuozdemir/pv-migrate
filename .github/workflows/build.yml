@@ -5,13 +5,11 @@ on:  # yamllint disable-line rule:truthy
   push:
     paths-ignore:
       - "**.md"
-      - "docker/**"
       - "test/**"
       - ".gitignore"
   pull_request:
     paths-ignore:
       - "**.md"
-      - "docker/**"
       - "test/**"
       - ".gitignore"
 jobs:
