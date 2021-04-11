@@ -86,7 +86,26 @@ func CreateSshdPodWaitTillRunning(kubeClient kubernetes.Interface, pod *corev1.P
 	return nil
 }
 
-func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info) *corev1.Pod {
+func createSshdPublicKeySecret(instanceId string, sourcePvcInfo pvc.Info, publicKey string) (*corev1.Secret, error) {
+	kubeClient := sourcePvcInfo.KubeClient()
+	namespace := sourcePvcInfo.Claim().Namespace
+	name := "pv-migrate-sshd-" + instanceId
+	secret := corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    k8s.ComponentLabels(instanceId, k8s.Sshd),
+		},
+		Data: map[string][]byte{
+			"publicKey": []byte(publicKey),
+		},
+	}
+
+	secrets := kubeClient.CoreV1().Secrets(namespace)
+	return secrets.Create(context.TODO(), &secret, metav1.CreateOptions{})
+}
+
+func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info, publicKeySecretName string) *corev1.Pod {
 	podName := "pv-migrate-sshd-" + instanceId
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -105,17 +124,35 @@ func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info) *corev1.Pod {
 						},
 					},
 				},
+				{
+					Name: "public-key-vol",
+					VolumeSource: corev1.VolumeSource{
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: publicKeySecretName,
+						},
+					},
+				},
 			},
 			Containers: []corev1.Container{
 				{
-					Name:            "app",
-					Image:           "docker.io/utkuozdemir/pv-migrate-sshd:v0.1.0",
-					ImagePullPolicy: corev1.PullAlways,
+					Name:  "app",
+					Image: "docker.io/panubo/sshd:1.3.0",
+					Env: []corev1.EnvVar{
+						{
+							Name:  "SSH_ENABLE_ROOT",
+							Value: "true",
+						},
+					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "source-vol",
 							MountPath: "/source",
 							ReadOnly:  true,
+						},
+						{
+							Name:      "public-key-vol",
+							MountPath: "/root/.ssh/authorized_keys",
+							SubPath:   "publicKey",
 						},
 					},
 					Ports: []corev1.ContainerPort{

@@ -8,11 +8,12 @@ import (
 )
 
 // CleanupForID removes the kubernetes resources for the given instance id using label selectors.
-// It removes services, jobs and pods that belong to the given instance.
+// It removes services, jobs, pods and secrets that belong to the given instance.
 func CleanupForID(kubeClient kubernetes.Interface, namespace string, id string) error {
 	pods := kubeClient.CoreV1().Pods(namespace)
 	jobs := kubeClient.BatchV1().Jobs(namespace)
 	services := kubeClient.CoreV1().Services(namespace)
+	secrets := kubeClient.CoreV1().Secrets(namespace)
 	deleteOptions := metav1.DeleteOptions{}
 	listOptions := metav1.ListOptions{
 		LabelSelector: LabelSelector(id),
@@ -39,6 +40,11 @@ func CleanupForID(kubeClient kubernetes.Interface, namespace string, id string) 
 		if err != nil {
 			result = multierror.Append(result, err)
 		}
+	}
+
+	err = secrets.DeleteCollection(context.TODO(), deleteOptions, listOptions)
+	if err != nil {
+		result = multierror.Append(result, err)
 	}
 
 	//goland:noinspection GoNilness
