@@ -26,7 +26,7 @@ Another use case: You need to move a PersistentVolumeClaim from one namespace to
 1. Go to the [releases](https://github.com/utkuozdemir/pv-migrate/releases) and download 
    the latest release archive for your platform.
 2. Extract the archive.
-3. Move the binary to somewhere in your `$PATH`.
+3. Move the binary to somewhere in your `PATH`.
 
 Steps for MacOS:
 ```bash
