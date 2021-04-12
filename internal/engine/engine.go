@@ -10,7 +10,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
-	"k8s.io/client-go/kubernetes"
 	"sort"
 	"strings"
 )
@@ -131,27 +130,35 @@ func (e *engine) BuildTask(request request.Request) (task.Task, error) {
 	source := request.Source()
 	dest := request.Dest()
 	kubernetesClientProvider := e.kubernetesClientProvider
-	var sourceClient, err = kubernetesClientProvider.GetKubernetesClient(source.KubeconfigPath(), source.Context())
+	var sourceClient, sourceNsInContext, err = kubernetesClientProvider.GetClientAndNsInContext(source.KubeconfigPath(), source.Context())
 	if err != nil {
 		return nil, err
 	}
 
-	var destClient kubernetes.Interface
-	if source.KubeconfigPath() == dest.KubeconfigPath() && source.Context() == dest.Context() {
-		destClient = sourceClient
-	} else {
-		destClient, err = kubernetesClientProvider.GetKubernetesClient(dest.KubeconfigPath(), dest.Context())
+	destClient, destNsInContext := sourceClient, sourceNsInContext
+	if source.KubeconfigPath() != dest.KubeconfigPath() || source.Context() == dest.Context() {
+		destClient, destNsInContext, err = kubernetesClientProvider.GetClientAndNsInContext(dest.KubeconfigPath(), dest.Context())
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	sourcePvcInfo, err := pvc.New(sourceClient, source.Namespace(), source.Name())
+	sourceNs := source.Namespace()
+	if sourceNs == "" {
+		sourceNs = sourceNsInContext
+	}
+
+	destNs := dest.Namespace()
+	if destNs == "" {
+		destNs = destNsInContext
+	}
+
+	sourcePvcInfo, err := pvc.New(sourceClient, sourceNs, source.Name())
 	if err != nil {
 		return nil, err
 	}
 
-	destPvcInfo, err := pvc.New(destClient, dest.Namespace(), dest.Name())
+	destPvcInfo, err := pvc.New(destClient, destNs, dest.Name())
 	if err != nil {
 		return nil, err
 	}
