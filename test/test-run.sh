@@ -5,31 +5,28 @@ SOURCE_KUBECONFIG=.kubeconfig-source.yaml
 DEST_KUBECONFIG=.kubeconfig-dest.yaml
 
 # Same namespace
-pv-migrate \
+pv-migrate migrate \
   --source-kubeconfig $SOURCE_KUBECONFIG \
   --source-namespace source \
-  --source source \
   --dest-kubeconfig $SOURCE_KUBECONFIG \
   --dest-namespace source \
-  --dest dest \
-  --dest-delete-extraneous-files true
+  --dest-delete-extraneous-files true \
+  source dest
 
 # Different namespace
-pv-migrate \
+pv-migrate migrate \
   --source-kubeconfig $SOURCE_KUBECONFIG \
   --source-namespace source \
-  --source source \
   --dest-kubeconfig $SOURCE_KUBECONFIG \
   --dest-namespace dest \
-  --dest dest \
-  --dest-delete-extraneous-files true
+  --dest-delete-extraneous-files true \
+  source dest
 
 # Different cluster
 pv-migrate \
   --source-kubeconfig $SOURCE_KUBECONFIG \
   --source-namespace source \
-  --source source \
   --dest-kubeconfig $DEST_KUBECONFIG \
   --dest-namespace dest \
-  --dest dest \
-  --dest-delete-extraneous-files true
+  --dest-delete-extraneous-files true \
+  source dest
