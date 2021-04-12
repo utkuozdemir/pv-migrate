@@ -136,7 +136,7 @@ func (e *engine) BuildTask(request request.Request) (task.Task, error) {
 	}
 
 	destClient, destNsInContext := sourceClient, sourceNsInContext
-	if source.KubeconfigPath() != dest.KubeconfigPath() || source.Context() == dest.Context() {
+	if source.KubeconfigPath() != dest.KubeconfigPath() || source.Context() != dest.Context() {
 		destClient, destNsInContext, err = kubernetesClientProvider.GetClientAndNsInContext(dest.KubeconfigPath(), dest.Context())
 		if err != nil {
 			return nil, err
