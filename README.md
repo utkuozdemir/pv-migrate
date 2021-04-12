@@ -14,14 +14,30 @@ the contents of one Kubernetes `PersistentVolume` to another.
 
 Common use case: You have a database with a bound 50gb PersistentVolumeClaim.
 Unfortunately 50gb was not enough, and you filled all the disk space rather quickly. 
-Sadly, your StorageClass/provisioner doesn't support [volume expansion](https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/).
-Now you need to create a new PVC of 1tb and somehow copy all the data to the new volume, as-is, with its permissions and so on.
+Sadly, your StorageClass/provisioner doesn't support 
+[volume expansion](https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/).
+Now you need to create a new PVC of 1tb and somehow copy all the data to the new volume, 
+as-is, with its permissions and so on.
 
 Another use case: You need to move a PersistentVolumeClaim from one namespace to another.
 
+## Installation
+
+1. Go to the [releases](https://github.com/utkuozdemir/pv-migrate/releases) and download 
+   the latest release archive for your platform.
+2. Extract the archive.
+3. Move the binary to somewhere in your `$PATH`.
+
+Steps for MacOS:
+```bash
+$ wget https://github.com/utkuozdemir/pv-migrate/releases/download/v0.3.1/pv-migrate_v0.3.1_darwin_x86_64.tar.gz
+$ tar -xvzf pv-migrate_v0.3.1_darwin_x86_64.tar.gz
+$ mv pv-migrate /usr/local/bin
+```
+
 ## Usage
 
-The main command:
+Main command:
 ```
 NAME:
    pv-migrate - A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another
@@ -38,7 +54,8 @@ GLOBAL OPTIONS:
    --version, -v  print the version (default: false)
 ```
 
-Migrate subcommand:
+
+Command `migrate`:
 ```
 NAME:
    pv-migrate migrate - Migrate data from the source pvc to the destination pvc
