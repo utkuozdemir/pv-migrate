@@ -9,13 +9,16 @@ import (
 
 func TestBuildK8sConfig(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
-	config, err := buildK8sConfig(kubeconfig, "")
-	assert.Nil(t, err)
+	config, ns, err := buildK8sConfig(kubeconfig, "")
 	assert.NotNil(t, config)
-	config, err = buildK8sConfig(kubeconfig, "context-2")
+	assert.Equal(t, "namespace1", ns)
 	assert.Nil(t, err)
+	config, ns, err = buildK8sConfig(kubeconfig, "context-2")
+	assert.Nil(t, err)
+	assert.Equal(t, "namespace2", ns)
 	assert.NotNil(t, config)
-	config, err = buildK8sConfig(kubeconfig, "context-nonexistent")
-	assert.NotNil(t, err)
+	config, ns, err = buildK8sConfig(kubeconfig, "context-nonexistent")
 	assert.Nil(t, config)
+	assert.Equal(t, "", ns)
+	assert.NotNil(t, err)
 }

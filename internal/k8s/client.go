@@ -8,18 +8,23 @@ import (
 
 // KubernetesClientProvider provides a kubernetes.Interface instance for the given kubeconfig path and the context.
 type KubernetesClientProvider interface {
-	GetKubernetesClient(kubeconfigPath string, context string) (kubernetes.Interface, error)
+	GetClientAndNsInContext(kubeconfigPath string, context string) (kubernetes.Interface, string, error)
 }
 
 type kubernetesClientProvider struct {
 }
 
-func (k *kubernetesClientProvider) GetKubernetesClient(kubeconfigPath string, context string) (kubernetes.Interface, error) {
-	config, err := buildK8sConfig(kubeconfigPath, context)
+func (k *kubernetesClientProvider) GetClientAndNsInContext(kubeconfigPath string, context string) (kubernetes.Interface, string, error) {
+	config, namespace, err := buildK8sConfig(kubeconfigPath, context)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return kubernetes.NewForConfig(config)
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return kubeClient, namespace, err
 }
 
 // NewKubernetesClientProvider creates a new KubernetesClientProvider that provides "real" kubernetes api clients.
@@ -27,17 +32,28 @@ func NewKubernetesClientProvider() KubernetesClientProvider {
 	return &kubernetesClientProvider{}
 }
 
-func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config, error) {
+func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config, string, error) {
 	clientcmd.NewDefaultClientConfigLoadingRules()
 	clientConfigLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
-
 	if kubeconfigPath != "" {
 		clientConfigLoadingRules = &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath}
 	}
 
-	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+	config := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientConfigLoadingRules,
 		&clientcmd.ConfigOverrides{
 			CurrentContext: context,
-		}).ClientConfig()
+		})
+
+	namespace, _, err := config.Namespace()
+	if err != nil {
+		return nil, "", err
+	}
+
+	clientConfig, err := config.ClientConfig()
+	if err != nil {
+		return nil, "", err
+	}
+
+	return clientConfig, namespace, nil
 }

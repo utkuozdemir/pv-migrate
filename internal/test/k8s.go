@@ -61,6 +61,6 @@ type KubernetesClientProvider struct {
 	Objects []runtime.Object
 }
 
-func (m *KubernetesClientProvider) GetKubernetesClient(_ string, _ string) (kubernetes.Interface, error) {
-	return fake.NewSimpleClientset(m.Objects...), nil
+func (m *KubernetesClientProvider) GetClientAndNsInContext(_ string, _ string) (kubernetes.Interface, string, error) {
+	return fake.NewSimpleClientset(m.Objects...), "", nil
 }
