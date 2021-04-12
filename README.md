@@ -30,7 +30,7 @@ Another use case: You need to move a PersistentVolumeClaim from one namespace to
 
 Steps for MacOS:
 ```bash
-$ VERSION=v0.3.1
+$ VERSION=v0.4.0
 $ wget https://github.com/utkuozdemir/pv-migrate/releases/download/${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ tar -xvzf pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ mv pv-migrate /usr/local/bin
