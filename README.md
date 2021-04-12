@@ -21,35 +21,66 @@ Another use case: You need to move a PersistentVolumeClaim from one namespace to
 
 ## Usage
 
-To migrate contents of PersistentVolumeClaim small-pvc in namespace ns-a
-to the PersistentVolumeClaim big-pvc in namespace ns-b, use the following command:
+The main command:
+```
+NAME:
+   pv-migrate - A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another
+
+USAGE:
+   pv-migrate [global options] command [command options] [arguments...]
+
+COMMANDS:
+   migrate, m  Migrate data from the source pvc to the destination pvc
+   help, h     Shows a list of commands or help for one command
+
+GLOBAL OPTIONS:
+   --help, -h     show help (default: false)
+   --version, -v  print the version (default: false)
+```
+
+Migrate subcommand:
+```
+NAME:
+   pv-migrate migrate - Migrate data from the source pvc to the destination pvc
+
+USAGE:
+   pv-migrate migrate [command options] [SOURCE_PVC] [DESTINATION_PVC]
+
+OPTIONS:
+   --source-kubeconfig value, -k value    Path of the kubeconfig file of the source pvc (default: ~/.kube/config or KUBECONFIG env variable)
+   --source-context value, -c value       Context in the kubeconfig file of the source pvc (default: currently selected context in the source kubeconfig)
+   --source-namespace value, -n value     Namespace of the source pvc (default: currently selected namespace in the source context)
+   --dest-kubeconfig value, -K value      Path of the kubeconfig file of the destination pvc (default: ~/.kube/config or KUBECONFIG env variable)
+   --dest-context value, -C value         Context in the kubeconfig file of the destination pvc (default: currently selected context in the destination kubeconfig)
+   --dest-namespace value, -N value       Namespace of the destination pvc (default: currently selected namespace in the destination context)
+   --dest-delete-extraneous-files, -d     Delete extraneous files on the destination by using rsync's '--delete' flag (default: false)
+   --override-strategies value, -s value  Override the default list of strategies and their order by priority
+   --help, -h                             show help (default: false)
+```
+
+## Examples
+
+To migrate contents of PersistentVolumeClaim `small-pvc` in namespace `source-ns`
+to the PersistentVolumeClaim `big-pvc` in namespace `dest-ns`, use the following command:
 ```bash
-$ kubectl pv-migrate \
-  --source-namespace ns-a \
-  --source small-pvc \
-  --dest-namespace ns-b \
-  --dest big-pvc
-```
-This will create a temporary **sshd** pod that has the `small-pvc` mounted, 
-and an **rsync** job with `big-pvc` mounted, and will rsync the whole content from the source to the target.
-It will clean up the temporary resources it created after the operation is completed (or failed).
-
-The output will be like the following:
-```
-INFO[0000] Both claims exist and bound, proceeding...
-INFO[0000] Creating sshd pod                             podName=pv-migrate-sshd-amcsl
-INFO[0000] Waiting for pod to start running              podName=pv-migrate-sshd-amcsl
-INFO[0010] sshd pod running                              podName=pv-migrate-sshd-amcsl
-INFO[0010] Creating rsync job                            jobName=pv-migrate-rsync-amcsl
-INFO[0010] Waiting for rsync job to finish               jobName=pv-migrate-rsync-amcsl
-INFO[0016] Job is running                                jobName=pv-migrate-rsync-amcsl podName=pv-migrate-rsync-amcsl-9cff6
-INFO[0017] Job completed...                              jobName=pv-migrate-rsync-amcsl podName=pv-migrate-rsync-amcsl-9cff6
-INFO[0017] Doing cleanup                                 instance=amcsl namespace=ns-a
-INFO[0018] Finished cleanup                              instance=amcsl
-INFO[0018] Doing cleanup                                 instance=amcsl namespace=ns-b
-INFO[0018] Finished cleanup                              instance=amcsl
+$ pv-migrate migrate \
+  --source-namespace source-ns \
+  --dest-namespace dest-ns \
+  small-pvc big-pvc
 ```
 
-**Note:** For it to run as kubectl plugin via `kubectl pv-migrate`, 
-put the binary with name `kubectl-pv_migrate` under your `PATH`.  
-To use it standalone, simply run it like `./pv-migrate --source-namespace ....`
+Full example between different clusters:
+```bash
+pv-migrate migrate \
+  --source-kubeconfig /path/to/source/kubeconfig \
+  --source-context some-context \
+  --source-namespace source-ns \
+  --dest-kubeconfig /path/to/dest/kubeconfig \
+  --dest-context some-other-context \
+  --dest-namespace dest-ns \
+  --dest-delete-extraneous-files \
+  old-pvc new-pvc
+```
+
+**Note:** For it to run as kubectl plugin via `kubectl pv-migrate ...`, 
+put the binary with name `kubectl-pv_migrate` under your `PATH`.
