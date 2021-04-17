@@ -16,12 +16,12 @@ jobs:
   build:
     runs-on: ubuntu-20.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v2.3.4
-      - name: Setup Go
-        uses: actions/setup-go@v2.1.3
-        with:
-          go-version: 1.16
+#      - name: Checkout
+#        uses: actions/checkout@v2.3.4
+#      - name: Setup Go
+#        uses: actions/setup-go@v2.1.3
+#        with:
+#          go-version: 1.16
 #      - name: Install staticcheck
 #        run: go install honnef.co/go/tools/cmd/staticcheck@2020.2.3
 #      - name: Ensure gofmt
@@ -36,8 +36,22 @@ jobs:
 #        uses: shogo82148/actions-goveralls@v1.4.3
 #        with:
 #          path-to-profile: profile.cov
-      - name: Build with Goreleaser
-        uses: goreleaser/goreleaser-action@v2.4.1
+      - name: Setup first cluster
+        uses: engineerd/setup-kind@v0.5.0
         with:
-          version: v0.161.1
-          args: release --snapshot --skip-publish --rm-dist
+          version: v0.10.0
+          name: kind-1
+      - name: Setup second cluster
+        uses: engineerd/setup-kind@v0.5.0
+        with:
+          version: v0.10.0
+          name: kind-2
+      - name: Get pods on first cluster
+        run: kubectl --context kind-1 get pod -A
+      - name: Get pods on second cluster
+        run: kubectl --context kind-2 get pod -A
+#      - name: Build with Goreleaser
+#        uses: goreleaser/goreleaser-action@v2.4.1
+#        with:
+#          version: v0.161.1
+#          args: release --snapshot --skip-publish --rm-dist
