@@ -17,8 +17,8 @@ func TestCanDoSameClusterSameNsSameNode(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
+	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
@@ -37,8 +37,8 @@ func TestCanDoSameClusterSameNsDestRwx(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteMany)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
+	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteMany)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
@@ -57,8 +57,8 @@ func TestCanDoSameClusterSameNsSourceRox(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
+	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
@@ -77,8 +77,8 @@ func TestCannotDoSameClusterDifferentNs(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
-	pvcB := test.PvcWithAccessModes("namespace2", "pvc2", v1.ReadWriteOnce)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
+	pvcB := test.PVCWithAccessModes("namespace2", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace2", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
@@ -97,8 +97,8 @@ func TestCannotDoDifferentContext(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
+	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
@@ -120,8 +120,8 @@ func TestCannotDoDifferentKubeconfigs(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
+	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
@@ -140,8 +140,8 @@ func TestDetermineTargetNodeDestRWO(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
+	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
@@ -160,8 +160,8 @@ func TestDetermineTargetNodeSourceRWO(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteMany)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteMany)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteMany)
+	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteMany)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
@@ -180,8 +180,8 @@ func TestDetermineTargetNodeBothRWX(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteMany)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
+	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteMany)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
@@ -214,8 +214,8 @@ func TestBuildRsyncJob(t *testing.T) {
 
 	strategy := MountBoth{}
 	strategies := []strategy2.Strategy{&strategy}
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
-	pvcB := test.PvcWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
+	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
