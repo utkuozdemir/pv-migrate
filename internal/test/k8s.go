@@ -44,17 +44,7 @@ func ObjectMeta(namespace string, name string) metav1.ObjectMeta {
 }
 
 func PVCWithAccessModes(namespace string, name string, accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
-	return &corev1.PersistentVolumeClaim{
-		ObjectMeta: ObjectMeta(namespace, name),
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: accessModes,
-			Resources: corev1.ResourceRequirements{
-				Requests: map[corev1.ResourceName]resource.Quantity{
-					"storage": resource.MustParse(""),
-				},
-			},
-		},
-	}
+	return PVC(ObjectMeta(namespace, name), "512Mi", accessModes...)
 }
 
 func NS(name string) corev1.Namespace {
@@ -65,8 +55,8 @@ func NS(name string) corev1.Namespace {
 	}
 }
 
-func PVC(objectMeta metav1.ObjectMeta, capacity string, accessModes ...corev1.PersistentVolumeAccessMode) corev1.PersistentVolumeClaim {
-	return corev1.PersistentVolumeClaim{
+func PVC(objectMeta metav1.ObjectMeta, capacity string, accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: objectMeta,
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: accessModes,

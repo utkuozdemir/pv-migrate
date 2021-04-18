@@ -196,25 +196,25 @@ func createK8sResources(kubeClient kubernetes.Interface) error {
 	}
 
 	pvcAaaAaa := test.PVC(test.ObjectMeta("aaa", "aaa"), "512Mi", corev1.ReadWriteOnce)
-	err = createPVC(kubeClient, pvcAaaAaa)
+	err = createPVC(kubeClient, *pvcAaaAaa)
 	if err != nil {
 		return err
 	}
 
 	pvcAaaBbb := test.PVC(test.ObjectMeta("aaa", "bbb"), "1024Mi", corev1.ReadWriteOnce)
-	err = createPVC(kubeClient, pvcAaaBbb)
+	err = createPVC(kubeClient, *pvcAaaBbb)
 	if err != nil {
 		return err
 	}
 
 	pvcBbbBbb := test.PVC(test.ObjectMeta("bbb", "bbb"), "1024Mi", corev1.ReadWriteOnce)
-	err = createPVC(kubeClient, pvcBbbBbb)
+	err = createPVC(kubeClient, *pvcBbbBbb)
 	if err != nil {
 		return err
 	}
 
 	pvcCccCcc := test.PVC(test.ObjectMeta("ccc", "ccc"), "1024Mi", corev1.ReadWriteOnce)
-	err = createPVC(kubeClient, pvcCccCcc)
+	err = createPVC(kubeClient, *pvcCccCcc)
 	if err != nil {
 		return err
 	}
