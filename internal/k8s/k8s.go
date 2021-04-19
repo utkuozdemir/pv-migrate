@@ -63,7 +63,7 @@ func GetServiceAddress(service *corev1.Service, kubeClient kubernetes.Interface)
 	}
 }
 
-func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job batchv1.Job) error {
+func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job *batchv1.Job) error {
 	channel := make(chan podResult)
 	defer close(channel)
 
@@ -100,7 +100,7 @@ func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job batchv1.Job
 	log.WithFields(log.Fields{
 		"job": job.Name,
 	}).Info("Creating rsync job")
-	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(context.TODO(), &job, metav1.CreateOptions{})
+	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(context.TODO(), job, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}

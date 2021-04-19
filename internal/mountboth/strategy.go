@@ -2,7 +2,6 @@ package mountboth
 
 import (
 	"errors"
-	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
@@ -47,7 +46,10 @@ func (r *MountBoth) Run(task task.Task) error {
 	}
 
 	node := determineTargetNode(task)
-	job := buildRsyncJob(task, node)
+	job, err := buildRsyncJob(task, node)
+	if err != nil {
+		return err
+	}
 	return k8s.CreateJobWaitTillCompleted(task.Source().KubeClient(), job)
 }
 
@@ -61,13 +63,15 @@ func determineTargetNode(task task.Task) string {
 	return task.Dest().MountedNode()
 }
 
-func buildRsyncJob(task task.Task, node string) batchv1.Job {
+func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 	jobTTLSeconds := int32(600)
 	backoffLimit := int32(0)
 	id := task.ID()
 	jobName := "pv-migrate-rsync-" + id
-	rsyncCommand := rsync.BuildRsyncCommand(task.Options().DeleteExtraneousFiles(), nil)
-	log.WithField("rsyncCommand", rsyncCommand).Info("Built rsync command")
+	rsyncScript, err := rsync.BuildRsyncScript(task.Options().DeleteExtraneousFiles(), "")
+	if err != nil {
+
+	}
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
@@ -104,9 +108,13 @@ func buildRsyncJob(task task.Task, node string) batchv1.Job {
 					},
 					Containers: []corev1.Container{
 						{
-							Name:    "app",
-							Image:   "docker.io/instrumentisto/rsync-ssh:alpine",
-							Command: rsyncCommand,
+							Name:  "app",
+							Image: "docker.io/instrumentisto/rsync-ssh:alpine",
+							Command: []string{
+								"sh",
+								"-c",
+								rsyncScript,
+							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "source-vol",
@@ -125,5 +133,5 @@ func buildRsyncJob(task task.Task, node string) batchv1.Job {
 			},
 		},
 	}
-	return job
+	return &job, nil
 }
