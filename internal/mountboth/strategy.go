@@ -70,7 +70,7 @@ func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 	jobName := "pv-migrate-rsync-" + id
 	rsyncScript, err := rsync.BuildRsyncScript(task.Options().DeleteExtraneousFiles(), "")
 	if err != nil {
-
+		return nil, err
 	}
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{

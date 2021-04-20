@@ -225,7 +225,8 @@ func TestBuildRsyncJob(t *testing.T) {
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
 	task, _ := e.BuildTask(request)
 	targetNode := determineTargetNode(task)
-	rsyncJob := buildRsyncJob(task, targetNode)
+	rsyncJob, err := buildRsyncJob(task, targetNode)
+	assert.NoError(t, err)
 	jobTemplate := rsyncJob.Spec.Template
 	podSpec := jobTemplate.Spec
 	container := podSpec.Containers[0]
