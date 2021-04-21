@@ -17,15 +17,6 @@ import (
 //go:embed _kubeconfig.yaml
 var kubeconfig string
 
-//func UserKubeconfigDir() string {
-//	homeDir, _ := os.UserHomeDir()
-//	return filepath.Clean(homeDir + "/.kube/")
-//}
-//
-//func UserKubeconfigPath() string {
-//	return filepath.Clean(UserKubeconfigDir() + "/config")
-//}
-
 func PrepareKubeconfig() string {
 	testConfig, _ := ioutil.TempFile("", "pv-migrate-testconfig-*.yaml")
 	_, _ = testConfig.WriteString(kubeconfig)
@@ -43,7 +34,8 @@ func ObjectMeta(namespace string, name string) metav1.ObjectMeta {
 	}
 }
 
-func PVCWithAccessModes(namespace string, name string, accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
+func PVCWithAccessModes(namespace string, name string,
+	accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
 	return PVC(ObjectMeta(namespace, name), "512Mi", accessModes...)
 }
 
@@ -55,7 +47,8 @@ func NS(name string) corev1.Namespace {
 	}
 }
 
-func PVC(objectMeta metav1.ObjectMeta, capacity string, accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
+func PVC(objectMeta metav1.ObjectMeta, capacity string,
+	accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: objectMeta,
 		Spec: corev1.PersistentVolumeClaimSpec{
