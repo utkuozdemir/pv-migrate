@@ -1,12 +1,24 @@
 package main
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/app"
 	"io/ioutil"
 	"os"
 	"testing"
 )
+
+const sourceKubeconfigParamKey = "--source-kubeconfig"
+const sourceNsParamKey = "--source-namespace"
+const destKubeconfigParamKey = "--dest-kubeconfig"
+const destNsParamKey = "--dest-namespace"
+const testFilePath = "/volume/file.txt"
+const migrateCommand = "migrate"
+const generateDataContent = "DATA"
+
+var generateDataShellCommand = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s", generateDataContent, testFilePath)}
+var printDataShellCommand = []string{"cat", testFilePath}
 
 func TestMain(m *testing.M) {
 	beforeTests()
@@ -18,52 +30,48 @@ func TestMain(m *testing.M) {
 func TestSameNS(t *testing.T) {
 	cliApp := app.Build()
 	args := []string{
-		os.Args[0], "migrate",
-		"--source-kubeconfig", testContext.kubeconfig,
-		"--source-namespace", "aaa",
-		"--dest-kubeconfig", testContext.kubeconfig,
-		"--dest-namespace", "aaa",
+		os.Args[0], migrateCommand,
+		sourceKubeconfigParamKey, testContext.kubeconfig,
+		sourceNsParamKey, "aaa",
+		destKubeconfigParamKey, testContext.kubeconfig,
+		destNsParamKey, "aaa",
 		"aaa", "bbb",
 	}
 
-	_, _, err := execInFirstPodWithPrefix("aaa", "aaa",
-		[]string{"sh", "-c", "echo -n aaaaa > /volume/file.txt"})
+	_, _, err := execInFirstPodWithPrefix("aaa", "aaa", generateDataShellCommand)
 	assert.NoError(t, err)
 
 	err = cliApp.Run(args)
 	assert.NoError(t, err)
 
-	stdout, stderr, err := execInFirstPodWithPrefix("aaa", "bbb",
-		[]string{"cat", "/volume/file.txt"})
+	stdout, stderr, err := execInFirstPodWithPrefix("aaa", "bbb", printDataShellCommand)
 	assert.NoError(t, err)
 	assert.Empty(t, stderr)
-	assert.Equal(t, "aaaaa", stdout)
+	assert.Equal(t, generateDataContent, stdout)
 }
 
 func TestDifferentNS(t *testing.T) {
 	cliApp := app.Build()
 
 	args := []string{
-		os.Args[0], "migrate",
-		"--source-kubeconfig", testContext.kubeconfig,
-		"--source-namespace", "aaa",
-		"--dest-kubeconfig", testContext.kubeconfig,
-		"--dest-namespace", "bbb",
+		os.Args[0], migrateCommand,
+		sourceKubeconfigParamKey, testContext.kubeconfig,
+		sourceNsParamKey, "aaa",
+		destKubeconfigParamKey, testContext.kubeconfig,
+		destNsParamKey, "bbb",
 		"aaa", "bbb",
 	}
 
-	_, _, err := execInFirstPodWithPrefix("aaa", "aaa",
-		[]string{"sh", "-c", "echo -n DATA > /volume/file.txt"})
+	_, _, err := execInFirstPodWithPrefix("aaa", "aaa", generateDataShellCommand)
 	assert.NoError(t, err)
 
 	err = cliApp.Run(args)
 	assert.NoError(t, err)
 
-	stdout, stderr, err := execInFirstPodWithPrefix("bbb", "bbb",
-		[]string{"cat", "/volume/file.txt"})
+	stdout, stderr, err := execInFirstPodWithPrefix("bbb", "bbb", printDataShellCommand)
 	assert.NoError(t, err)
 	assert.Empty(t, stderr)
-	assert.Equal(t, "DATA", stdout)
+	assert.Equal(t, generateDataContent, stdout)
 }
 
 // TestDifferentCluster will trick the application to "think" that source and dest are in 2 different clusters
@@ -78,24 +86,22 @@ func TestDifferentCluster(t *testing.T) {
 	cliApp := app.Build()
 
 	args := []string{
-		os.Args[0], "migrate",
-		"--source-kubeconfig", testContext.kubeconfig,
-		"--source-namespace", "aaa",
-		"--dest-kubeconfig", kubeconfigCopy,
-		"--dest-namespace", "ccc",
+		os.Args[0], migrateCommand,
+		sourceKubeconfigParamKey, testContext.kubeconfig,
+		sourceNsParamKey, "aaa",
+		destKubeconfigParamKey, kubeconfigCopy,
+		destNsParamKey, "ccc",
 		"aaa", "ccc",
 	}
 
-	_, _, err := execInFirstPodWithPrefix("aaa", "aaa",
-		[]string{"sh", "-c", "echo -n DATA > /volume/file.txt"})
+	_, _, err := execInFirstPodWithPrefix("aaa", "aaa", generateDataShellCommand)
 	assert.NoError(t, err)
 
 	err = cliApp.Run(args)
 	assert.NoError(t, err)
 
-	stdout, stderr, err := execInFirstPodWithPrefix("ccc", "ccc",
-		[]string{"cat", "/volume/file.txt"})
+	stdout, stderr, err := execInFirstPodWithPrefix("ccc", "ccc", printDataShellCommand)
 	assert.NoError(t, err)
 	assert.Empty(t, stderr)
-	assert.Equal(t, "DATA", stdout)
+	assert.Equal(t, generateDataContent, stdout)
 }
