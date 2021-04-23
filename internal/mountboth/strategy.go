@@ -2,6 +2,7 @@ package mountboth
 
 import (
 	"errors"
+	"github.com/utkuozdemir/pv-migrate/internal/job"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
@@ -14,7 +15,8 @@ type MountBoth struct {
 }
 
 func (r *MountBoth) Cleanup(task task.Task) error {
-	return k8s.CleanupForID(task.Source().KubeClient(), task.Source().Claim().Namespace, task.ID())
+	job := task.Job()
+	return k8s.CleanupForID(job.Source().KubeClient(), job.Source().Claim().Namespace, task.ID())
 }
 
 func (r *MountBoth) Name() string {
@@ -25,42 +27,43 @@ func (r *MountBoth) Priority() int {
 	return 1000
 }
 
-func (r *MountBoth) CanDo(task task.Task) bool {
-	sameCluster := task.Source().KubeClient() == task.Dest().KubeClient()
+func (r *MountBoth) CanDo(job job.Job) bool {
+	sameCluster := job.Source().KubeClient() == job.Dest().KubeClient()
 	if !sameCluster {
 		return false
 	}
 
-	sameNamespace := task.Source().Claim().Namespace == task.Dest().Claim().Namespace
+	sameNamespace := job.Source().Claim().Namespace == job.Dest().Claim().Namespace
 	if !sameNamespace {
 		return false
 	}
 
-	sameNode := task.Source().MountedNode() == task.Dest().MountedNode()
-	return sameNode || task.Source().SupportsROX() || task.Source().SupportsRWX() || task.Dest().SupportsRWX()
+	sameNode := job.Source().MountedNode() == job.Dest().MountedNode()
+	return sameNode || job.Source().SupportsROX() || job.Source().SupportsRWX() || job.Dest().SupportsRWX()
 }
 
 func (r *MountBoth) Run(task task.Task) error {
-	if !r.CanDo(task) {
+	if !r.CanDo(task.Job()) {
 		return errors.New("cannot do this task using this strategy")
 	}
 
-	node := determineTargetNode(task)
-	job, err := buildRsyncJob(task, node)
+	node := determineTargetNode(task.Job())
+	migrationJob, err := buildRsyncJob(task, node)
 	if err != nil {
 		return err
 	}
-	return k8s.CreateJobWaitTillCompleted(task.Source().KubeClient(), job)
+
+	return k8s.CreateJobWaitTillCompleted(task.Job().Source().KubeClient(), migrationJob)
 }
 
-func determineTargetNode(task task.Task) string {
-	if (task.Source().SupportsROX() || task.Source().SupportsRWX()) && task.Dest().SupportsRWX() {
+func determineTargetNode(job job.Job) string {
+	if (job.Source().SupportsROX() || job.Source().SupportsRWX()) && job.Dest().SupportsRWX() {
 		return ""
 	}
-	if !task.Source().SupportsROX() && !task.Source().SupportsRWX() {
-		return task.Source().MountedNode()
+	if !job.Source().SupportsROX() && !job.Source().SupportsRWX() {
+		return job.Source().MountedNode()
 	}
-	return task.Dest().MountedNode()
+	return job.Dest().MountedNode()
 }
 
 func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
@@ -68,14 +71,15 @@ func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 	backoffLimit := int32(0)
 	id := task.ID()
 	jobName := "pv-migrate-rsync-" + id
-	rsyncScript, err := rsync.BuildRsyncScript(task.Options().DeleteExtraneousFiles(), "")
+	migrationJob := task.Job()
+	rsyncScript, err := rsync.BuildRsyncScript(migrationJob.Options().DeleteExtraneousFiles(), "")
 	if err != nil {
 		return nil, err
 	}
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
-			Namespace: task.Dest().Claim().Namespace,
+			Namespace: migrationJob.Dest().Claim().Namespace,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoffLimit,
@@ -84,7 +88,7 @@ func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      jobName,
-					Namespace: task.Dest().Claim().Namespace,
+					Namespace: migrationJob.Dest().Claim().Namespace,
 					Labels:    k8s.Labels(id),
 				},
 				Spec: corev1.PodSpec{
@@ -93,7 +97,7 @@ func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 							Name: "source-vol",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: task.Source().Claim().Name,
+									ClaimName: migrationJob.Source().Claim().Name,
 								},
 							},
 						},
@@ -101,7 +105,7 @@ func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 							Name: "dest-vol",
 							VolumeSource: corev1.VolumeSource{
 								PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-									ClaimName: task.Dest().Claim().Name,
+									ClaimName: migrationJob.Dest().Claim().Name,
 								},
 							},
 						},

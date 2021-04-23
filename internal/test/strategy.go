@@ -1,13 +1,14 @@
 package test
 
 import (
+	"github.com/utkuozdemir/pv-migrate/internal/job"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 )
 
 type Strategy struct {
 	NameVal     string
 	PriorityVal int
-	CanDoVal    func(task.Task) bool
+	CanDoVal    func(job.Job) bool
 	RunFunc     func(task.Task) error
 	CleanupFunc func(task.Task) error
 }
@@ -20,7 +21,7 @@ func (t *Strategy) Priority() int {
 	return t.PriorityVal
 }
 
-func (t *Strategy) CanDo(task task.Task) bool {
+func (t *Strategy) CanDo(task job.Job) bool {
 	return t.CanDoVal(task)
 }
 

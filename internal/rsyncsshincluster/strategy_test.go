@@ -26,7 +26,7 @@ func TestCanDoSameCluster(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context1", "namespace2", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	canDo := strategy.CanDo(task)
 	assert.True(t, canDo)
 }
@@ -46,7 +46,7 @@ func TestCannotDoDifferentContext(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context2", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	canDo := strategy.CanDo(task)
 	assert.False(t, canDo)
 }
@@ -69,7 +69,7 @@ func TestCannotDoDifferentKubeconfigs(t *testing.T) {
 	source := request2.NewPVC(kubeconfig1, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig2, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	canDo := strategy.CanDo(task)
 	assert.False(t, canDo)
 }
