@@ -33,10 +33,9 @@ func NewKubernetesClientProvider() KubernetesClientProvider {
 }
 
 func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config, string, error) {
-	clientcmd.NewDefaultClientConfigLoadingRules()
 	clientConfigLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	if kubeconfigPath != "" {
-		clientConfigLoadingRules = &clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfigPath}
+		clientConfigLoadingRules.ExplicitPath = kubeconfigPath
 	}
 
 	config := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(

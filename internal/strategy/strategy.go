@@ -5,29 +5,29 @@ import (
 )
 
 type Strategy interface {
-	// Unique name of the strategy.
+	// Name is the unique name of the strategy.
 	//
 	// Must follow kebab-case and return the same string every time.
 	Name() string
 
-	// Priority of the strategy.
+	// Priority is the numeric priority of the strategy.
 	//
 	// If the strategy is more preferable compared to another, it must return a smaller number (higher priority).
 	//
 	// Must always return the same number.
 	Priority() int
 
-	// True if this strategy can execute the task.
+	// CanDo must return True if this strategy can execute the task.
 	//
 	// Needs to evaluate the input and return if it can execute the task or not.
 	CanDo(task task.Task) bool
 
-	// Execute the migration for the given task.
+	// Run executes the migration for the given task.
 	//
-	// Actual implementation of the migration.
+	// This is the actual implementation of the migration.
 	Run(task task.Task) error
 
-	// Clean up the created resources.
+	// Cleanup is the function to remove the temporary resources used for the migration.
 	//
 	// The engine will call cleanup after the execution of the migration, no matter if it succeeds or fails.
 	// It is recommended to implement this as best-effort, meaning that if it fails to remove one resource,

@@ -1,37 +1,75 @@
 package rsync
 
 import (
+	"bytes"
 	"context"
-	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"html/template"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
-func BuildRsyncCommand(deleteExtraneousFiles bool, sshTargetHost *string) []string {
-	rsyncCommand := []string{"rsync"}
-	if deleteExtraneousFiles {
-		rsyncCommand = append(rsyncCommand, "--delete")
-	}
-	rsyncCommand = append(rsyncCommand, "-avzh")
-	rsyncCommand = append(rsyncCommand, "--progress")
+const maxRetries = 5
+const retryIntervalSecs = 5
 
-	if sshTargetHost != nil {
-		rsyncCommand = append(rsyncCommand, "-e")
-		rsyncCommand = append(rsyncCommand, "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null")
-		rsyncCommand = append(rsyncCommand, fmt.Sprintf("root@%s:/source/", *sshTargetHost))
-	} else {
-		rsyncCommand = append(rsyncCommand, "/source/")
+var scriptTemplate = template.Must(template.New("script").Parse(`
+n=0
+rc=1
+retries={{.MaxRetries}}
+until [ "$n" -ge "$retries" ]
+do
+  rsync \
+    {{ if .DeleteExtraneousFiles -}}
+    --delete \
+    {{ end -}}
+    -avzh \
+    --progress \
+    {{ if .SshTargetHost -}}
+    -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    root@{{.SshTargetHost}}:/source/ \
+    {{ else -}}
+    /source/ \
+    {{ end -}}
+    /dest/ && \
+    rc=0 && \
+    break
+  n=$((n+1))
+  sleep {{.RetryIntervalSecs}}
+done
+
+if [ $rc -ne 0 ]; then
+  echo "Rsync job failed after $retries retries"
+fi
+exit $rc
+`))
+
+type script struct {
+	MaxRetries            int
+	DeleteExtraneousFiles bool
+	SshTargetHost         string
+	RetryIntervalSecs     int
+}
+
+func BuildRsyncScript(deleteExtraneousFiles bool, sshTargetHost string) (string, error) {
+	s := script{
+		MaxRetries:            maxRetries,
+		DeleteExtraneousFiles: deleteExtraneousFiles,
+		SshTargetHost:         sshTargetHost,
+		RetryIntervalSecs:     retryIntervalSecs,
 	}
 
-	rsyncCommand = append(rsyncCommand, "/dest/")
-	return rsyncCommand
+	var templatedScript bytes.Buffer
+	err := scriptTemplate.Execute(&templatedScript, s)
+	if err != nil {
+		return "", err
+	}
+
+	return templatedScript.String(), nil
 }
 
 func createRsyncPrivateKeySecret(instanceId string, pvcInfo pvc.Info, privateKey string) (*corev1.Secret, error) {
@@ -53,15 +91,18 @@ func createRsyncPrivateKeySecret(instanceId string, pvcInfo pvc.Info, privateKey
 	return secrets.Create(context.TODO(), &secret, metav1.CreateOptions{})
 }
 
-func buildRsyncJobDest(task task.Task, targetHost string, privateKeySecretName string) batchv1.Job {
+func buildRsyncJobDest(task task.Task, targetHost string, privateKeySecretName string) (*batchv1.Job, error) {
 	jobTTLSeconds := int32(600)
 	backoffLimit := int32(0)
 	id := task.ID()
 	jobName := "pv-migrate-rsync-" + id
 	destPvcInfo := task.Dest()
 
-	rsyncCommand := BuildRsyncCommand(task.Options().DeleteExtraneousFiles(), &targetHost)
-	log.WithField("rsyncCommand", strings.Join(rsyncCommand, " ")).Info("Built rsync command")
+	rsyncScript, err := BuildRsyncScript(task.Options().DeleteExtraneousFiles(), targetHost)
+	if err != nil {
+		return nil, err
+	}
+
 	permissions := int32(256) // octal mode 0400 - we don't need more than that
 	job := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
@@ -100,9 +141,13 @@ func buildRsyncJobDest(task task.Task, targetHost string, privateKeySecretName s
 					},
 					Containers: []corev1.Container{
 						{
-							Name:    "app",
-							Image:   "docker.io/instrumentisto/rsync-ssh:alpine",
-							Command: rsyncCommand,
+							Name:  "app",
+							Image: "docker.io/instrumentisto/rsync-ssh:alpine",
+							Command: []string{
+								"sh",
+								"-c",
+								rsyncScript,
+							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
 									Name:      "dest-vol",
@@ -122,7 +167,7 @@ func buildRsyncJobDest(task task.Task, targetHost string, privateKeySecretName s
 			},
 		},
 	}
-	return job
+	return &job, nil
 }
 
 func RunRsyncJobOverSsh(task task.Task, serviceType corev1.ServiceType) error {
@@ -166,7 +211,11 @@ func RunRsyncJobOverSsh(task task.Task, serviceType corev1.ServiceType) error {
 	}
 
 	log.WithField("targetHost", targetHost).Info("Connecting to the rsync server")
-	rsyncJob := buildRsyncJobDest(task, targetHost, secret.Name)
+	rsyncJob, err := buildRsyncJobDest(task, targetHost, secret.Name)
+	if err != nil {
+		return err
+	}
+
 	err = k8s.CreateJobWaitTillCompleted(destKubeClient, rsyncJob)
 	if err != nil {
 		return err

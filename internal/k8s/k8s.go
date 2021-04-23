@@ -63,7 +63,7 @@ func GetServiceAddress(service *corev1.Service, kubeClient kubernetes.Interface)
 	}
 }
 
-func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job batchv1.Job) error {
+func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job *batchv1.Job) error {
 	channel := make(chan podResult)
 	defer close(channel)
 
@@ -76,15 +76,15 @@ func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job batchv1.Job
 					switch newPod.Status.Phase {
 					case corev1.PodSucceeded:
 						log.WithFields(log.Fields{
-							"jobName": job.Name,
-							"podName": newPod.Name,
+							"job": job.Name,
+							"pod": newPod.Name,
 						}).Info("Job completed")
 						channel <- podResult{true, newPod}
 					case corev1.PodRunning:
 						log.WithFields(log.Fields{
-							"jobName": job.Name,
-							"podName": newPod.Name,
-						}).Info("Job is running ")
+							"job": job.Name,
+							"pod": newPod.Name,
+						}).Info("job running")
 					case corev1.PodFailed, corev1.PodUnknown:
 						channel <- podResult{false, newPod}
 					}
@@ -98,15 +98,15 @@ func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job batchv1.Job
 	sharedInformerFactory.Start(stopCh)
 
 	log.WithFields(log.Fields{
-		"jobName": job.Name,
+		"job": job.Name,
 	}).Info("Creating rsync job")
-	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(context.TODO(), &job, metav1.CreateOptions{})
+	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(context.TODO(), job, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
 
 	log.WithFields(log.Fields{
-		"jobName": job.Name,
+		"job": job.Name,
 	}).Info("Waiting for rsync job to finish")
 
 	result := <-channel

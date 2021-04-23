@@ -226,8 +226,8 @@ func testRequest(strategies ...string) request.Request {
 }
 
 func testEngine(strategies ...strategy.Strategy) Engine {
-	pvcA := test.PvcWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
-	pvcB := test.PvcWithAccessModes("namespace2", "pvc2", v1.ReadWriteOnce, v1.ReadWriteMany)
+	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
+	pvcB := test.PVCWithAccessModes("namespace2", "pvc2", v1.ReadWriteOnce, v1.ReadWriteMany)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace2", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
