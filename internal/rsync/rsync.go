@@ -96,9 +96,10 @@ func buildRsyncJobDest(task task.Task, targetHost string, privateKeySecretName s
 	backoffLimit := int32(0)
 	id := task.ID()
 	jobName := "pv-migrate-rsync-" + id
-	destPvcInfo := task.Dest()
+	migrationJob := task.Job()
+	destPvcInfo := migrationJob.Dest()
 
-	rsyncScript, err := BuildRsyncScript(task.Options().DeleteExtraneousFiles(), targetHost)
+	rsyncScript, err := BuildRsyncScript(migrationJob.Options().DeleteExtraneousFiles(), targetHost)
 	if err != nil {
 		return nil, err
 	}
@@ -172,9 +173,10 @@ func buildRsyncJobDest(task task.Task, targetHost string, privateKeySecretName s
 
 func RunRsyncJobOverSsh(task task.Task, serviceType corev1.ServiceType) error {
 	instanceId := task.ID()
-	sourcePvcInfo := task.Source()
-	sourceKubeClient := task.Source().KubeClient()
-	destPvcInfo := task.Dest()
+	migrationJob := task.Job()
+	sourcePvcInfo := migrationJob.Source()
+	sourceKubeClient := migrationJob.Source().KubeClient()
+	destPvcInfo := migrationJob.Dest()
 	destKubeClient := destPvcInfo.KubeClient()
 
 	log.Info("Generating RSA SSH key pair")

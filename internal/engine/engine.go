@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"github.com/utkuozdemir/pv-migrate/internal/job"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/request"
@@ -21,9 +22,9 @@ type Engine interface {
 	// Run runs the migration
 	Run(request request.Request) error
 	validate(request request.Request) error
-	// BuildTask builds a Request from a Task
-	BuildTask(request request.Request) (task.Task, error)
-	determineStrategies(request request.Request, task task.Task) ([]strategy.Strategy, error)
+	// BuildJob builds a Job from a Request
+	BuildJob(request request.Request) (job.Job, error)
+	determineStrategies(request request.Request, job job.Job) ([]strategy.Strategy, error)
 	findStrategies(strategyNames ...string) ([]strategy.Strategy, error)
 }
 
@@ -57,18 +58,18 @@ func NewWithKubernetesClientProvider(strategies []strategy.Strategy, kubernetesC
 		strategyMap:              strategyMap}, nil
 }
 
-func (e engine) Run(request request.Request) error {
+func (e *engine) Run(request request.Request) error {
 	err := e.validate(request)
 	if err != nil {
 		return err
 	}
 
-	t, err := e.BuildTask(request)
+	migrationJob, err := e.BuildJob(request)
 	if err != nil {
 		return err
 	}
 
-	strategies, err := e.determineStrategies(request, t)
+	strategies, err := e.determineStrategies(request, migrationJob)
 	if err != nil {
 		return err
 	}
@@ -86,13 +87,15 @@ func (e engine) Run(request request.Request) error {
 		Infof("Determined %v strategies to be attempted", numStrategies)
 
 	for _, s := range strategies {
+		migrationTask := task.New(migrationJob)
+
 		logger = log.WithFields(log.Fields{
 			"strategy": s.Name(),
 			"priority": s.Priority(),
 		})
 
 		logger.Info("Executing strategy")
-		runErr := s.Run(t)
+		runErr := s.Run(migrationTask)
 		if runErr != nil {
 			logger.WithError(runErr).Warn("Migration failed, will try remaining strategies")
 		} else {
@@ -100,7 +103,7 @@ func (e engine) Run(request request.Request) error {
 		}
 
 		logger.Info("Cleaning up")
-		cleanupErr := s.Cleanup(t)
+		cleanupErr := s.Cleanup(migrationTask)
 		if cleanupErr != nil {
 			logger.WithError(cleanupErr).Warn("Cleanup failed, you might want to clean up manually")
 		}
@@ -124,7 +127,7 @@ func (e *engine) validate(request request.Request) error {
 	return nil
 }
 
-func (e *engine) BuildTask(request request.Request) (task.Task, error) {
+func (e *engine) BuildJob(request request.Request) (job.Job, error) {
 	id := util.RandomHexadecimalString(5)
 
 	source := request.Source()
@@ -167,18 +170,18 @@ func (e *engine) BuildTask(request request.Request) (task.Task, error) {
 		return nil, errors.New("destination pvc is not writeable")
 	}
 
-	taskOptions := task.NewOptions(request.Options().DeleteExtraneousFiles())
-	return task.New(id, sourcePvcInfo, destPvcInfo, taskOptions), nil
+	taskOptions := job.NewOptions(request.Options().DeleteExtraneousFiles())
+	return job.New(id, sourcePvcInfo, destPvcInfo, taskOptions), nil
 }
 
-func (e *engine) determineStrategies(request request.Request, task task.Task) ([]strategy.Strategy, error) {
+func (e *engine) determineStrategies(request request.Request, job job.Job) ([]strategy.Strategy, error) {
 	if len(request.Strategies()) > 0 {
 		return e.findStrategies(request.Strategies()...)
 	}
 
 	var strategies []strategy.Strategy
 	for _, s := range e.strategyMap {
-		if (s).CanDo(task) {
+		if (s).CanDo(job) {
 			strategies = append(strategies, s)
 		}
 	}

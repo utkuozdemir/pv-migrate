@@ -5,6 +5,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/engine"
 	request2 "github.com/utkuozdemir/pv-migrate/internal/request"
 	strategy2 "github.com/utkuozdemir/pv-migrate/internal/strategy"
+	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/test"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -26,7 +27,7 @@ func TestCanDoSameClusterSameNsSameNode(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	canDo := strategy.CanDo(task)
 	assert.True(t, canDo)
 }
@@ -46,7 +47,7 @@ func TestCanDoSameClusterSameNsDestRwx(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	canDo := strategy.CanDo(task)
 	assert.True(t, canDo)
 }
@@ -66,7 +67,7 @@ func TestCanDoSameClusterSameNsSourceRox(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	canDo := strategy.CanDo(task)
 	assert.True(t, canDo)
 }
@@ -86,7 +87,7 @@ func TestCannotDoSameClusterDifferentNs(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context1", "namespace2", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	canDo := strategy.CanDo(task)
 	assert.False(t, canDo)
 }
@@ -106,7 +107,7 @@ func TestCannotDoDifferentContext(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context2", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	canDo := strategy.CanDo(task)
 	assert.False(t, canDo)
 }
@@ -129,7 +130,7 @@ func TestCannotDoDifferentKubeconfigs(t *testing.T) {
 	source := request2.NewPVC(kubeconfig1, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig2, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	canDo := strategy.CanDo(task)
 	assert.False(t, canDo)
 }
@@ -149,8 +150,8 @@ func TestDetermineTargetNodeDestRWO(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
-	targetNode := determineTargetNode(task)
+	migrationJob, _ := e.BuildJob(request)
+	targetNode := determineTargetNode(migrationJob)
 	assert.Equal(t, "node2", targetNode)
 }
 
@@ -169,7 +170,7 @@ func TestDetermineTargetNodeSourceRWO(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
+	task, _ := e.BuildJob(request)
 	targetNode := determineTargetNode(task)
 	assert.Equal(t, "", targetNode)
 }
@@ -189,8 +190,8 @@ func TestDetermineTargetNodeBothRWX(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
-	targetNode := determineTargetNode(task)
+	migrationJob, _ := e.BuildJob(request)
+	targetNode := determineTargetNode(migrationJob)
 	assert.Equal(t, "node1", targetNode)
 }
 
@@ -223,9 +224,10 @@ func TestBuildRsyncJob(t *testing.T) {
 	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
 	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
 	request := request2.New(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildTask(request)
-	targetNode := determineTargetNode(task)
-	rsyncJob, err := buildRsyncJob(task, targetNode)
+	migrationJob, _ := e.BuildJob(request)
+	migrationTask := task.New(migrationJob)
+	targetNode := determineTargetNode(migrationJob)
+	rsyncJob, err := buildRsyncJob(migrationTask, targetNode)
 	assert.NoError(t, err)
 	jobTemplate := rsyncJob.Spec.Template
 	podSpec := jobTemplate.Spec

@@ -30,7 +30,7 @@ jobs:
         run: go mod tidy && git diff --no-patch --exit-code
       - name: Run static analysis
         run: staticcheck ./...
-      - name: Run unit tests
+      - name: Run tests
         run: go test -v -coverprofile=profile.cov ./...
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.4.3

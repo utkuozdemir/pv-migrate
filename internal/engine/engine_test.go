@@ -3,6 +3,7 @@ package engine
 import (
 	"errors"
 	"github.com/stretchr/testify/assert"
+	"github.com/utkuozdemir/pv-migrate/internal/job"
 	"github.com/utkuozdemir/pv-migrate/internal/request"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
@@ -45,24 +46,25 @@ func TestValidateRequestWithNonExistingStrategy(t *testing.T) {
 func TestBuildTask(t *testing.T) {
 	testEngine := testEngine(testStrategies()...)
 	testRequest := testRequest()
-	testTask, err := testEngine.BuildTask(testRequest)
+	migrationJob, err := testEngine.BuildJob(testRequest)
+	migrationTask := task.New(migrationJob)
 	assert.Nil(t, err)
 
-	assert.Len(t, testTask.ID(), 5)
+	assert.Len(t, migrationTask.ID(), 5)
 
-	assert.True(t, testTask.Options().DeleteExtraneousFiles())
-	assert.Equal(t, "namespace1", testTask.Source().Claim().Namespace)
-	assert.Equal(t, "pvc1", testTask.Source().Claim().Name)
-	assert.Equal(t, "node1", testTask.Source().MountedNode())
-	assert.False(t, testTask.Source().SupportsRWO())
-	assert.True(t, testTask.Source().SupportsROX())
-	assert.False(t, testTask.Source().SupportsRWX())
-	assert.Equal(t, "namespace2", testTask.Dest().Claim().Namespace)
-	assert.Equal(t, "pvc2", testTask.Dest().Claim().Name)
-	assert.Equal(t, "node2", testTask.Dest().MountedNode())
-	assert.True(t, testTask.Dest().SupportsRWO())
-	assert.False(t, testTask.Dest().SupportsROX())
-	assert.True(t, testTask.Dest().SupportsRWX())
+	assert.True(t, migrationJob.Options().DeleteExtraneousFiles())
+	assert.Equal(t, "namespace1", migrationJob.Source().Claim().Namespace)
+	assert.Equal(t, "pvc1", migrationJob.Source().Claim().Name)
+	assert.Equal(t, "node1", migrationJob.Source().MountedNode())
+	assert.False(t, migrationJob.Source().SupportsRWO())
+	assert.True(t, migrationJob.Source().SupportsROX())
+	assert.False(t, migrationJob.Source().SupportsRWX())
+	assert.Equal(t, "namespace2", migrationJob.Dest().Claim().Namespace)
+	assert.Equal(t, "pvc2", migrationJob.Dest().Claim().Name)
+	assert.Equal(t, "node2", migrationJob.Dest().MountedNode())
+	assert.True(t, migrationJob.Dest().SupportsRWO())
+	assert.False(t, migrationJob.Dest().SupportsROX())
+	assert.True(t, migrationJob.Dest().SupportsRWX())
 }
 
 func TestFindStrategies(t *testing.T) {
@@ -79,7 +81,7 @@ func TestFindStrategies(t *testing.T) {
 func TestDetermineStrategies(t *testing.T) {
 	engine := testEngine(testStrategies()...)
 	r := testRequest()
-	testTask, _ := engine.BuildTask(r)
+	testTask, _ := engine.BuildJob(r)
 	strategies, _ := engine.determineStrategies(r, testTask)
 	assert.Len(t, strategies, 2)
 }
@@ -103,7 +105,7 @@ func TestDetermineStrategiesCorrectOrder(t *testing.T) {
 
 	engine := testEngine(&strategy1, &strategy2, &strategy3)
 	req := testRequest()
-	testTask, _ := engine.BuildTask(req)
+	testTask, _ := engine.BuildJob(req)
 	strategies, _ := engine.determineStrategies(req, testTask)
 	assert.Len(t, strategies, 3)
 	assert.Equal(t, "strategy2", strategies[0].Name())
@@ -125,7 +127,7 @@ func TestDetermineStrategiesCannotDo(t *testing.T) {
 
 	engine := testEngine(&strategy1, &strategy2)
 	req := testRequest()
-	testTask, _ := engine.BuildTask(req)
+	testTask, _ := engine.BuildJob(req)
 	strategies, _ := engine.determineStrategies(req, testTask)
 	assert.Len(t, strategies, 1)
 	assert.Equal(t, "strategy2", strategies[0].Name())
@@ -150,7 +152,7 @@ func TestDetermineStrategiesRequested(t *testing.T) {
 
 	engine := testEngine(&strategy1, &strategy2, &strategy3)
 	req := testRequest("strategy1", "strategy3")
-	testTask, _ := engine.BuildTask(req)
+	testTask, _ := engine.BuildJob(req)
 	strategies, _ := engine.determineStrategies(req, testTask)
 	assert.Len(t, strategies, 2)
 	assert.Equal(t, "strategy1", strategies[0].Name())
@@ -166,7 +168,7 @@ func TestDetermineStrategiesRequestedNonExistent(t *testing.T) {
 
 	engine := testEngine(&strategy1)
 	req := testRequest("strategy1", "strategy2")
-	testTask, _ := engine.BuildTask(req)
+	testTask, _ := engine.BuildJob(req)
 	strategies, err := engine.determineStrategies(req, testTask)
 	assert.Nil(t, strategies)
 	assert.NotNil(t, err)
@@ -248,10 +250,10 @@ func testStrategies() []strategy.Strategy {
 	return strategies
 }
 
-func canDoTrue(_ task.Task) bool {
+func canDoTrue(_ job.Job) bool {
 	return true
 }
 
-func canDoFalse(_ task.Task) bool {
+func canDoFalse(_ job.Job) bool {
 	return false
 }

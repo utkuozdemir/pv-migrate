@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"github.com/utkuozdemir/pv-migrate/internal/job"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 )
 
@@ -17,10 +18,10 @@ type Strategy interface {
 	// Must always return the same number.
 	Priority() int
 
-	// CanDo must return True if this strategy can execute the task.
+	// CanDo must return True if this strategy can execute the job.
 	//
-	// Needs to evaluate the input and return if it can execute the task or not.
-	CanDo(task task.Task) bool
+	// Needs to evaluate the input and return if it can execute the job or not.
+	CanDo(task job.Job) bool
 
 	// Run executes the migration for the given task.
 	//

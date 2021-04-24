@@ -1,60 +1,31 @@
 package task
 
 import (
-	"github.com/utkuozdemir/pv-migrate/internal/pvc"
+	"github.com/utkuozdemir/pv-migrate/internal/job"
+	"github.com/utkuozdemir/pv-migrate/internal/util"
 )
 
 type Task interface {
 	ID() string
-	Source() pvc.Info
-	Dest() pvc.Info
-	Options() Options
+	Job() job.Job
 }
 
 type task struct {
-	id      string
-	source  pvc.Info
-	dest    pvc.Info
-	options Options
+	id  string
+	job job.Job
 }
 
 func (t *task) ID() string {
 	return t.id
 }
 
-func (t *task) Source() pvc.Info {
-	return t.source
+func (t *task) Job() job.Job {
+	return t.job
 }
 
-func (t *task) Dest() pvc.Info {
-	return t.dest
-}
-
-func (t *task) Options() Options {
-	return t.options
-}
-
-func New(id string, source pvc.Info, dest pvc.Info, options Options) Task {
+func New(job job.Job) Task {
 	return &task{
-		id:      id,
-		source:  source,
-		dest:    dest,
-		options: options,
+		id:  util.RandomHexadecimalString(5),
+		job: job,
 	}
-}
-
-type Options interface {
-	DeleteExtraneousFiles() bool
-}
-
-type options struct {
-	deleteExtraneousFiles bool
-}
-
-func NewOptions(deleteExtraneousFiles bool) Options {
-	return &options{deleteExtraneousFiles: deleteExtraneousFiles}
-}
-
-func (t *options) DeleteExtraneousFiles() bool {
-	return t.deleteExtraneousFiles
 }
