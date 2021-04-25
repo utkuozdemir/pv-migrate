@@ -15,8 +15,8 @@ type MountBoth struct {
 }
 
 func (r *MountBoth) Cleanup(task task.Task) error {
-	job := task.Job()
-	return k8s.CleanupForID(job.Source().KubeClient(), job.Source().Claim().Namespace, task.ID())
+	migrationJob := task.Job()
+	return k8s.CleanupForID(migrationJob.Source().KubeClient(), migrationJob.Source().Claim().Namespace, task.ID())
 }
 
 func (r *MountBoth) Name() string {
@@ -76,7 +76,7 @@ func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 	if err != nil {
 		return nil, err
 	}
-	job := batchv1.Job{
+	k8sJob := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
 			Namespace: migrationJob.Dest().Claim().Namespace,
@@ -113,7 +113,7 @@ func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 					Containers: []corev1.Container{
 						{
 							Name:  "app",
-							Image: "docker.io/instrumentisto/rsync-ssh:alpine",
+							Image: task.Job().RsyncImage(),
 							Command: []string{
 								"sh",
 								"-c",
@@ -137,5 +137,5 @@ func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 			},
 		},
 	}
-	return &job, nil
+	return &k8sJob, nil
 }

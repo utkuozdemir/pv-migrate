@@ -143,7 +143,7 @@ func buildRsyncJobDest(task task.Task, targetHost string, privateKeySecretName s
 					Containers: []corev1.Container{
 						{
 							Name:  "app",
-							Image: "docker.io/instrumentisto/rsync-ssh:alpine",
+							Image: task.Job().RsyncImage(),
 							Command: []string{
 								"sh",
 								"-c",
@@ -191,7 +191,7 @@ func RunRsyncJobOverSsh(task task.Task, serviceType corev1.ServiceType) error {
 		return err
 	}
 
-	sftpPod := PrepareSshdPod(instanceId, sourcePvcInfo, secret.Name)
+	sftpPod := PrepareSshdPod(instanceId, sourcePvcInfo, secret.Name, task.Job().SshdImage())
 	err = CreateSshdPodWaitTillRunning(sourceKubeClient, sftpPod)
 	if err != nil {
 		return err

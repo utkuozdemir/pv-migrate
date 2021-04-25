@@ -6,6 +6,8 @@ type Job interface {
 	Source() pvc.Info
 	Dest() pvc.Info
 	Options() Options
+	RsyncImage() string
+	SshdImage() string
 }
 
 type Options interface {
@@ -13,9 +15,11 @@ type Options interface {
 }
 
 type job struct {
-	source  pvc.Info
-	dest    pvc.Info
-	options Options
+	source     pvc.Info
+	dest       pvc.Info
+	options    Options
+	rsyncImage string
+	sshdImage  string
 }
 
 func (t *job) Source() pvc.Info {
@@ -30,11 +34,21 @@ func (t *job) Options() Options {
 	return t.options
 }
 
-func New(id string, source pvc.Info, dest pvc.Info, options Options) Job {
+func (t *job) RsyncImage() string {
+	return t.rsyncImage
+}
+
+func (t *job) SshdImage() string {
+	return t.sshdImage
+}
+
+func New(source pvc.Info, dest pvc.Info, options Options, rsyncImage string, sshdImage string) Job {
 	return &job{
-		source:  source,
-		dest:    dest,
-		options: options,
+		source:     source,
+		dest:       dest,
+		options:    options,
+		rsyncImage: rsyncImage,
+		sshdImage:  sshdImage,
 	}
 }
 

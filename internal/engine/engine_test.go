@@ -36,7 +36,7 @@ func TestNewEngineDuplicateStrategies(t *testing.T) {
 
 func TestValidateRequestWithNonExistingStrategy(t *testing.T) {
 	eng := testEngine(testStrategies()...)
-	req := request.New(nil, nil, request.NewOptions(true), []string{"strategy3"})
+	req := request.NewWithDefaultImages(nil, nil, request.NewOptions(true), []string{"strategy3"})
 	err := eng.validate(req)
 	if err == nil {
 		t.Fatal("expected error for non existing strategy")
@@ -223,7 +223,7 @@ func testRequest(strategies ...string) request.Request {
 	source := request.NewPVC("/kubeconfig1", "context1", "namespace1", "pvc1")
 	dest := request.NewPVC("/kubeconfig2", "context2", "namespace2", "pvc2")
 	options := request.NewOptions(true)
-	newRequest := request.New(source, dest, options, strategies)
+	newRequest := request.NewWithDefaultImages(source, dest, options, strategies)
 	return newRequest
 }
 
