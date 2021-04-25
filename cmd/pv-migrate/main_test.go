@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestSameNSNoIgnoreMounted(t *testing.T) {
+func TestSameNS(t *testing.T) {
 	sourceNs := "aaa"
 	source := "aaa"
 	destNs := sourceNs
@@ -50,18 +50,55 @@ func TestSameNSNoIgnoreMounted(t *testing.T) {
 		source, dest,
 	}
 	defer func() {
-		_, _, err := execInFirstPodWithPrefix(sourceNs, dest, removeDataShellCommand)
+		_, _, err := execInPodWithPVC(destNs, dest, removeDataShellCommand)
 		assert.NoError(t, err)
 	}()
 
-	_, _, err := execInFirstPodWithPrefix(sourceNs, source, generateDataShellCommand)
+	_, _, err := execInPodWithPVC(sourceNs, source, generateDataShellCommand)
 	assert.NoError(t, err)
+
+	err = cliApp.Run(args)
+	assert.NoError(t, err)
+
+	stdout, stderr, err := execInPodWithPVC(destNs, dest, printDataShellCommand)
+	assert.NoError(t, err)
+	assert.Empty(t, stderr)
+	assert.Equal(t, generateDataContent, stdout)
+}
+
+func TestMountedError(t *testing.T) {
+	sourceNs := "aaa"
+	source := "aaa"
+	destNs := sourceNs
+	dest := "bbb"
+	cliApp := app.New("", "")
+	args := []string{
+		os.Args[0], migrateCommand,
+		sourceKubeconfigParamKey, testContext.kubeconfig,
+		sourceNsParamKey, sourceNs,
+		destKubeconfigParamKey, testContext.kubeconfig,
+		destNsParamKey, destNs,
+		source, dest,
+	}
+	defer func() {
+		_, _, err := execInPodWithPVC(destNs, dest, removeDataShellCommand)
+		assert.NoError(t, err)
+	}()
+
+	_, _, err := execInPodWithPVC(sourceNs, source, generateDataShellCommand)
+	assert.NoError(t, err)
+
+	mounter, err := startPodWithPVCMount(testContext.kubeClient, sourceNs, source)
+	assert.NoError(t, err)
+	defer func() {
+		_ = ensurePodIsDeleted(testContext.kubeClient, sourceNs, mounter.Name)
+	}()
 
 	err = cliApp.Run(args)
 	assert.Error(t, err)
 }
 
-func TestSameNS(t *testing.T) {
+func TestIgnoreMounted(t *testing.T) {
 	sourceNs := "aaa"
 	source := "aaa"
 	destNs := sourceNs
@@ -77,17 +114,23 @@ func TestSameNS(t *testing.T) {
 		source, dest,
 	}
 	defer func() {
-		_, _, err := execInFirstPodWithPrefix(destNs, dest, removeDataShellCommand)
+		_, _, err := execInPodWithPVC(destNs, dest, removeDataShellCommand)
 		assert.NoError(t, err)
 	}()
 
-	_, _, err := execInFirstPodWithPrefix(sourceNs, source, generateDataShellCommand)
+	_, _, err := execInPodWithPVC(sourceNs, source, generateDataShellCommand)
 	assert.NoError(t, err)
+
+	mounter, err := startPodWithPVCMount(testContext.kubeClient, sourceNs, source)
+	assert.NoError(t, err)
+	defer func() {
+		_ = ensurePodIsDeleted(testContext.kubeClient, sourceNs, mounter.Name)
+	}()
 
 	err = cliApp.Run(args)
 	assert.NoError(t, err)
 
-	stdout, stderr, err := execInFirstPodWithPrefix(destNs, dest, printDataShellCommand)
+	stdout, stderr, err := execInPodWithPVC(destNs, dest, printDataShellCommand)
 	assert.NoError(t, err)
 	assert.Empty(t, stderr)
 	assert.Equal(t, generateDataContent, stdout)
@@ -106,21 +149,20 @@ func TestDifferentNS(t *testing.T) {
 		sourceNsParamKey, sourceNs,
 		destKubeconfigParamKey, testContext.kubeconfig,
 		destNsParamKey, destNs,
-		ignoreMountedFlag,
 		source, dest,
 	}
 	defer func() {
-		_, _, err := execInFirstPodWithPrefix(destNs, dest, removeDataShellCommand)
+		_, _, err := execInPodWithPVC(destNs, dest, removeDataShellCommand)
 		assert.NoError(t, err)
 	}()
 
-	_, _, err := execInFirstPodWithPrefix(sourceNs, source, generateDataShellCommand)
+	_, _, err := execInPodWithPVC(sourceNs, source, generateDataShellCommand)
 	assert.NoError(t, err)
 
 	err = cliApp.Run(args)
 	assert.NoError(t, err)
 
-	stdout, stderr, err := execInFirstPodWithPrefix(destNs, dest, printDataShellCommand)
+	stdout, stderr, err := execInPodWithPVC(destNs, dest, printDataShellCommand)
 	assert.NoError(t, err)
 	assert.Empty(t, stderr)
 	assert.Equal(t, generateDataContent, stdout)
@@ -147,21 +189,20 @@ func TestDifferentCluster(t *testing.T) {
 		sourceNsParamKey, sourceNs,
 		destKubeconfigParamKey, kubeconfigCopy,
 		destNsParamKey, destNs,
-		ignoreMountedFlag,
 		source, dest,
 	}
 	defer func() {
-		_, _, err := execInFirstPodWithPrefix(destNs, dest, removeDataShellCommand)
+		_, _, err := execInPodWithPVC(destNs, dest, removeDataShellCommand)
 		assert.NoError(t, err)
 	}()
 
-	_, _, err := execInFirstPodWithPrefix(sourceNs, source, generateDataShellCommand)
+	_, _, err := execInPodWithPVC(sourceNs, source, generateDataShellCommand)
 	assert.NoError(t, err)
 
 	err = cliApp.Run(args)
 	assert.NoError(t, err)
 
-	stdout, stderr, err := execInFirstPodWithPrefix(destNs, dest, printDataShellCommand)
+	stdout, stderr, err := execInPodWithPVC(destNs, dest, printDataShellCommand)
 	assert.NoError(t, err)
 	assert.Empty(t, stderr)
 	assert.Equal(t, generateDataContent, stdout)
