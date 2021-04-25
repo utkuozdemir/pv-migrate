@@ -163,6 +163,16 @@ func (e *engine) BuildJob(request request.Request) (job.Job, error) {
 		return nil, err
 	}
 
+	ignoreMounted := request.Options().IgnoreMounted()
+	err = handleMounted(sourcePvcInfo, ignoreMounted)
+	if err != nil {
+		return nil, err
+	}
+	err = handleMounted(destPvcInfo, ignoreMounted)
+	if err != nil {
+		return nil, err
+	}
+
 	if !(destPvcInfo.SupportsRWO() || destPvcInfo.SupportsRWX()) {
 		return nil, errors.New("destination pvc is not writeable")
 	}
@@ -201,4 +211,17 @@ func (e *engine) findStrategies(strategyNames ...string) ([]strategy.Strategy, e
 	}
 
 	return strategies, nil
+}
+
+func handleMounted(info pvc.Info, ignoreMounted bool) error {
+	if info.MountedNode() == "" {
+		return nil
+	}
+
+	if ignoreMounted {
+		log.Infof("PVC %s is mounted to node %s, ignoring...", info.Claim().Name, info.MountedNode())
+		return nil
+	}
+	return fmt.Errorf("PVC %s is mounted to node %s and ignore-mounted is not requested",
+		info.Claim().Name, info.MountedNode())
 }

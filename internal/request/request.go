@@ -3,8 +3,9 @@ package request
 import log "github.com/sirupsen/logrus"
 
 const (
-	DefaultRsyncImage = "docker.io/instrumentisto/rsync-ssh:alpine"
-	DefaultSshdImage  = "docker.io/panubo/sshd:1.3.0"
+	DefaultRsyncImage    = "docker.io/instrumentisto/rsync-ssh:alpine"
+	DefaultSshdImage     = "docker.io/panubo/sshd:1.3.0"
+	DefaultIgnoreMounted = false
 )
 
 type PVC interface {
@@ -113,16 +114,26 @@ func New(source PVC, dest PVC, options Options, strategies []string, rsyncImage 
 
 type Options interface {
 	DeleteExtraneousFiles() bool
+	IgnoreMounted() bool
 }
 
 type options struct {
 	deleteExtraneousFiles bool
+	ignoreMounted         bool
 }
 
-func NewOptions(deleteExtraneousFiles bool) Options {
-	return &options{deleteExtraneousFiles: deleteExtraneousFiles}
+func NewOptionsWithDefaults(deleteExtraneousFiles bool) Options {
+	return NewOptions(deleteExtraneousFiles, DefaultIgnoreMounted)
+}
+
+func NewOptions(deleteExtraneousFiles bool, ignoreMounted bool) Options {
+	return &options{deleteExtraneousFiles: deleteExtraneousFiles, ignoreMounted: ignoreMounted}
 }
 
 func (r *options) DeleteExtraneousFiles() bool {
 	return r.deleteExtraneousFiles
+}
+
+func (r *options) IgnoreMounted() bool {
+	return r.ignoreMounted
 }

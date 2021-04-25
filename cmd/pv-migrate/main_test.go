@@ -9,22 +9,52 @@ import (
 	"testing"
 )
 
-const sourceKubeconfigParamKey = "--source-kubeconfig"
-const sourceNsParamKey = "--source-namespace"
-const destKubeconfigParamKey = "--dest-kubeconfig"
-const destNsParamKey = "--dest-namespace"
-const testFilePath = "/volume/file.txt"
-const migrateCommand = "migrate"
-const generateDataContent = "DATA"
+const (
+	flagPrefix               = "--"
+	sourceKubeconfigParamKey = flagPrefix + app.FlagSourceKubeconfig
+	sourceNsParamKey         = flagPrefix + app.FlagSourceNamespace
+	destKubeconfigParamKey   = flagPrefix + app.FlagDestKubeconfig
+	destNsParamKey           = flagPrefix + app.FlagDestNamespace
+	ignoreMountedFlag        = flagPrefix + app.FlagIgnoreMounted
+	migrateCommand           = app.CommandMigrate
 
-var generateDataShellCommand = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s", generateDataContent, testFilePath)}
-var printDataShellCommand = []string{"cat", testFilePath}
+	testFilePath        = "/volume/file.txt"
+	generateDataContent = "DATA"
+)
+
+var (
+	generateDataShellCommand = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s", generateDataContent, testFilePath)}
+	printDataShellCommand    = []string{"cat", testFilePath}
+	removeDataShellCommand   = []string{"rm", "-rf", testFilePath}
+)
 
 func TestMain(m *testing.M) {
 	beforeTests()
 	code := m.Run()
 	afterTests()
 	os.Exit(code)
+}
+
+func TestSameNSNoIgnoreMounted(t *testing.T) {
+	cliApp := app.New("", "")
+	args := []string{
+		os.Args[0], migrateCommand,
+		sourceKubeconfigParamKey, testContext.kubeconfig,
+		sourceNsParamKey, "aaa",
+		destKubeconfigParamKey, testContext.kubeconfig,
+		destNsParamKey, "aaa",
+		"aaa", "bbb",
+	}
+	defer func() {
+		_, _, err := execInFirstPodWithPrefix("aaa", "bbb", removeDataShellCommand)
+		assert.NoError(t, err)
+	}()
+
+	_, _, err := execInFirstPodWithPrefix("aaa", "aaa", generateDataShellCommand)
+	assert.NoError(t, err)
+
+	err = cliApp.Run(args)
+	assert.Error(t, err)
 }
 
 func TestSameNS(t *testing.T) {
@@ -35,8 +65,13 @@ func TestSameNS(t *testing.T) {
 		sourceNsParamKey, "aaa",
 		destKubeconfigParamKey, testContext.kubeconfig,
 		destNsParamKey, "aaa",
+		ignoreMountedFlag,
 		"aaa", "bbb",
 	}
+	defer func() {
+		_, _, err := execInFirstPodWithPrefix("aaa", "bbb", removeDataShellCommand)
+		assert.NoError(t, err)
+	}()
 
 	_, _, err := execInFirstPodWithPrefix("aaa", "aaa", generateDataShellCommand)
 	assert.NoError(t, err)
@@ -59,8 +94,13 @@ func TestDifferentNS(t *testing.T) {
 		sourceNsParamKey, "aaa",
 		destKubeconfigParamKey, testContext.kubeconfig,
 		destNsParamKey, "bbb",
+		ignoreMountedFlag,
 		"aaa", "bbb",
 	}
+	defer func() {
+		_, _, err := execInFirstPodWithPrefix("bbb", "bbb", removeDataShellCommand)
+		assert.NoError(t, err)
+	}()
 
 	_, _, err := execInFirstPodWithPrefix("aaa", "aaa", generateDataShellCommand)
 	assert.NoError(t, err)
@@ -91,8 +131,13 @@ func TestDifferentCluster(t *testing.T) {
 		sourceNsParamKey, "aaa",
 		destKubeconfigParamKey, kubeconfigCopy,
 		destNsParamKey, "ccc",
+		ignoreMountedFlag,
 		"aaa", "ccc",
 	}
+	defer func() {
+		_, _, err := execInFirstPodWithPrefix("ccc", "ccc", removeDataShellCommand)
+		assert.NoError(t, err)
+	}()
 
 	_, _, err := execInFirstPodWithPrefix("aaa", "aaa", generateDataShellCommand)
 	assert.NoError(t, err)

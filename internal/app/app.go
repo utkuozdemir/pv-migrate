@@ -14,16 +14,18 @@ import (
 )
 
 const (
-	flagSourceKubeconfig          = "source-kubeconfig"
-	flagSourceContext             = "source-context"
-	flagSourceNamespace           = "source-namespace"
-	flagDestKubeconfig            = "dest-kubeconfig"
-	flagDestContext               = "dest-context"
-	flagDestNamespace             = "dest-namespace"
-	flagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
-	flagOverrideStrategies        = "override-strategies"
-	flagRsyncImage                = "rsync-image"
-	flagSshdImage                 = "sshd-image"
+	CommandMigrate                = "migrate"
+	FlagSourceKubeconfig          = "source-kubeconfig"
+	FlagSourceContext             = "source-context"
+	FlagSourceNamespace           = "source-namespace"
+	FlagDestKubeconfig            = "dest-kubeconfig"
+	FlagDestContext               = "dest-context"
+	FlagDestNamespace             = "dest-namespace"
+	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
+	FlagIgnoreMounted             = "ignore-mounted"
+	FlagOverrideStrategies        = "override-strategies"
+	FlagRsyncImage                = "rsync-image"
+	FlagSshdImage                 = "sshd-image"
 )
 
 var (
@@ -41,26 +43,27 @@ func New(version string, commit string) *cli.App {
 		Version: fmt.Sprintf("%s (commit: %s)", version, commit),
 		Commands: []*cli.Command{
 			{
-				Name:      "migrate",
+				Name:      CommandMigrate,
 				Usage:     "Migrate data from the source pvc to the destination pvc",
 				Aliases:   []string{"m"},
 				ArgsUsage: "[SOURCE_PVC] [DESTINATION_PVC]",
 				Action: func(c *cli.Context) error {
-					sourceKubeconfig := c.String(flagSourceKubeconfig)
-					sourceContext := c.String(flagSourceContext)
-					sourceNamespace := c.String(flagSourceNamespace)
+					sourceKubeconfig := c.String(FlagSourceKubeconfig)
+					sourceContext := c.String(FlagSourceContext)
+					sourceNamespace := c.String(FlagSourceNamespace)
 					source := c.Args().Get(0)
-					destKubeconfig := c.String(flagDestKubeconfig)
-					destContext := c.String(flagDestContext)
-					destNamespace := c.String(flagDestNamespace)
+					destKubeconfig := c.String(FlagDestKubeconfig)
+					destContext := c.String(FlagDestContext)
+					destNamespace := c.String(FlagDestNamespace)
 					dest := c.Args().Get(1)
-					destDeleteExtraneousFiles := c.Bool(flagDestDeleteExtraneousFiles)
-					overrideStrategies := c.StringSlice(flagOverrideStrategies)
+					destDeleteExtraneousFiles := c.Bool(FlagDestDeleteExtraneousFiles)
+					ignoreMounted := c.Bool(FlagIgnoreMounted)
+					overrideStrategies := c.StringSlice(FlagOverrideStrategies)
 					sourceRequestPvc := request.NewPVC(sourceKubeconfig, sourceContext, sourceNamespace, source)
 					destRequestPvc := request.NewPVC(destKubeconfig, destContext, destNamespace, dest)
-					requestOptions := request.NewOptions(destDeleteExtraneousFiles)
-					rsyncImage := c.String(flagRsyncImage)
-					sshdImage := c.String(flagSshdImage)
+					requestOptions := request.NewOptions(destDeleteExtraneousFiles, ignoreMounted)
+					rsyncImage := c.String(FlagRsyncImage)
+					sshdImage := c.String(FlagSshdImage)
 
 					req := request.New(sourceRequestPvc, destRequestPvc, requestOptions,
 						overrideStrategies, rsyncImage, sshdImage)
@@ -74,7 +77,7 @@ func New(version string, commit string) *cli.App {
 				},
 				Flags: []cli.Flag{
 					&cli.StringFlag{
-						Name:        flagSourceKubeconfig,
+						Name:        FlagSourceKubeconfig,
 						Aliases:     []string{"k"},
 						Usage:       "Path of the kubeconfig file of the source pvc",
 						Value:       "",
@@ -82,21 +85,21 @@ func New(version string, commit string) *cli.App {
 						TakesFile:   true,
 					},
 					&cli.StringFlag{
-						Name:        flagSourceContext,
+						Name:        FlagSourceContext,
 						Aliases:     []string{"c"},
 						Value:       "",
 						Usage:       "Context in the kubeconfig file of the source pvc",
 						DefaultText: "currently selected context in the source kubeconfig",
 					},
 					&cli.StringFlag{
-						Name:        flagSourceNamespace,
+						Name:        FlagSourceNamespace,
 						Aliases:     []string{"n"},
 						Usage:       "Namespace of the source pvc",
 						Value:       "",
 						DefaultText: "currently selected namespace in the source context",
 					},
 					&cli.StringFlag{
-						Name:        flagDestKubeconfig,
+						Name:        FlagDestKubeconfig,
 						Aliases:     []string{"K"},
 						Value:       "",
 						Usage:       "Path of the kubeconfig file of the destination pvc",
@@ -104,40 +107,46 @@ func New(version string, commit string) *cli.App {
 						TakesFile:   true,
 					},
 					&cli.StringFlag{
-						Name:        flagDestContext,
+						Name:        FlagDestContext,
 						Aliases:     []string{"C"},
 						Value:       "",
 						Usage:       "Context in the kubeconfig file of the destination pvc",
 						DefaultText: "currently selected context in the destination kubeconfig",
 					},
 					&cli.StringFlag{
-						Name:        flagDestNamespace,
+						Name:        FlagDestNamespace,
 						Aliases:     []string{"N"},
 						Usage:       "Namespace of the destination pvc",
 						Value:       "",
 						DefaultText: "currently selected namespace in the destination context",
 					},
 					&cli.BoolFlag{
-						Name:    flagDestDeleteExtraneousFiles,
+						Name:    FlagDestDeleteExtraneousFiles,
 						Aliases: []string{"d"},
 						Usage:   "Delete extraneous files on the destination by using rsync's '--delete' flag",
 						Value:   false,
 					},
+					&cli.BoolFlag{
+						Name:    FlagIgnoreMounted,
+						Aliases: []string{"i"},
+						Usage:   "Do not fail if the source or destination PVC is mounted",
+						Value:   request.DefaultIgnoreMounted,
+					},
 					&cli.StringSliceFlag{
-						Name:        flagOverrideStrategies,
+						Name:        FlagOverrideStrategies,
 						Aliases:     []string{"s"},
 						Usage:       "Override the default list of strategies and their order by priority",
 						Value:       nil,
 						DefaultText: "try all built-in strategies in the natural order",
 					},
 					&cli.StringFlag{
-						Name:    flagRsyncImage,
+						Name:    FlagRsyncImage,
 						Aliases: []string{"r"},
 						Usage:   "Image to use for running rsync",
 						Value:   request.DefaultRsyncImage,
 					},
 					&cli.StringFlag{
-						Name:    flagSshdImage,
+						Name:    FlagSshdImage,
 						Aliases: []string{"S"},
 						Usage:   "Image to use for running sshd server",
 						Value:   request.DefaultSshdImage,

@@ -33,17 +33,20 @@ import (
 	"time"
 )
 
-//go:embed metallb-test.yaml
-var metallbManifests string
+const (
+	testClusterName = "pv-migrate-kind"
+	pollInterval    = 5 * time.Second
+	pollTimeout     = 5 * time.Minute
+)
 
-const testClusterName = "pv-migrate-kind"
-const pollInterval = 5 * time.Second
-const pollTimeout = 5 * time.Minute
+var (
+	//go:embed metallb-test.yaml
+	metallbManifests string
+	testContext      *kindTestContext
 
-var testContext *kindTestContext
-
-//var predefinedKubeconfigPath = test.UserKubeconfigDir() + "/pv-migrate-test.yaml"
-var predefinedKubeconfigPath = ""
+	//var predefinedKubeconfigPath = test.UserKubeconfigDir() + "/pv-migrate-test.yaml"
+	predefinedKubeconfigPath = ""
+)
 
 type kindTestContext struct {
 	clusterProvider *cluster.Provider
