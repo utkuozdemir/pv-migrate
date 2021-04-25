@@ -26,10 +26,11 @@ jobs:
         run: test -z "$(gofmt -s -d .)"
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
-      - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@2020.2.3
-      - name: Run static analysis
-        run: staticcheck ./...
+      - name: Run linters
+        uses: golangci/golangci-lint-action@v2.5.2
+        with:
+          version: v1.39.0
+          skip-go-installation: true
       - name: Run tests
         run: go test -v -coverprofile=profile.cov ./...
       - name: Send coverage
