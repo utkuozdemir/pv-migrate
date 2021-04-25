@@ -2,7 +2,6 @@ package pvc
 
 import (
 	"context"
-	"errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -101,5 +100,5 @@ func findMountedNode(kubeClient kubernetes.Interface, pvc *corev1.PersistentVolu
 		}
 	}
 
-	return "", errors.New("couldn't find the node that the pvc is mounted to")
+	return "", nil
 }
