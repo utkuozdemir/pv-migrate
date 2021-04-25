@@ -31,6 +31,7 @@ jobs:
         with:
           version: v1.39.0
           skip-go-installation: true
+          args: --timeout=3m0s
       - name: Run tests
         run: go test -v -coverprofile=profile.cov ./...
       - name: Send coverage
