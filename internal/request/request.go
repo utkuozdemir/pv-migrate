@@ -2,6 +2,11 @@ package request
 
 import log "github.com/sirupsen/logrus"
 
+const (
+	DefaultRsyncImage = "docker.io/instrumentisto/rsync-ssh:alpine"
+	DefaultSshdImage  = "docker.io/panubo/sshd:1.3.0"
+)
+
 type PVC interface {
 	KubeconfigPath() string
 	Context() string
@@ -47,6 +52,8 @@ type Request interface {
 	Options() Options
 	Strategies() []string
 	LogFields() log.Fields
+	RsyncImage() string
+	SshdImage() string
 }
 
 type request struct {
@@ -54,6 +61,8 @@ type request struct {
 	dest       PVC
 	options    Options
 	strategies []string
+	rsyncImage string
+	sshdImage  string
 }
 
 func (r *request) Source() PVC {
@@ -72,6 +81,14 @@ func (r *request) Strategies() []string {
 	return r.strategies
 }
 
+func (r *request) RsyncImage() string {
+	return r.rsyncImage
+}
+
+func (r *request) SshdImage() string {
+	return r.sshdImage
+}
+
 func (r *request) LogFields() log.Fields {
 	return log.Fields{
 		"source": r.Source().Namespace() + "/" + r.Source().Name(),
@@ -79,12 +96,18 @@ func (r *request) LogFields() log.Fields {
 	}
 }
 
-func New(source PVC, dest PVC, options Options, strategies []string) Request {
+func NewWithDefaultImages(source PVC, dest PVC, options Options, strategies []string) Request {
+	return New(source, dest, options, strategies, DefaultRsyncImage, DefaultSshdImage)
+}
+
+func New(source PVC, dest PVC, options Options, strategies []string, rsyncImage string, sshdImage string) Request {
 	return &request{
 		source:     source,
 		dest:       dest,
 		options:    options,
 		strategies: strategies,
+		rsyncImage: rsyncImage,
+		sshdImage:  sshdImage,
 	}
 }
 

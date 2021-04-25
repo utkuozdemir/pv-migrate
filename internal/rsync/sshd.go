@@ -105,7 +105,7 @@ func createSshdPublicKeySecret(instanceId string, sourcePvcInfo pvc.Info, public
 	return secrets.Create(context.TODO(), &secret, metav1.CreateOptions{})
 }
 
-func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info, publicKeySecretName string) *corev1.Pod {
+func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info, publicKeySecretName string, sshdImage string) *corev1.Pod {
 	podName := "pv-migrate-sshd-" + instanceId
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -136,7 +136,7 @@ func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info, publicKeySecretNa
 			Containers: []corev1.Container{
 				{
 					Name:  "app",
-					Image: "docker.io/panubo/sshd:1.3.0",
+					Image: sshdImage,
 					Env: []corev1.EnvVar{
 						{
 							Name:  "SSH_ENABLE_ROOT",

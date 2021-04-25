@@ -10,7 +10,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/request"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
-	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"sort"
 	"strings"
 )
@@ -128,8 +127,6 @@ func (e *engine) validate(request request.Request) error {
 }
 
 func (e *engine) BuildJob(request request.Request) (job.Job, error) {
-	id := util.RandomHexadecimalString(5)
-
 	source := request.Source()
 	dest := request.Dest()
 	kubernetesClientProvider := e.kubernetesClientProvider
@@ -171,7 +168,7 @@ func (e *engine) BuildJob(request request.Request) (job.Job, error) {
 	}
 
 	taskOptions := job.NewOptions(request.Options().DeleteExtraneousFiles())
-	return job.New(id, sourcePvcInfo, destPvcInfo, taskOptions), nil
+	return job.New(sourcePvcInfo, destPvcInfo, taskOptions, request.RsyncImage(), request.SshdImage()), nil
 }
 
 func (e *engine) determineStrategies(request request.Request, job job.Job) ([]strategy.Strategy, error) {

@@ -22,6 +22,8 @@ const (
 	flagDestNamespace             = "dest-namespace"
 	flagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	flagOverrideStrategies        = "override-strategies"
+	flagRsyncImage                = "rsync-image"
+	flagSshdImage                 = "sshd-image"
 )
 
 var (
@@ -61,8 +63,11 @@ func Build() *cli.App {
 					sourceRequestPvc := request.NewPVC(sourceKubeconfig, sourceContext, sourceNamespace, source)
 					destRequestPvc := request.NewPVC(destKubeconfig, destContext, destNamespace, dest)
 					requestOptions := request.NewOptions(destDeleteExtraneousFiles)
+					rsyncImage := c.String(flagRsyncImage)
+					sshdImage := c.String(flagSshdImage)
 
-					req := request.New(sourceRequestPvc, destRequestPvc, requestOptions, overrideStrategies)
+					req := request.New(sourceRequestPvc, destRequestPvc, requestOptions,
+						overrideStrategies, rsyncImage, sshdImage)
 					logger := log.WithFields(req.LogFields())
 
 					if destDeleteExtraneousFiles {
@@ -128,6 +133,18 @@ func Build() *cli.App {
 						Usage:       "Override the default list of strategies and their order by priority",
 						Value:       nil,
 						DefaultText: "try all built-in strategies in the natural order",
+					},
+					&cli.StringFlag{
+						Name:    flagRsyncImage,
+						Aliases: []string{"r"},
+						Usage:   "Image to use for running rsync",
+						Value:   request.DefaultRsyncImage,
+					},
+					&cli.StringFlag{
+						Name:    flagSshdImage,
+						Aliases: []string{"S"},
+						Usage:   "Image to use for running sshd server",
+						Value:   request.DefaultSshdImage,
 					},
 				},
 			},
