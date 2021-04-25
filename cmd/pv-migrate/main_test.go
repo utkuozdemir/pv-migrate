@@ -28,7 +28,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestSameNS(t *testing.T) {
-	cliApp := app.Build()
+	cliApp := app.New("", "")
 	args := []string{
 		os.Args[0], migrateCommand,
 		sourceKubeconfigParamKey, testContext.kubeconfig,
@@ -51,7 +51,7 @@ func TestSameNS(t *testing.T) {
 }
 
 func TestDifferentNS(t *testing.T) {
-	cliApp := app.Build()
+	cliApp := app.New("", "")
 
 	args := []string{
 		os.Args[0], migrateCommand,
@@ -83,7 +83,7 @@ func TestDifferentCluster(t *testing.T) {
 	_ = ioutil.WriteFile(kubeconfigCopy, kubeconfigBytes, 0600)
 	defer func() { _ = os.Remove(kubeconfigCopy) }()
 
-	cliApp := app.Build()
+	cliApp := app.New("", "")
 
 	args := []string{
 		os.Args[0], migrateCommand,

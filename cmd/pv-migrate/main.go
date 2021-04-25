@@ -11,6 +11,12 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 )
 
+var (
+	// will be overridden by goreleaser: https://goreleaser.com/environment/#using-the-mainversion
+	version = "dev"
+	commit  = "none"
+)
+
 func init() {
 	log.SetFormatter(&log.TextFormatter{
 		FullTimestamp: true,
@@ -22,7 +28,7 @@ func init() {
 }
 
 func main() {
-	cliApp := app.Build()
+	cliApp := app.New(version, commit)
 	err := cliApp.Run(os.Args)
 	if err != nil {
 		log.Fatal(err.Error())

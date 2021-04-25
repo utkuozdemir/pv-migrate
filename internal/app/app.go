@@ -32,13 +32,9 @@ var (
 		&rsyncsshincluster.RsyncSSSHInCluster{},
 		&rsyncsshcrosscluster.RsyncSSHCrossCluster{},
 	}
-
-	// will be overridden by goreleaser: https://goreleaser.com/environment/#using-the-mainversion
-	version = "dev"
-	commit  = "none"
 )
 
-func Build() *cli.App {
+func New(version string, commit string) *cli.App {
 	return &cli.App{
 		Name:    "pv-migrate",
 		Usage:   "A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another",
