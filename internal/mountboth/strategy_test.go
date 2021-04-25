@@ -3,7 +3,7 @@ package mountboth
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/engine"
-	request2 "github.com/utkuozdemir/pv-migrate/internal/request"
+	request "github.com/utkuozdemir/pv-migrate/internal/request"
 	strategy2 "github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/test"
@@ -12,23 +12,27 @@ import (
 	"testing"
 )
 
+var (
+	defaultRequestOptions = request.NewOptions(true, true)
+)
+
 func TestCanDoSameClusterSameNsSameNode(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := MountBoth{}
-	strategies := []strategy2.Strategy{&strategy}
+	s := MountBoth{}
+	strategies := []strategy2.Strategy{&s}
 	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildJob(request)
-	canDo := strategy.CanDo(task)
+	source := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	j, _ := e.BuildJob(r)
+	canDo := s.CanDo(j)
 	assert.True(t, canDo)
 }
 
@@ -36,19 +40,19 @@ func TestCanDoSameClusterSameNsDestRwx(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := MountBoth{}
-	strategies := []strategy2.Strategy{&strategy}
+	s := MountBoth{}
+	strategies := []strategy2.Strategy{&s}
 	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteMany)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildJob(request)
-	canDo := strategy.CanDo(task)
+	source := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	j, _ := e.BuildJob(r)
+	canDo := s.CanDo(j)
 	assert.True(t, canDo)
 }
 
@@ -56,19 +60,19 @@ func TestCanDoSameClusterSameNsSourceRox(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := MountBoth{}
-	strategies := []strategy2.Strategy{&strategy}
+	s := MountBoth{}
+	strategies := []strategy2.Strategy{&s}
 	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
 	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildJob(request)
-	canDo := strategy.CanDo(task)
+	source := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	j, _ := e.BuildJob(r)
+	canDo := s.CanDo(j)
 	assert.True(t, canDo)
 }
 
@@ -76,19 +80,19 @@ func TestCannotDoSameClusterDifferentNs(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := MountBoth{}
-	strategies := []strategy2.Strategy{&strategy}
+	s := MountBoth{}
+	strategies := []strategy2.Strategy{&s}
 	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PVCWithAccessModes("namespace2", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace2", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context1", "namespace2", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildJob(request)
-	canDo := strategy.CanDo(task)
+	source := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig, "context1", "namespace2", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	j, _ := e.BuildJob(r)
+	canDo := s.CanDo(j)
 	assert.False(t, canDo)
 }
 
@@ -96,19 +100,19 @@ func TestCannotDoDifferentContext(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := MountBoth{}
-	strategies := []strategy2.Strategy{&strategy}
+	s := MountBoth{}
+	strategies := []strategy2.Strategy{&s}
 	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context2", "namespace1", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildJob(request)
-	canDo := strategy.CanDo(task)
+	source := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig, "context2", "namespace1", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	j, _ := e.BuildJob(r)
+	canDo := s.CanDo(j)
 	assert.False(t, canDo)
 }
 
@@ -119,19 +123,19 @@ func TestCannotDoDifferentKubeconfigs(t *testing.T) {
 	kubeconfig2 := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig2)
 
-	strategy := MountBoth{}
-	strategies := []strategy2.Strategy{&strategy}
+	s := MountBoth{}
+	strategies := []strategy2.Strategy{&s}
 	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig1, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig2, "context1", "namespace1", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildJob(request)
-	canDo := strategy.CanDo(task)
+	source := request.NewPVC(kubeconfig1, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig2, "context1", "namespace1", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	j, _ := e.BuildJob(r)
+	canDo := s.CanDo(j)
 	assert.False(t, canDo)
 }
 
@@ -139,19 +143,19 @@ func TestDetermineTargetNodeDestRWO(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := MountBoth{}
-	strategies := []strategy2.Strategy{&strategy}
+	s := MountBoth{}
+	strategies := []strategy2.Strategy{&s}
 	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
 	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteOnce)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	migrationJob, _ := e.BuildJob(request)
-	targetNode := determineTargetNode(migrationJob)
+	source := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	job, _ := e.BuildJob(r)
+	targetNode := determineTargetNode(job)
 	assert.Equal(t, "node2", targetNode)
 }
 
@@ -167,11 +171,11 @@ func TestDetermineTargetNodeSourceRWO(t *testing.T) {
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	task, _ := e.BuildJob(request)
-	targetNode := determineTargetNode(task)
+	source := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	j, _ := e.BuildJob(r)
+	targetNode := determineTargetNode(j)
 	assert.Equal(t, "", targetNode)
 }
 
@@ -179,19 +183,19 @@ func TestDetermineTargetNodeBothRWX(t *testing.T) {
 	kubeconfig := test.PrepareKubeconfig()
 	defer test.DeleteKubeconfig(kubeconfig)
 
-	strategy := MountBoth{}
-	strategies := []strategy2.Strategy{&strategy}
+	s := MountBoth{}
+	strategies := []strategy2.Strategy{&s}
 	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadWriteOnce)
 	pvcB := test.PVCWithAccessModes("namespace1", "pvc2", v1.ReadWriteMany)
 	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
 	podB := test.Pod("namespace1", "pod2", "node2", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	migrationJob, _ := e.BuildJob(request)
-	targetNode := determineTargetNode(migrationJob)
+	source := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	j, _ := e.BuildJob(r)
+	targetNode := determineTargetNode(j)
 	assert.Equal(t, "node1", targetNode)
 }
 
@@ -221,13 +225,13 @@ func TestBuildRsyncJob(t *testing.T) {
 	podB := test.Pod("namespace1", "pod2", "node1", "pvc2")
 	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := engine.NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
-	source := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
-	dest := request2.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
-	request := request2.NewWithDefaultImages(source, dest, request2.NewOptions(true), []string{})
-	migrationJob, _ := e.BuildJob(request)
-	migrationTask := task.New(migrationJob)
-	targetNode := determineTargetNode(migrationJob)
-	rsyncJob, err := buildRsyncJob(migrationTask, targetNode)
+	source := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc1")
+	dest := request.NewPVC(kubeconfig, "context1", "namespace1", "pvc2")
+	r := request.NewWithDefaultImages(source, dest, defaultRequestOptions, []string{})
+	j, _ := e.BuildJob(r)
+	tsk := task.New(j)
+	targetNode := determineTargetNode(j)
+	rsyncJob, err := buildRsyncJob(tsk, targetNode)
 	assert.NoError(t, err)
 	jobTemplate := rsyncJob.Spec.Template
 	podSpec := jobTemplate.Spec

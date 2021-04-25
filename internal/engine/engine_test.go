@@ -36,14 +36,14 @@ func TestNewEngineDuplicateStrategies(t *testing.T) {
 
 func TestValidateRequestWithNonExistingStrategy(t *testing.T) {
 	eng := testEngine(testStrategies()...)
-	req := request.NewWithDefaultImages(nil, nil, request.NewOptions(true), []string{"strategy3"})
+	req := request.NewWithDefaultImages(nil, nil, request.NewOptionsWithDefaults(true), []string{"strategy3"})
 	err := eng.validate(req)
 	if err == nil {
 		t.Fatal("expected error for non existing strategy")
 	}
 }
 
-func TestBuildTask(t *testing.T) {
+func TestBuildJob(t *testing.T) {
 	testEngine := testEngine(testStrategies()...)
 	testRequest := testRequest()
 	migrationJob, err := testEngine.BuildJob(testRequest)
@@ -65,6 +65,14 @@ func TestBuildTask(t *testing.T) {
 	assert.True(t, migrationJob.Dest().SupportsRWO())
 	assert.False(t, migrationJob.Dest().SupportsROX())
 	assert.True(t, migrationJob.Dest().SupportsRWX())
+}
+
+func TestBuildJobMounted(t *testing.T) {
+	testEngine := testEngine(testStrategies()...)
+	testRequest := testRequestWithOptions(request.NewOptions(true, false))
+	j, err := testEngine.BuildJob(testRequest)
+	assert.Nil(t, j)
+	assert.Error(t, err)
 }
 
 func TestFindStrategies(t *testing.T) {
@@ -220,9 +228,13 @@ func TestRun(t *testing.T) {
 }
 
 func testRequest(strategies ...string) request.Request {
+	options := request.NewOptions(true, true)
+	return testRequestWithOptions(options, strategies...)
+}
+
+func testRequestWithOptions(options request.Options, strategies ...string) request.Request {
 	source := request.NewPVC("/kubeconfig1", "context1", "namespace1", "pvc1")
 	dest := request.NewPVC("/kubeconfig2", "context2", "namespace2", "pvc2")
-	options := request.NewOptions(true)
 	newRequest := request.NewWithDefaultImages(source, dest, options, strategies)
 	return newRequest
 }
