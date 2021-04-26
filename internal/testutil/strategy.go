@@ -1,4 +1,4 @@
-package test
+package testutil
 
 import (
 	"github.com/utkuozdemir/pv-migrate/internal/job"

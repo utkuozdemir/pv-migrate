@@ -1,4 +1,4 @@
-package test
+package testutil
 
 import (
 	// for go:embed directive to work
