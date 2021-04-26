@@ -17,9 +17,11 @@ const (
 	destKubeconfigParamKey   = flagPrefix + app.FlagDestKubeconfig
 	destNsParamKey           = flagPrefix + app.FlagDestNamespace
 	ignoreMountedFlag        = flagPrefix + app.FlagIgnoreMounted
+	deleteExtraneousFilesFlag        = flagPrefix + app.FlagDestDeleteExtraneousFiles
 	migrateCommand           = app.CommandMigrate
 
 	dataFilePath        = "/volume/file.txt"
+	extraDataFilePath        = "/volume/extra_file.txt"
 	generateDataContent = "DATA"
 
 	noKindEnvVar = "PV_MIGRATE_TEST_NO_KIND"
@@ -28,7 +30,9 @@ const (
 var (
 	ctx                      *pvMigrateTestContext
 	generateDataShellCommand = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s", generateDataContent, dataFilePath)}
+	generateExtraDataShellCommand = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s", generateDataContent, extraDataFilePath)}
 	printDataShellCommand    = []string{"cat", dataFilePath}
+	checkExtraDataShellCommand    = []string{"ls", extraDataFilePath}
 )
 
 func TestMain(m *testing.M) {
@@ -62,6 +66,10 @@ func TestSameNS(t *testing.T) {
 	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
 	assert.NoError(t, err)
 
+	// generate extra file
+	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
 	err = cliApp.Run(args)
 	assert.NoError(t, err)
 
@@ -69,6 +77,51 @@ func TestSameNS(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, stderr)
 	assert.Equal(t, generateDataContent, stdout)
+
+	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, checkExtraDataShellCommand)
+	assert.NoError(t, err)
+}
+
+func TestSameNSDeleteExtraneousFiles(t *testing.T) {
+	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
+	assert.NoError(t, err)
+	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
+	assert.NoError(t, err)
+	destNs := sourceNs
+
+	cliApp := app.New("", "")
+	args := []string{
+		os.Args[0], migrateCommand,
+		sourceKubeconfigParamKey, ctx.kubeconfig,
+		sourceNsParamKey, sourceNs,
+		destKubeconfigParamKey, ctx.kubeconfig,
+		destNsParamKey, destNs,
+		deleteExtraneousFilesFlag,
+		source, dest,
+	}
+	defer func() {
+		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
+		assert.NoError(t, err)
+	}()
+
+	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
+	assert.NoError(t, err)
+
+	// generate extra file
+	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
+	err = cliApp.Run(args)
+	assert.NoError(t, err)
+
+	stdout, stderr, err := execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, printDataShellCommand)
+	assert.NoError(t, err)
+	assert.Empty(t, stderr)
+	assert.Equal(t, generateDataContent, stdout)
+
+	_, stderr, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, checkExtraDataShellCommand)
+	assert.Error(t, err)
+	assert.Contains(t, stderr, "No such file or directory")
 }
 
 func TestMountedError(t *testing.T) {
