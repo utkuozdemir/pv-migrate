@@ -11,27 +11,27 @@ import (
 )
 
 const (
-	flagPrefix               = "--"
-	sourceKubeconfigParamKey = flagPrefix + app.FlagSourceKubeconfig
-	sourceNsParamKey         = flagPrefix + app.FlagSourceNamespace
-	destKubeconfigParamKey   = flagPrefix + app.FlagDestKubeconfig
-	destNsParamKey           = flagPrefix + app.FlagDestNamespace
-	ignoreMountedFlag        = flagPrefix + app.FlagIgnoreMounted
-	deleteExtraneousFilesFlag        = flagPrefix + app.FlagDestDeleteExtraneousFiles
-	migrateCommand           = app.CommandMigrate
+	flagPrefix                = "--"
+	sourceKubeconfigParamKey  = flagPrefix + app.FlagSourceKubeconfig
+	sourceNsParamKey          = flagPrefix + app.FlagSourceNamespace
+	destKubeconfigParamKey    = flagPrefix + app.FlagDestKubeconfig
+	destNsParamKey            = flagPrefix + app.FlagDestNamespace
+	ignoreMountedFlag         = flagPrefix + app.FlagIgnoreMounted
+	deleteExtraneousFilesFlag = flagPrefix + app.FlagDestDeleteExtraneousFiles
+	migrateCommand            = app.CommandMigrate
 
 	dataFilePath        = "/volume/file.txt"
-	extraDataFilePath        = "/volume/extra_file.txt"
+	extraDataFilePath   = "/volume/extra_file.txt"
 	generateDataContent = "DATA"
 
 	noKindEnvVar = "PV_MIGRATE_TEST_NO_KIND"
 )
 
 var (
-	ctx                      *pvMigrateTestContext
-	generateDataShellCommand = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s", generateDataContent, dataFilePath)}
+	ctx                           *pvMigrateTestContext
+	generateDataShellCommand      = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s", generateDataContent, dataFilePath)}
 	generateExtraDataShellCommand = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s", generateDataContent, extraDataFilePath)}
-	printDataShellCommand    = []string{"cat", dataFilePath}
+	printDataShellCommand         = []string{"cat", dataFilePath}
 	checkExtraDataShellCommand    = []string{"ls", extraDataFilePath}
 )
 
