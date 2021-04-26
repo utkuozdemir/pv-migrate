@@ -18,13 +18,12 @@ func ExecInPod(client kubernetes.Interface, config *restclient.Config, namespace
 		Namespace(namespace).SubResource("exec")
 	option := &corev1.PodExecOptions{
 		Command: command,
-		Stdin:   true,
+		Stdin:   false,
 		Stdout:  true,
 		Stderr:  true,
-		TTY:     true,
+		TTY:     false,
 	}
 
-	option.Stdin = false
 	req.VersionedParams(
 		option,
 		scheme.ParameterCodec,

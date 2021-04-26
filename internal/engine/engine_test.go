@@ -7,7 +7,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/request"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
-	"github.com/utkuozdemir/pv-migrate/internal/test"
+	"github.com/utkuozdemir/pv-migrate/internal/testutil"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"testing"
@@ -21,10 +21,10 @@ func TestNewEngineEmptyStrategies(t *testing.T) {
 }
 
 func TestNewEngineDuplicateStrategies(t *testing.T) {
-	strategy1 := test.Strategy{
+	strategy1 := testutil.Strategy{
 		NameVal: "strategy1",
 	}
-	strategy2 := test.Strategy{
+	strategy2 := testutil.Strategy{
 		NameVal: "strategy1",
 	}
 	strategies := []strategy.Strategy{&strategy1, &strategy2}
@@ -95,17 +95,17 @@ func TestDetermineStrategies(t *testing.T) {
 }
 
 func TestDetermineStrategiesCorrectOrder(t *testing.T) {
-	strategy1 := test.Strategy{
+	strategy1 := testutil.Strategy{
 		NameVal:     "strategy1",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 3000,
 	}
-	strategy2 := test.Strategy{
+	strategy2 := testutil.Strategy{
 		NameVal:     "strategy2",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 1000,
 	}
-	strategy3 := test.Strategy{
+	strategy3 := testutil.Strategy{
 		NameVal:     "strategy3",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 2000,
@@ -122,12 +122,12 @@ func TestDetermineStrategiesCorrectOrder(t *testing.T) {
 }
 
 func TestDetermineStrategiesCannotDo(t *testing.T) {
-	strategy1 := test.Strategy{
+	strategy1 := testutil.Strategy{
 		NameVal:     "strategy1",
 		CanDoVal:    canDoFalse,
 		PriorityVal: 3000,
 	}
-	strategy2 := test.Strategy{
+	strategy2 := testutil.Strategy{
 		NameVal:     "strategy2",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 1000,
@@ -142,17 +142,17 @@ func TestDetermineStrategiesCannotDo(t *testing.T) {
 }
 
 func TestDetermineStrategiesRequested(t *testing.T) {
-	strategy1 := test.Strategy{
+	strategy1 := testutil.Strategy{
 		NameVal:     "strategy1",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 3000,
 	}
-	strategy2 := test.Strategy{
+	strategy2 := testutil.Strategy{
 		NameVal:     "strategy2",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 1000,
 	}
-	strategy3 := test.Strategy{
+	strategy3 := testutil.Strategy{
 		NameVal:     "strategy3",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 2000,
@@ -168,7 +168,7 @@ func TestDetermineStrategiesRequested(t *testing.T) {
 }
 
 func TestDetermineStrategiesRequestedNonExistent(t *testing.T) {
-	strategy1 := test.Strategy{
+	strategy1 := testutil.Strategy{
 		NameVal:     "strategy1",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 3000,
@@ -187,7 +187,7 @@ func TestRun(t *testing.T) {
 	cleanup := func(t task.Task) error {
 		return nil
 	}
-	strategy1 := test.Strategy{
+	strategy1 := testutil.Strategy{
 		NameVal:     "strategy1",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 3000,
@@ -197,7 +197,7 @@ func TestRun(t *testing.T) {
 		},
 		CleanupFunc: cleanup,
 	}
-	strategy2 := test.Strategy{
+	strategy2 := testutil.Strategy{
 		NameVal:     "strategy2",
 		CanDoVal:    canDoTrue,
 		PriorityVal: 1000,
@@ -207,7 +207,7 @@ func TestRun(t *testing.T) {
 		},
 		CleanupFunc: cleanup,
 	}
-	strategy3 := test.Strategy{
+	strategy3 := testutil.Strategy{
 		NameVal:     "strategy3",
 		CanDoVal:    canDoFalse,
 		PriorityVal: 2000,
@@ -240,21 +240,21 @@ func testRequestWithOptions(options request.Options, strategies ...string) reque
 }
 
 func testEngine(strategies ...strategy.Strategy) Engine {
-	pvcA := test.PVCWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
-	pvcB := test.PVCWithAccessModes("namespace2", "pvc2", v1.ReadWriteOnce, v1.ReadWriteMany)
-	podA := test.Pod("namespace1", "pod1", "node1", "pvc1")
-	podB := test.Pod("namespace2", "pod2", "node2", "pvc2")
-	kubernetesClientProvider := test.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
+	pvcA := testutil.PVCWithAccessModes("namespace1", "pvc1", v1.ReadOnlyMany)
+	pvcB := testutil.PVCWithAccessModes("namespace2", "pvc2", v1.ReadWriteOnce, v1.ReadWriteMany)
+	podA := testutil.Pod("namespace1", "pod1", "node1", "pvc1")
+	podB := testutil.Pod("namespace2", "pod2", "node2", "pvc2")
+	kubernetesClientProvider := testutil.KubernetesClientProvider{Objects: []runtime.Object{pvcA, pvcB, podA, podB}}
 	e, _ := NewWithKubernetesClientProvider(strategies, &kubernetesClientProvider)
 	return e
 }
 
 func testStrategies() []strategy.Strategy {
-	strategy1 := test.Strategy{
+	strategy1 := testutil.Strategy{
 		NameVal:  "strategy1",
 		CanDoVal: canDoTrue,
 	}
-	strategy2 := test.Strategy{
+	strategy2 := testutil.Strategy{
 		NameVal:  "strategy2",
 		CanDoVal: canDoTrue,
 	}

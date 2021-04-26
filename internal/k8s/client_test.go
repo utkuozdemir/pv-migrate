@@ -3,12 +3,12 @@ package k8s
 import (
 	_ "embed"
 	"github.com/stretchr/testify/assert"
-	"github.com/utkuozdemir/pv-migrate/internal/test"
+	"github.com/utkuozdemir/pv-migrate/internal/testutil"
 	"testing"
 )
 
 func TestBuildK8sConfig(t *testing.T) {
-	kubeconfig := test.PrepareKubeconfig()
+	kubeconfig := testutil.PrepareKubeconfig()
 	config, ns, err := buildK8sConfig(kubeconfig, "")
 	assert.NotNil(t, config)
 	assert.Equal(t, "namespace1", ns)
