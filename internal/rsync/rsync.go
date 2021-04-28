@@ -14,8 +14,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const maxRetries = 5
-const retryIntervalSecs = 5
+const (
+	maxRetries            = 10
+	retryIntervalSecs     = 5
+	sshConnectTimeoutSecs = 5
+)
 
 var scriptTemplate = template.Must(template.New("script").Parse(`
 n=0
@@ -30,7 +33,7 @@ do
     -avzh \
     --progress \
     {{ if .SshTargetHost -}}
-    -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+    -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout={{.SshConnectTimeoutSecs}}" \
     root@{{.SshTargetHost}}:/source/ \
     {{ else -}}
     /source/ \
@@ -39,6 +42,7 @@ do
     rc=0 && \
     break
   n=$((n+1))
+  echo "rsync attempt $n/{{.MaxRetries}} failed, waiting {{.RetryIntervalSecs}} seconds before trying again"
   sleep {{.RetryIntervalSecs}}
 done
 
@@ -52,6 +56,7 @@ type script struct {
 	MaxRetries            int
 	DeleteExtraneousFiles bool
 	SshTargetHost         string
+	SshConnectTimeoutSecs int
 	RetryIntervalSecs     int
 }
 
@@ -60,6 +65,7 @@ func BuildRsyncScript(deleteExtraneousFiles bool, sshTargetHost string) (string,
 		MaxRetries:            maxRetries,
 		DeleteExtraneousFiles: deleteExtraneousFiles,
 		SshTargetHost:         sshTargetHost,
+		SshConnectTimeoutSecs: sshConnectTimeoutSecs,
 		RetryIntervalSecs:     retryIntervalSecs,
 	}
 
@@ -201,7 +207,7 @@ func RunRsyncJobOverSsh(task task.Task, serviceType corev1.ServiceType) error {
 	if err != nil {
 		return err
 	}
-	targetHost, err := k8s.GetServiceAddress(createdService, sourceKubeClient)
+	targetHost, err := k8s.GetServiceAddress(sourceKubeClient, createdService)
 	if err != nil {
 		return err
 	}
