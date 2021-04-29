@@ -3,13 +3,17 @@
 name: build
 on:  # yamllint disable-line rule:truthy
   push:
+    branches:
+      - master
     paths-ignore:
-      - "**.md"
+      - "**/README.md"
       - "test/**"
       - ".gitignore"
   pull_request:
+    branches:
+      - master
     paths-ignore:
-      - "**.md"
+      - "**/README.md"
       - "test/**"
       - ".gitignore"
 jobs:
