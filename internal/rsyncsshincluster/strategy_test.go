@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	defaultRequestOptions = request.NewOptions(true, true)
+	defaultRequestOptions = request.NewOptions(true, true, false)
 )
 
 func TestCanDoSameCluster(t *testing.T) {

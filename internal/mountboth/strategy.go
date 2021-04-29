@@ -72,7 +72,9 @@ func buildRsyncJob(task task.Task, node string) (*batchv1.Job, error) {
 	id := task.ID()
 	jobName := "pv-migrate-rsync-" + id
 	migrationJob := task.Job()
-	rsyncScript, err := rsync.BuildRsyncScript(migrationJob.Options().DeleteExtraneousFiles(), "")
+	rsyncScript, err := rsync.BuildRsyncScript(migrationJob.Options().DeleteExtraneousFiles(),
+		migrationJob.Options().NoChown(),
+		"")
 	if err != nil {
 		return nil, err
 	}

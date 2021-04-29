@@ -12,6 +12,7 @@ type Job interface {
 
 type Options interface {
 	DeleteExtraneousFiles() bool
+	NoChown() bool
 }
 
 type job struct {
@@ -54,12 +55,17 @@ func New(source pvc.Info, dest pvc.Info, options Options, rsyncImage string, ssh
 
 type options struct {
 	deleteExtraneousFiles bool
+	noChown               bool
 }
 
-func NewOptions(deleteExtraneousFiles bool) Options {
-	return &options{deleteExtraneousFiles: deleteExtraneousFiles}
+func NewOptions(deleteExtraneousFiles bool, noChown bool) Options {
+	return &options{deleteExtraneousFiles: deleteExtraneousFiles, noChown: noChown}
 }
 
 func (t *options) DeleteExtraneousFiles() bool {
 	return t.deleteExtraneousFiles
+}
+
+func (t *options) NoChown() bool {
+	return t.noChown
 }
