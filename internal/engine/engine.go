@@ -177,7 +177,7 @@ func (e *engine) BuildJob(request request.Request) (job.Job, error) {
 		return nil, errors.New("destination pvc is not writeable")
 	}
 
-	taskOptions := job.NewOptions(request.Options().DeleteExtraneousFiles())
+	taskOptions := job.NewOptions(request.Options().DeleteExtraneousFiles(), request.Options().NoChown())
 	return job.New(sourcePvcInfo, destPvcInfo, taskOptions, request.RsyncImage(), request.SshdImage()), nil
 }
 

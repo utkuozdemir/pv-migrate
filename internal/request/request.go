@@ -6,6 +6,7 @@ const (
 	DefaultRsyncImage    = "docker.io/instrumentisto/rsync-ssh:alpine"
 	DefaultSshdImage     = "docker.io/panubo/sshd:1.3.0"
 	DefaultIgnoreMounted = false
+	DefaultNoChown       = false
 )
 
 type PVC interface {
@@ -115,19 +116,21 @@ func New(source PVC, dest PVC, options Options, strategies []string, rsyncImage 
 type Options interface {
 	DeleteExtraneousFiles() bool
 	IgnoreMounted() bool
+	NoChown() bool
 }
 
 type options struct {
 	deleteExtraneousFiles bool
 	ignoreMounted         bool
+	noChown               bool
 }
 
 func NewOptionsWithDefaults(deleteExtraneousFiles bool) Options {
-	return NewOptions(deleteExtraneousFiles, DefaultIgnoreMounted)
+	return NewOptions(deleteExtraneousFiles, DefaultIgnoreMounted, DefaultNoChown)
 }
 
-func NewOptions(deleteExtraneousFiles bool, ignoreMounted bool) Options {
-	return &options{deleteExtraneousFiles: deleteExtraneousFiles, ignoreMounted: ignoreMounted}
+func NewOptions(deleteExtraneousFiles bool, ignoreMounted bool, noChown bool) Options {
+	return &options{deleteExtraneousFiles: deleteExtraneousFiles, ignoreMounted: ignoreMounted, noChown: noChown}
 }
 
 func (r *options) DeleteExtraneousFiles() bool {
@@ -136,4 +139,8 @@ func (r *options) DeleteExtraneousFiles() bool {
 
 func (r *options) IgnoreMounted() bool {
 	return r.ignoreMounted
+}
+
+func (r *options) NoChown() bool {
+	return r.noChown
 }

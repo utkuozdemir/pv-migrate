@@ -69,7 +69,7 @@ func TestBuildJob(t *testing.T) {
 
 func TestBuildJobMounted(t *testing.T) {
 	testEngine := testEngine(testStrategies()...)
-	testRequest := testRequestWithOptions(request.NewOptions(true, false))
+	testRequest := testRequestWithOptions(request.NewOptions(true, false, false))
 	j, err := testEngine.BuildJob(testRequest)
 	assert.Nil(t, j)
 	assert.Error(t, err)
@@ -228,7 +228,7 @@ func TestRun(t *testing.T) {
 }
 
 func testRequest(strategies ...string) request.Request {
-	options := request.NewOptions(true, true)
+	options := request.NewOptions(true, true, false)
 	return testRequestWithOptions(options, strategies...)
 }
 

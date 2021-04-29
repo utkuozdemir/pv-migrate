@@ -27,11 +27,14 @@ retries={{.MaxRetries}}
 until [ "$n" -ge "$retries" ]
 do
   rsync \
+    -avzh \
+    --progress \
     {{ if .DeleteExtraneousFiles -}}
     --delete \
     {{ end -}}
-    -avzh \
-    --progress \
+    {{ if .NoChown -}}
+    --no-o --no-g \
+    {{ end -}}
     {{ if .SshTargetHost -}}
     -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout={{.SshConnectTimeoutSecs}}" \
     root@{{.SshTargetHost}}:/source/ \
@@ -55,15 +58,17 @@ exit $rc
 type script struct {
 	MaxRetries            int
 	DeleteExtraneousFiles bool
+	NoChown               bool
 	SshTargetHost         string
 	SshConnectTimeoutSecs int
 	RetryIntervalSecs     int
 }
 
-func BuildRsyncScript(deleteExtraneousFiles bool, sshTargetHost string) (string, error) {
+func BuildRsyncScript(deleteExtraneousFiles bool, noChown bool, sshTargetHost string) (string, error) {
 	s := script{
 		MaxRetries:            maxRetries,
 		DeleteExtraneousFiles: deleteExtraneousFiles,
+		NoChown:               noChown,
 		SshTargetHost:         sshTargetHost,
 		SshConnectTimeoutSecs: sshConnectTimeoutSecs,
 		RetryIntervalSecs:     retryIntervalSecs,
@@ -105,7 +110,8 @@ func buildRsyncJobDest(task task.Task, targetHost string, privateKeySecretName s
 	migrationJob := task.Job()
 	destPvcInfo := migrationJob.Dest()
 
-	rsyncScript, err := BuildRsyncScript(migrationJob.Options().DeleteExtraneousFiles(), targetHost)
+	rsyncScript, err := BuildRsyncScript(migrationJob.Options().DeleteExtraneousFiles(),
+		migrationJob.Options().NoChown(), targetHost)
 	if err != nil {
 		return nil, err
 	}

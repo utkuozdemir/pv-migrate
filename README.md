@@ -74,6 +74,7 @@ OPTIONS:
    --dest-namespace value, -N value       Namespace of the destination pvc (default: currently selected namespace in the destination context)
    --dest-delete-extraneous-files, -d     Delete extraneous files on the destination by using rsync's '--delete' flag (default: false)
    --ignore-mounted, -i                   Do not fail if the source or destination PVC is mounted (default: false)
+   --no-chown, -o                         Omit chown on rsync (default: false)
    --override-strategies value, -s value  Override the default list of strategies and their order by priority
    --rsync-image value, -r value          Image to use for running rsync (default: "docker.io/instrumentisto/rsync-ssh:alpine")
    --sshd-image value, -S value           Image to use for running sshd server (default: "docker.io/panubo/sshd:1.3.0")

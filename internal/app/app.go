@@ -23,6 +23,7 @@ const (
 	FlagDestNamespace             = "dest-namespace"
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
+	FlagNoChown                   = "no-chown"
 	FlagOverrideStrategies        = "override-strategies"
 	FlagRsyncImage                = "rsync-image"
 	FlagSshdImage                 = "sshd-image"
@@ -58,10 +59,11 @@ func New(version string, commit string) *cli.App {
 					dest := c.Args().Get(1)
 					destDeleteExtraneousFiles := c.Bool(FlagDestDeleteExtraneousFiles)
 					ignoreMounted := c.Bool(FlagIgnoreMounted)
+					noChown := c.Bool(FlagNoChown)
 					overrideStrategies := c.StringSlice(FlagOverrideStrategies)
 					sourceRequestPvc := request.NewPVC(sourceKubeconfig, sourceContext, sourceNamespace, source)
 					destRequestPvc := request.NewPVC(destKubeconfig, destContext, destNamespace, dest)
-					requestOptions := request.NewOptions(destDeleteExtraneousFiles, ignoreMounted)
+					requestOptions := request.NewOptions(destDeleteExtraneousFiles, ignoreMounted, noChown)
 					rsyncImage := c.String(FlagRsyncImage)
 					sshdImage := c.String(FlagSshdImage)
 
@@ -131,6 +133,12 @@ func New(version string, commit string) *cli.App {
 						Aliases: []string{"i"},
 						Usage:   "Do not fail if the source or destination PVC is mounted",
 						Value:   request.DefaultIgnoreMounted,
+					},
+					&cli.BoolFlag{
+						Name:    FlagNoChown,
+						Aliases: []string{"o"},
+						Usage:   "Omit chown on rsync",
+						Value:   request.DefaultNoChown,
 					},
 					&cli.StringSliceFlag{
 						Name:        FlagOverrideStrategies,
