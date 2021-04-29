@@ -7,38 +7,26 @@ DEST_KUBECONFIG=.kubeconfig-dest.yaml
 echo "Same namespace"
 pv-migrate migrate \
   --source-kubeconfig $SOURCE_KUBECONFIG \
-  --source-namespace source \
+  --source-namespace pv-migrate-test-1 \
   --dest-kubeconfig $SOURCE_KUBECONFIG \
-  --dest-namespace source \
+  --dest-namespace pv-migrate-test-1 \
   --dest-delete-extraneous-files \
-  source dest
+  pv-migrate-test-source-1 pv-migrate-test-dest-1
 
 echo "Different namespace"
 pv-migrate migrate \
   --source-kubeconfig $SOURCE_KUBECONFIG \
-  --source-namespace source \
+  --source-namespace pv-migrate-test-1 \
   --dest-kubeconfig $SOURCE_KUBECONFIG \
-  --dest-namespace dest \
+  --dest-namespace pv-migrate-test-2 \
   --dest-delete-extraneous-files \
-  source dest
+  pv-migrate-test-source-1 pv-migrate-test-dest-2
 
 echo "Different cluster"
 pv-migrate migrate \
   --source-kubeconfig $SOURCE_KUBECONFIG \
-  -n source \
+  -n pv-migrate-test-1 \
   --dest-kubeconfig $DEST_KUBECONFIG \
-  -N dest \
+  -N pv-migrate-test-1 \
   --dest-delete-extraneous-files \
-  source dest
-
-kubectl --kubeconfig $SOURCE_KUBECONFIG config set-context --current --namespace=source
-kubectl --kubeconfig $DEST_KUBECONFIG config set-context --current --namespace=dest
-
-echo "Different cluster - implicit ns"
-pv-migrate m \
-  -k $SOURCE_KUBECONFIG \
-  -n source \
-  -K $DEST_KUBECONFIG \
-  -N dest \
-  -d \
-  source dest
+  pv-migrate-test-source-1 pv-migrate-test-dest-1
