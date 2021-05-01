@@ -1,7 +1,9 @@
 package strategy
 
-//import "github.com/utkuozdemir/pv-migrate/internal/request"
-//
-//var (
-//	defaultRequestOptions = request.NewOptions(true, true, false)
-//)
+import (
+	"github.com/utkuozdemir/pv-migrate/internal/job"
+)
+
+var (
+	defaultJobOptions = job.NewOptions(true, true)
+)
