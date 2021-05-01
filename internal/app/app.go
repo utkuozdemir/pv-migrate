@@ -131,7 +131,7 @@ func New(version string, commit string) *cli.App {
 						Name:    FlagStrategies,
 						Aliases: []string{"s"},
 						Usage:   "The strategies to be used in the given order",
-						Value:   cli.NewStringSlice(strategy.Defaults...),
+						Value:   cli.NewStringSlice(strategy.DefaultStrategies...),
 					},
 					&cli.StringFlag{
 						Name:    FlagRsyncImage,

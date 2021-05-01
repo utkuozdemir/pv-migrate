@@ -40,7 +40,7 @@ func NewWithKubernetesClientProvider(kubernetesClientProvider k8s.KubernetesClie
 }
 
 func (e *engine) Run(request request.Request) error {
-	requestedStrategies, err := strategy.ForNames(request.Strategies())
+	nameToStrategyMap, err := strategy.GetStrategiesMapForNames(request.Strategies())
 	if err != nil {
 		return err
 	}
@@ -50,39 +50,29 @@ func (e *engine) Run(request request.Request) error {
 		return err
 	}
 
-	applicableStrategies := filterApplicableStrategies(requestedStrategies, migrationJob)
-	numApplicableStrategies := len(applicableStrategies)
-	if numApplicableStrategies == 0 {
-		return errors.New("no strategy found that can handle the request")
-	}
-
 	logger := log.WithFields(request.LogFields())
-	applicableStrategyNames := strategy.Names(applicableStrategies)
 	logger.
-		WithField("strategies", strings.Join(applicableStrategyNames, " ")).
-		Infof("Determined %v strategies to be attempted", numApplicableStrategies)
+		WithField("strategies", strings.Join(request.Strategies(), " ")).
+		Infof("Will attempt %v strategies", len(nameToStrategyMap))
 
-	for _, s := range applicableStrategies {
+	for name, s := range nameToStrategyMap {
 		migrationTask := task.New(migrationJob)
 
-		logger = log.WithField("strategy", s.Name())
-		logger.Info("Executing strategy")
-		runErr := s.Run(migrationTask)
-		if runErr != nil {
-			logger.WithError(runErr).Warn("Migration failed, will try remaining strategies")
-		} else {
-			logger.Info("Migration succeeded")
-		}
-
-		logger.Info("Cleaning up")
-		cleanupErr := s.Cleanup(migrationTask)
-		if cleanupErr != nil {
-			logger.WithError(cleanupErr).Warn("Cleanup failed, you might want to clean up manually")
+		logger = log.WithField("strategy", name)
+		logger.Info("Attempting strategy")
+		accepted, runErr := s.Run(migrationTask)
+		if !accepted {
+			logger.Info("Strategy cannot handle this request, will try the next one")
+			continue
 		}
 
 		if runErr == nil {
+			logger.Info("Migration succeeded")
 			return nil
 		}
+
+		logger.WithError(runErr).
+			Warn("Migration failed with this strategy, will try with the remaining strategies")
 	}
 
 	return errors.New("all strategies have failed")
@@ -92,14 +82,16 @@ func (e *engine) BuildJob(request request.Request) (job.Job, error) {
 	source := request.Source()
 	dest := request.Dest()
 	kubernetesClientProvider := e.kubernetesClientProvider
-	var sourceClient, sourceNsInContext, err = kubernetesClientProvider.GetClientAndNsInContext(source.KubeconfigPath(), source.Context())
+	var sourceClient, sourceNsInContext, err = kubernetesClientProvider.
+		GetClientAndNsInContext(source.KubeconfigPath(), source.Context())
 	if err != nil {
 		return nil, err
 	}
 
 	destClient, destNsInContext := sourceClient, sourceNsInContext
 	if source.KubeconfigPath() != dest.KubeconfigPath() || source.Context() != dest.Context() {
-		destClient, destNsInContext, err = kubernetesClientProvider.GetClientAndNsInContext(dest.KubeconfigPath(), dest.Context())
+		destClient, destNsInContext, err = kubernetesClientProvider.
+			GetClientAndNsInContext(dest.KubeconfigPath(), dest.Context())
 		if err != nil {
 			return nil, err
 		}
@@ -141,17 +133,6 @@ func (e *engine) BuildJob(request request.Request) (job.Job, error) {
 
 	taskOptions := job.NewOptions(request.Options().DeleteExtraneousFiles(), request.Options().NoChown())
 	return job.New(sourcePvcInfo, destPvcInfo, taskOptions, request.RsyncImage(), request.SshdImage()), nil
-}
-
-func filterApplicableStrategies(strategies []strategy.Strategy, job job.Job) []strategy.Strategy {
-	var sts []strategy.Strategy
-	for _, s := range strategies {
-		if s.CanDo(job) {
-			sts = append(sts, s)
-		}
-	}
-
-	return sts
 }
 
 func handleMounted(info pvc.Info, ignoreMounted bool) error {

@@ -1,7 +1,6 @@
 package strategy
 
 import (
-	"errors"
 	"github.com/utkuozdemir/pv-migrate/internal/job"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
@@ -11,23 +10,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const (
-	Mnt2Name = "mnt2"
-)
-
 type Mnt2 struct {
 }
 
-func (r *Mnt2) Cleanup(task task.Task) error {
-	migrationJob := task.Job()
-	return k8s.CleanupForID(migrationJob.Source().KubeClient(), migrationJob.Source().Claim().Namespace, task.ID())
-}
-
-func (r *Mnt2) Name() string {
-	return Mnt2Name
-}
-
-func (r *Mnt2) CanDo(job job.Job) bool {
+func (r *Mnt2) canDo(job job.Job) bool {
 	sameCluster := job.Source().KubeClient() == job.Dest().KubeClient()
 	if !sameCluster {
 		return false
@@ -42,18 +28,19 @@ func (r *Mnt2) CanDo(job job.Job) bool {
 	return sameNode || job.Source().SupportsROX() || job.Source().SupportsRWX() || job.Dest().SupportsRWX()
 }
 
-func (r *Mnt2) Run(task task.Task) error {
-	if !r.CanDo(task.Job()) {
-		return errors.New("cannot do this task using this strategy")
+func (r *Mnt2) Run(task task.Task) (bool, error) {
+	if !r.canDo(task.Job()) {
+		return false, nil
 	}
 
 	node := determineTargetNode(task.Job())
 	migrationJob, err := buildRsyncJob(task, node)
 	if err != nil {
-		return err
+		return true, err
 	}
 
-	return k8s.CreateJobWaitTillCompleted(task.Job().Source().KubeClient(), migrationJob)
+	defer cleanup(task)
+	return true, k8s.CreateJobWaitTillCompleted(task.Job().Source().KubeClient(), migrationJob)
 }
 
 func determineTargetNode(job job.Job) string {
