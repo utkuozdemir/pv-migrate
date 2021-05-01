@@ -33,7 +33,7 @@ const (
 	pollInterval            = 5 * time.Second
 	pollTimeout             = 5 * time.Minute
 	kindWaitForReadyTimeout = 2 * time.Minute
-	kindImage = "kindest/node:v1.20.2"
+	kindImage               = "kindest/node:v1.20.2"
 )
 
 var (
