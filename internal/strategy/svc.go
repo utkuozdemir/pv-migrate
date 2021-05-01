@@ -1,4 +1,4 @@
-package rsyncsshcrosscluster
+package strategy
 
 import (
 	"errors"
@@ -10,10 +10,14 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-type RsyncSSHCrossCluster struct {
+const (
+	SvcName = "svc"
+)
+
+type Svc struct {
 }
 
-func (r *RsyncSSHCrossCluster) Cleanup(task task.Task) error {
+func (r *Svc) Cleanup(task task.Task) error {
 	migrationJob := task.Job()
 	var result *multierror.Error
 	err := k8s.CleanupForID(migrationJob.Source().KubeClient(), migrationJob.Source().Claim().Namespace, task.ID())
@@ -28,21 +32,18 @@ func (r *RsyncSSHCrossCluster) Cleanup(task task.Task) error {
 	return result.ErrorOrNil()
 }
 
-func (r *RsyncSSHCrossCluster) Name() string {
-	return "rsync-ssh-cross-cluster"
+func (r *Svc) Name() string {
+	return SvcName
 }
 
-func (r *RsyncSSHCrossCluster) Priority() int {
-	return 3000
+func (r *Svc) CanDo(migrationJob job.Job) bool {
+	sameCluster := migrationJob.Source().KubeClient() == migrationJob.Dest().KubeClient()
+	return sameCluster
 }
 
-func (r *RsyncSSHCrossCluster) CanDo(_ job.Job) bool {
-	return true
-}
-
-func (r *RsyncSSHCrossCluster) Run(task task.Task) error {
+func (r *Svc) Run(task task.Task) error {
 	if !r.CanDo(task.Job()) {
 		return errors.New("cannot do this task using this strategy")
 	}
-	return rsync.RunRsyncJobOverSsh(task, corev1.ServiceTypeLoadBalancer)
+	return rsync.RunRsyncJobOverSsh(task, corev1.ServiceTypeClusterIP)
 }

@@ -10,7 +10,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/request"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
-	"sort"
 	"strings"
 )
 
@@ -20,45 +19,28 @@ import (
 type Engine interface {
 	// Run runs the migration
 	Run(request request.Request) error
-	validate(request request.Request) error
 	// BuildJob builds a Job from a Request
 	BuildJob(request request.Request) (job.Job, error)
-	determineStrategies(request request.Request, job job.Job) ([]strategy.Strategy, error)
-	findStrategies(strategyNames ...string) ([]strategy.Strategy, error)
 }
 
 type engine struct {
 	kubernetesClientProvider k8s.KubernetesClientProvider
-	strategyMap              map[string]strategy.Strategy
 }
 
-// New creates a new engine with the given strategies
-func New(strategies []strategy.Strategy) (Engine, error) {
-	return NewWithKubernetesClientProvider(strategies, k8s.NewKubernetesClientProvider())
+// New creates a new engine
+func New() Engine {
+	return NewWithKubernetesClientProvider(k8s.NewKubernetesClientProvider())
 }
 
-// NewWithKubernetesClientProvider creates a new engine with the given strategies and the kubernetes client provider
-func NewWithKubernetesClientProvider(strategies []strategy.Strategy, kubernetesClientProvider k8s.KubernetesClientProvider) (Engine, error) {
-	if len(strategies) == 0 {
-		return nil, errors.New("no strategies passed")
-	}
-
-	strategyMap := make(map[string]strategy.Strategy)
-	for _, s := range strategies {
-		name := s.Name()
-		if _, exists := strategyMap[name]; exists {
-			return nil, errors.New("duplicate name in strategies")
-		}
-		strategyMap[name] = s
-	}
-
+// NewWithKubernetesClientProvider creates a new engine with the given kubernetes client provider
+func NewWithKubernetesClientProvider(kubernetesClientProvider k8s.KubernetesClientProvider) Engine {
 	return &engine{
 		kubernetesClientProvider: kubernetesClientProvider,
-		strategyMap:              strategyMap}, nil
+	}
 }
 
 func (e *engine) Run(request request.Request) error {
-	err := e.validate(request)
+	requestedStrategies, err := strategy.ForNames(request.Strategies())
 	if err != nil {
 		return err
 	}
@@ -68,31 +50,22 @@ func (e *engine) Run(request request.Request) error {
 		return err
 	}
 
-	strategies, err := e.determineStrategies(request, migrationJob)
-	if err != nil {
-		return err
-	}
-
-	logger := log.WithFields(request.LogFields())
-
-	numStrategies := len(strategies)
-	if numStrategies == 0 {
+	applicableStrategies := filterApplicableStrategies(requestedStrategies, migrationJob)
+	numApplicableStrategies := len(applicableStrategies)
+	if numApplicableStrategies == 0 {
 		return errors.New("no strategy found that can handle the request")
 	}
 
-	strategyNames := strategy.Names(strategies)
+	logger := log.WithFields(request.LogFields())
+	applicableStrategyNames := strategy.Names(applicableStrategies)
 	logger.
-		WithField("strategies", strings.Join(strategyNames, " ")).
-		Infof("Determined %v strategies to be attempted", numStrategies)
+		WithField("strategies", strings.Join(applicableStrategyNames, " ")).
+		Infof("Determined %v strategies to be attempted", numApplicableStrategies)
 
-	for _, s := range strategies {
+	for _, s := range applicableStrategies {
 		migrationTask := task.New(migrationJob)
 
-		logger = log.WithFields(log.Fields{
-			"strategy": s.Name(),
-			"priority": s.Priority(),
-		})
-
+		logger = log.WithField("strategy", s.Name())
 		logger.Info("Executing strategy")
 		runErr := s.Run(migrationTask)
 		if runErr != nil {
@@ -113,17 +86,6 @@ func (e *engine) Run(request request.Request) error {
 	}
 
 	return errors.New("all strategies have failed")
-}
-
-func (e *engine) validate(request request.Request) error {
-	for _, requestStrategy := range request.Strategies() {
-		if _, exists := e.strategyMap[requestStrategy]; !exists {
-			log.WithField("strategy", requestStrategy).Error("Requested strategy not found")
-			return errors.New("requested strategy not found")
-		}
-	}
-
-	return nil
 }
 
 func (e *engine) BuildJob(request request.Request) (job.Job, error) {
@@ -181,36 +143,15 @@ func (e *engine) BuildJob(request request.Request) (job.Job, error) {
 	return job.New(sourcePvcInfo, destPvcInfo, taskOptions, request.RsyncImage(), request.SshdImage()), nil
 }
 
-func (e *engine) determineStrategies(request request.Request, job job.Job) ([]strategy.Strategy, error) {
-	if len(request.Strategies()) > 0 {
-		return e.findStrategies(request.Strategies()...)
-	}
-
-	var strategies []strategy.Strategy
-	for _, s := range e.strategyMap {
-		if (s).CanDo(job) {
-			strategies = append(strategies, s)
+func filterApplicableStrategies(strategies []strategy.Strategy, job job.Job) []strategy.Strategy {
+	var sts []strategy.Strategy
+	for _, s := range strategies {
+		if s.CanDo(job) {
+			sts = append(sts, s)
 		}
 	}
 
-	sort.Slice(strategies, func(i, j int) bool {
-		return strategies[i].Priority() < strategies[j].Priority()
-	})
-
-	return strategies, nil
-}
-
-func (e *engine) findStrategies(strategyNames ...string) ([]strategy.Strategy, error) {
-	var strategies []strategy.Strategy
-	for _, strategyName := range strategyNames {
-		s, exists := e.strategyMap[strategyName]
-		if !exists {
-			return nil, fmt.Errorf("strategy not found: %v", strategyName)
-		}
-		strategies = append(strategies, s)
-	}
-
-	return strategies, nil
+	return sts
 }
 
 func handleMounted(info pvc.Info, ignoreMounted bool) error {

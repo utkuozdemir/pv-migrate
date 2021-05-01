@@ -1,22 +1,34 @@
 package strategy
 
 import (
+	"fmt"
 	"github.com/utkuozdemir/pv-migrate/internal/job"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 )
+
+var (
+	Defaults = []string{Mnt2Name, SvcName, LbSvcName}
+
+	all = []Strategy{
+		&Mnt2{},
+		&Svc{},
+		&LbSvc{},
+	}
+
+	allMap = make(map[string]Strategy)
+)
+
+func init() {
+	for _, s := range all {
+		allMap[s.Name()] = s
+	}
+}
 
 type Strategy interface {
 	// Name is the unique name of the strategy.
 	//
 	// Must follow kebab-case and return the same string every time.
 	Name() string
-
-	// Priority is the numeric priority of the strategy.
-	//
-	// If the strategy is more preferable compared to another, it must return a smaller number (higher priority).
-	//
-	// Must always return the same number.
-	Priority() int
 
 	// CanDo must return True if this strategy can execute the job.
 	//
@@ -45,4 +57,17 @@ func Names(strategies []Strategy) []string {
 		result = append(result, name)
 	}
 	return result
+}
+
+func ForNames(names []string) ([]Strategy, error) {
+	var sts []Strategy
+	for _, name := range names {
+		s, ok := allMap[name]
+		if !ok {
+			return nil, fmt.Errorf("strategy not found: %s", name)
+		}
+
+		sts = append(sts, s)
+	}
+	return sts, nil
 }

@@ -5,12 +5,8 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"github.com/utkuozdemir/pv-migrate/internal/engine"
-	"github.com/utkuozdemir/pv-migrate/internal/mountboth"
 	"github.com/utkuozdemir/pv-migrate/internal/request"
-	"github.com/utkuozdemir/pv-migrate/internal/rsyncsshcrosscluster"
-	"github.com/utkuozdemir/pv-migrate/internal/rsyncsshincluster"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
-	"strings"
 )
 
 const (
@@ -24,17 +20,9 @@ const (
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
 	FlagNoChown                   = "no-chown"
-	FlagOverrideStrategies        = "override-strategies"
+	FlagStrategies                = "strategies"
 	FlagRsyncImage                = "rsync-image"
 	FlagSshdImage                 = "sshd-image"
-)
-
-var (
-	strategies = []strategy.Strategy{
-		&mountboth.MountBoth{},
-		&rsyncsshincluster.RsyncSSSHInCluster{},
-		&rsyncsshcrosscluster.RsyncSSHCrossCluster{},
-	}
 )
 
 func New(version string, commit string) *cli.App {
@@ -45,7 +33,7 @@ func New(version string, commit string) *cli.App {
 		Commands: []*cli.Command{
 			{
 				Name:      CommandMigrate,
-				Usage:     "Migrate data from the source pvc to the destination pvc",
+				Usage:     "Migrate data from the source PVC to the destination PVC",
 				Aliases:   []string{"m"},
 				ArgsUsage: "[SOURCE_PVC] [DESTINATION_PVC]",
 				Action: func(c *cli.Context) error {
@@ -60,7 +48,7 @@ func New(version string, commit string) *cli.App {
 					destDeleteExtraneousFiles := c.Bool(FlagDestDeleteExtraneousFiles)
 					ignoreMounted := c.Bool(FlagIgnoreMounted)
 					noChown := c.Bool(FlagNoChown)
-					overrideStrategies := c.StringSlice(FlagOverrideStrategies)
+					strategies := c.StringSlice(FlagStrategies)
 					sourceRequestPvc := request.NewPVC(sourceKubeconfig, sourceContext, sourceNamespace, source)
 					destRequestPvc := request.NewPVC(destKubeconfig, destContext, destNamespace, dest)
 					requestOptions := request.NewOptions(destDeleteExtraneousFiles, ignoreMounted, noChown)
@@ -68,20 +56,19 @@ func New(version string, commit string) *cli.App {
 					sshdImage := c.String(FlagSshdImage)
 
 					req := request.New(sourceRequestPvc, destRequestPvc, requestOptions,
-						overrideStrategies, rsyncImage, sshdImage)
-					logger := log.WithFields(req.LogFields())
+						strategies, rsyncImage, sshdImage)
 
 					if destDeleteExtraneousFiles {
-						logger.Info("Extraneous files will be deleted from the destination")
+						log.WithFields(req.LogFields()).Info("Extraneous files will be deleted from the destination")
 					}
 
-					return executeRequest(logger, req)
+					return executeRequest(req)
 				},
 				Flags: []cli.Flag{
 					&cli.StringFlag{
 						Name:        FlagSourceKubeconfig,
 						Aliases:     []string{"k"},
-						Usage:       "Path of the kubeconfig file of the source pvc",
+						Usage:       "Path of the kubeconfig file of the source PVC",
 						Value:       "",
 						DefaultText: "~/.kube/config or KUBECONFIG env variable",
 						TakesFile:   true,
@@ -90,13 +77,13 @@ func New(version string, commit string) *cli.App {
 						Name:        FlagSourceContext,
 						Aliases:     []string{"c"},
 						Value:       "",
-						Usage:       "Context in the kubeconfig file of the source pvc",
+						Usage:       "Context in the kubeconfig file of the source PVC",
 						DefaultText: "currently selected context in the source kubeconfig",
 					},
 					&cli.StringFlag{
 						Name:        FlagSourceNamespace,
 						Aliases:     []string{"n"},
-						Usage:       "Namespace of the source pvc",
+						Usage:       "Namespace of the source PVC",
 						Value:       "",
 						DefaultText: "currently selected namespace in the source context",
 					},
@@ -104,7 +91,7 @@ func New(version string, commit string) *cli.App {
 						Name:        FlagDestKubeconfig,
 						Aliases:     []string{"K"},
 						Value:       "",
-						Usage:       "Path of the kubeconfig file of the destination pvc",
+						Usage:       "Path of the kubeconfig file of the destination PVC",
 						DefaultText: "~/.kube/config or KUBECONFIG env variable",
 						TakesFile:   true,
 					},
@@ -112,13 +99,13 @@ func New(version string, commit string) *cli.App {
 						Name:        FlagDestContext,
 						Aliases:     []string{"C"},
 						Value:       "",
-						Usage:       "Context in the kubeconfig file of the destination pvc",
+						Usage:       "Context in the kubeconfig file of the destination PVC",
 						DefaultText: "currently selected context in the destination kubeconfig",
 					},
 					&cli.StringFlag{
 						Name:        FlagDestNamespace,
 						Aliases:     []string{"N"},
-						Usage:       "Namespace of the destination pvc",
+						Usage:       "Namespace of the destination PVC",
 						Value:       "",
 						DefaultText: "currently selected namespace in the destination context",
 					},
@@ -141,11 +128,10 @@ func New(version string, commit string) *cli.App {
 						Value:   request.DefaultNoChown,
 					},
 					&cli.StringSliceFlag{
-						Name:        FlagOverrideStrategies,
-						Aliases:     []string{"s"},
-						Usage:       "Override the default list of strategies and their order by priority",
-						Value:       nil,
-						DefaultText: "try all built-in strategies in the natural order",
+						Name:    FlagStrategies,
+						Aliases: []string{"s"},
+						Usage:   "The strategies to be used in the given order",
+						Value:   cli.NewStringSlice(strategy.Defaults...),
 					},
 					&cli.StringFlag{
 						Name:    FlagRsyncImage,
@@ -171,23 +157,12 @@ func New(version string, commit string) *cli.App {
 	}
 }
 
-func executeRequest(logger *log.Entry, request request.Request) error {
-	eng, err := engine.New(strategies)
-	if err != nil {
-		logger.WithError(err).Error("Failed to initialize the engine")
-		return err
-	}
-
-	numStrategies := len(strategies)
-	strategyNames := strategy.Names(strategies)
-	logger.WithField("strategies", strings.Join(strategyNames, " ")).
-		Infof("Engine initialized with %v total strategies", numStrategies)
-
-	err = eng.Run(request)
+func executeRequest(r request.Request) error {
+	logger := log.WithFields(r.LogFields())
+	eng := engine.New()
+	err := eng.Run(r)
 	if err != nil {
 		logger.WithError(err).Error("Migration failed")
-		return err
 	}
-
-	return nil
+	return err
 }
