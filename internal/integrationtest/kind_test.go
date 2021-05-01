@@ -33,6 +33,7 @@ const (
 	pollInterval            = 5 * time.Second
 	pollTimeout             = 5 * time.Minute
 	kindWaitForReadyTimeout = 2 * time.Minute
+	kindImage               = "kindest/node:v1.20.2"
 )
 
 var (
@@ -151,7 +152,7 @@ func createKindTestContext() *pvMigrateTestContext {
 		// preventing urfave/cli to call os.Exit
 		log.WithField("code", code).Info("os.Exit is called")
 	}
-	kindTestContext, err := setupKindCluster(testClusterName, "kindest/node:v1.20.2")
+	kindTestContext, err := setupKindCluster(testClusterName, kindImage)
 	if err != nil {
 		log.WithError(err).Error("failed to setup kind cluster")
 		err := destroyKindCluster(kindTestContext.clusterProvider, kindTestContext.kubeconfig)
