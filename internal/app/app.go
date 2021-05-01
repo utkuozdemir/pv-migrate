@@ -7,6 +7,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/engine"
 	"github.com/utkuozdemir/pv-migrate/internal/request"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
+	"strings"
 )
 
 const (
@@ -48,7 +49,7 @@ func New(version string, commit string) *cli.App {
 					destDeleteExtraneousFiles := c.Bool(FlagDestDeleteExtraneousFiles)
 					ignoreMounted := c.Bool(FlagIgnoreMounted)
 					noChown := c.Bool(FlagNoChown)
-					strategies := c.StringSlice(FlagStrategies)
+					strategies := strings.Split(c.String(FlagStrategies), ",")
 					sourceRequestPvc := request.NewPVC(sourceKubeconfig, sourceContext, sourceNamespace, source)
 					destRequestPvc := request.NewPVC(destKubeconfig, destContext, destNamespace, dest)
 					requestOptions := request.NewOptions(destDeleteExtraneousFiles, ignoreMounted, noChown)
@@ -127,11 +128,11 @@ func New(version string, commit string) *cli.App {
 						Usage:   "Omit chown on rsync",
 						Value:   request.DefaultNoChown,
 					},
-					&cli.StringSliceFlag{
+					&cli.StringFlag{
 						Name:    FlagStrategies,
 						Aliases: []string{"s"},
-						Usage:   "The strategies to be used in the given order",
-						Value:   cli.NewStringSlice(strategy.DefaultStrategies...),
+						Usage:   "The comma-separated list of strategies to be used in the given order",
+						Value:   strings.Join(strategy.DefaultStrategies, ","),
 					},
 					&cli.StringFlag{
 						Name:    FlagRsyncImage,
