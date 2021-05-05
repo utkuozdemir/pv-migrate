@@ -39,7 +39,7 @@ jobs:
       - name: Install go-acc
         run: go install github.com/ory/go-acc@v0.2.6
       - name: Run tests
-        run: go-acc -v --output profile.cov ./...
+        run: go-acc --output profile.cov ./... -- -v
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.4.3
         with:
