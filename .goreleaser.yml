@@ -50,6 +50,7 @@ changelog:
       - '^docs:'
       - '^test:'
       - '^ci:'
+      - '^refactor:'
       - Merge pull request
       - Merge branch
       - go mod tidy
