@@ -11,5 +11,5 @@ type LbSvc struct {
 
 func (r *LbSvc) Run(t *task.Task) (bool, error) {
 	defer cleanup(t)
-	return true, rsync.RunRsyncJobOverSsh(t, corev1.ServiceTypeLoadBalancer)
+	return true, rsync.RunRsyncJobOverSSH(t, corev1.ServiceTypeLoadBalancer)
 }
