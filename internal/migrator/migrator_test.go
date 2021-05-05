@@ -82,8 +82,6 @@ func fakeKubeClientGetter() kubeClientGetter {
 	}
 }
 
-
-
 func buildTestPod(namespace string, name string, node string, pvc string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
