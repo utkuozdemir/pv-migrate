@@ -6,7 +6,6 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
-	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"html/template"
 	batchv1 "k8s.io/api/batch/v1"
@@ -183,7 +182,7 @@ func buildRsyncJobDest(t *task.Task, targetHost string, privateKeySecretName str
 	return &job, nil
 }
 
-func RunRsyncJobOverSsh(t *task.Task, serviceType corev1.ServiceType) error {
+func RunRsyncJobOverSSH(t *task.Task, serviceType corev1.ServiceType) error {
 	instanceId := t.ID
 	s := t.SourceInfo
 	sourceKubeClient := s.KubeClient
@@ -191,7 +190,7 @@ func RunRsyncJobOverSsh(t *task.Task, serviceType corev1.ServiceType) error {
 	destKubeClient := d.KubeClient
 
 	log.Info("Generating RSA SSH key pair")
-	publicKey, privateKey, err := ssh.CreateSSHKeyPair()
+	publicKey, privateKey, err := CreateSSHKeyPair()
 	if err != nil {
 		return err
 	}

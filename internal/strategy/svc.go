@@ -21,5 +21,5 @@ func (r *Svc) Run(t *task.Task) (bool, error) {
 		return false, nil
 	}
 	defer cleanup(t)
-	return true, rsync.RunRsyncJobOverSsh(t, corev1.ServiceTypeClusterIP)
+	return true, rsync.RunRsyncJobOverSSH(t, corev1.ServiceTypeClusterIP)
 }

@@ -1,4 +1,4 @@
-package ssh
+package rsync
 
 import (
 	"crypto/rand"

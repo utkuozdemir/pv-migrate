@@ -4,7 +4,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
-	"github.com/utkuozdemir/pv-migrate/internal/testutil"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
 	"testing"
@@ -23,10 +22,10 @@ func TestCanDoSameNode(t *testing.T) {
 	destNode := "node1"
 	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
 
-	pvcA := testutil.PVCWithAccessModes(sourceNS, sourcePVC, sourceModes...)
-	pvcB := testutil.PVCWithAccessModes(destNS, destPvc, destModes...)
-	podA := testutil.Pod(sourceNS, sourcePod, sourceNode, sourcePVC)
-	podB := testutil.Pod(destNS, destPod, destNode, destPvc)
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
@@ -54,10 +53,10 @@ func TestCanDoDestRWX(t *testing.T) {
 	destNode := "node2"
 	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteMany}
 
-	pvcA := testutil.PVCWithAccessModes(sourceNS, sourcePVC, sourceModes...)
-	pvcB := testutil.PVCWithAccessModes(destNS, destPvc, destModes...)
-	podA := testutil.Pod(sourceNS, sourcePod, sourceNode, sourcePVC)
-	podB := testutil.Pod(destNS, destPod, destNode, destPvc)
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
@@ -85,10 +84,10 @@ func TestCanDoSourceROX(t *testing.T) {
 	destNode := "node2"
 	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
 
-	pvcA := testutil.PVCWithAccessModes(sourceNS, sourcePVC, sourceModes...)
-	pvcB := testutil.PVCWithAccessModes(destNS, destPvc, destModes...)
-	podA := testutil.Pod(sourceNS, sourcePod, sourceNode, sourcePVC)
-	podB := testutil.Pod(destNS, destPod, destNode, destPvc)
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
@@ -116,10 +115,10 @@ func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 	destNode := "node1"
 	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
 
-	pvcA := testutil.PVCWithAccessModes(sourceNS, sourcePVC, sourceModes...)
-	pvcB := testutil.PVCWithAccessModes(destNS, destPvc, destModes...)
-	podA := testutil.Pod(sourceNS, sourcePod, sourceNode, sourcePVC)
-	podB := testutil.Pod(destNS, destPod, destNode, destPvc)
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
@@ -147,10 +146,10 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	destNode := "node2"
 	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
 
-	pvcA := testutil.PVCWithAccessModes(sourceNS, sourcePVC, sourceModes...)
-	pvcB := testutil.PVCWithAccessModes(destNS, destPvc, destModes...)
-	podA := testutil.Pod(sourceNS, sourcePod, sourceNode, sourcePVC)
-	podB := testutil.Pod(destNS, destPod, destNode, destPvc)
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c1 := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
 	c2 := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c1, sourceNS, sourcePVC)
@@ -179,10 +178,10 @@ func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 	destNode := "node2"
 	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
 
-	pvcA := testutil.PVCWithAccessModes(sourceNS, sourcePVC, sourceModes...)
-	pvcB := testutil.PVCWithAccessModes(destNS, destPvc, destModes...)
-	podA := testutil.Pod(sourceNS, sourcePod, sourceNode, sourcePVC)
-	podB := testutil.Pod(destNS, destPod, destNode, destPvc)
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
@@ -209,10 +208,10 @@ func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 	destNode := "node2"
 	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteMany}
 
-	pvcA := testutil.PVCWithAccessModes(sourceNS, sourcePVC, sourceModes...)
-	pvcB := testutil.PVCWithAccessModes(destNS, destPvc, destModes...)
-	podA := testutil.Pod(sourceNS, sourcePod, sourceNode, sourcePVC)
-	podB := testutil.Pod(destNS, destPod, destNode, destPvc)
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)

@@ -3,9 +3,11 @@ package migrator
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
-	"github.com/utkuozdemir/pv-migrate/internal/testutil"
 	"github.com/utkuozdemir/pv-migrate/migration"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"testing"
@@ -70,12 +72,49 @@ func buildMigration(options *migration.Options) *migration.Migration {
 }
 
 func fakeKubeClientGetter() kubeClientGetter {
-	pvcA := testutil.PVCWithAccessModes(sourceNS, sourcePVC, v1.ReadOnlyMany)
-	pvcB := testutil.PVCWithAccessModes(destNS, destPVC, v1.ReadWriteOnce, v1.ReadWriteMany)
-	podA := testutil.Pod(sourceNS, sourcePod, sourceNode, sourcePVC)
-	podB := testutil.Pod(destNS, destPod, destNode, destPVC)
+	pvcA := buildTestPVC(sourceNS, sourcePVC, v1.ReadOnlyMany)
+	pvcB := buildTestPVC(destNS, destPVC, v1.ReadWriteOnce, v1.ReadWriteMany)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPVC)
 
 	return func(kubeconfigPath string, context string) (kubernetes.Interface, string, error) {
 		return fake.NewSimpleClientset(pvcA, pvcB, podA, podB), "", nil
+	}
+}
+
+func buildTestPod(namespace string, name string, node string, pvc string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Spec: corev1.PodSpec{
+			NodeName: node,
+			Volumes: []corev1.Volume{
+				{Name: "a", VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: pvc,
+					},
+				}},
+			},
+		},
+	}
+}
+
+func buildTestPVC(namespace string, name string,
+	accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: accessModes,
+			Resources: corev1.ResourceRequirements{
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					"storage": resource.MustParse("512Mi"),
+				},
+			},
+		},
 	}
 }
