@@ -4,13 +4,15 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
-	"github.com/utkuozdemir/pv-migrate/internal/engine"
-	"github.com/utkuozdemir/pv-migrate/internal/request"
+	"github.com/utkuozdemir/pv-migrate/engine"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
+	"github.com/utkuozdemir/pv-migrate/migration"
 	"strings"
 )
 
 const (
+	authorName                    = "Utku Ozdemir"
+	authorEmail                   = "uoz@protonmail.com"
 	CommandMigrate                = "migrate"
 	FlagSourceKubeconfig          = "source-kubeconfig"
 	FlagSourceContext             = "source-context"
@@ -38,32 +40,41 @@ func New(version string, commit string) *cli.App {
 				Aliases:   []string{"m"},
 				ArgsUsage: "[SOURCE_PVC] [DESTINATION_PVC]",
 				Action: func(c *cli.Context) error {
-					sourceKubeconfig := c.String(FlagSourceKubeconfig)
-					sourceContext := c.String(FlagSourceContext)
-					sourceNamespace := c.String(FlagSourceNamespace)
-					source := c.Args().Get(0)
-					destKubeconfig := c.String(FlagDestKubeconfig)
-					destContext := c.String(FlagDestContext)
-					destNamespace := c.String(FlagDestNamespace)
-					dest := c.Args().Get(1)
-					destDeleteExtraneousFiles := c.Bool(FlagDestDeleteExtraneousFiles)
-					ignoreMounted := c.Bool(FlagIgnoreMounted)
-					noChown := c.Bool(FlagNoChown)
-					strategies := strings.Split(c.String(FlagStrategies), ",")
-					sourceRequestPvc := request.NewPVC(sourceKubeconfig, sourceContext, sourceNamespace, source)
-					destRequestPvc := request.NewPVC(destKubeconfig, destContext, destNamespace, dest)
-					requestOptions := request.NewOptions(destDeleteExtraneousFiles, ignoreMounted, noChown)
-					rsyncImage := c.String(FlagRsyncImage)
-					sshdImage := c.String(FlagSshdImage)
-
-					req := request.New(sourceRequestPvc, destRequestPvc, requestOptions,
-						strategies, rsyncImage, sshdImage)
-
-					if destDeleteExtraneousFiles {
-						log.WithFields(req.LogFields()).Info("Extraneous files will be deleted from the destination")
+					s := migration.PVC{
+						KubeconfigPath: c.String(FlagSourceKubeconfig),
+						Context:        c.String(FlagSourceContext),
+						Namespace:      c.String(FlagSourceNamespace),
+						Name:           c.Args().Get(0),
 					}
 
-					return executeRequest(req)
+					d := migration.PVC{
+						KubeconfigPath: c.String(FlagDestKubeconfig),
+						Context:        c.String(FlagDestContext),
+						Namespace:      c.String(FlagDestNamespace),
+						Name:           c.Args().Get(1),
+					}
+
+					opts := migration.Options{
+						DeleteExtraneousFiles: c.Bool(FlagDestDeleteExtraneousFiles),
+						IgnoreMounted:         c.Bool(FlagIgnoreMounted),
+						NoChown:               c.Bool(FlagNoChown),
+					}
+
+					strategies := strings.Split(c.String(FlagStrategies), ",")
+					m := migration.Migration{
+						Source:     &s,
+						Dest:       &d,
+						Options:    &opts,
+						Strategies: strategies,
+						RsyncImage: c.String(FlagRsyncImage),
+						SshdImage:  c.String(FlagSshdImage),
+					}
+
+					if opts.DeleteExtraneousFiles {
+						log.Info("Extraneous files will be deleted from the destination")
+					}
+
+					return engine.New().Run(&m)
 				},
 				Flags: []cli.Flag{
 					&cli.StringFlag{
@@ -120,13 +131,13 @@ func New(version string, commit string) *cli.App {
 						Name:    FlagIgnoreMounted,
 						Aliases: []string{"i"},
 						Usage:   "Do not fail if the source or destination PVC is mounted",
-						Value:   request.DefaultIgnoreMounted,
+						Value:   migration.DefaultIgnoreMounted,
 					},
 					&cli.BoolFlag{
 						Name:    FlagNoChown,
 						Aliases: []string{"o"},
 						Usage:   "Omit chown on rsync",
-						Value:   request.DefaultNoChown,
+						Value:   migration.DefaultNoChown,
 					},
 					&cli.StringFlag{
 						Name:    FlagStrategies,
@@ -138,32 +149,22 @@ func New(version string, commit string) *cli.App {
 						Name:    FlagRsyncImage,
 						Aliases: []string{"r"},
 						Usage:   "Image to use for running rsync",
-						Value:   request.DefaultRsyncImage,
+						Value:   migration.DefaultRsyncImage,
 					},
 					&cli.StringFlag{
 						Name:    FlagSshdImage,
 						Aliases: []string{"S"},
 						Usage:   "Image to use for running sshd server",
-						Value:   request.DefaultSshdImage,
+						Value:   migration.DefaultSshdImage,
 					},
 				},
 			},
 		},
 		Authors: []*cli.Author{
 			{
-				Name:  "Utku Ozdemir",
-				Email: "uoz@protonmail.com",
+				Name:  authorName,
+				Email: authorEmail,
 			},
 		},
 	}
-}
-
-func executeRequest(r request.Request) error {
-	logger := log.WithFields(r.LogFields())
-	eng := engine.New()
-	err := eng.Run(r)
-	if err != nil {
-		logger.WithError(err).Error("Migration failed")
-	}
-	return err
 }

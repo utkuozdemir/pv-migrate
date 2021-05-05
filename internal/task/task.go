@@ -1,31 +1,15 @@
 package task
 
 import (
-	"github.com/utkuozdemir/pv-migrate/internal/job"
-	"github.com/utkuozdemir/pv-migrate/internal/util"
+	log "github.com/sirupsen/logrus"
+	"github.com/utkuozdemir/pv-migrate/internal/pvc"
+	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
-type Task interface {
-	ID() string
-	Job() job.Job
-}
-
-type task struct {
-	id  string
-	job job.Job
-}
-
-func (t *task) ID() string {
-	return t.id
-}
-
-func (t *task) Job() job.Job {
-	return t.job
-}
-
-func New(job job.Job) Task {
-	return &task{
-		id:  util.RandomHexadecimalString(5),
-		job: job,
-	}
+type Task struct {
+	Migration  *migration.Migration
+	LogFields  log.Fields
+	SourceInfo *pvc.Info
+	DestInfo   *pvc.Info
+	ID         string
 }

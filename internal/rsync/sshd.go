@@ -15,15 +15,15 @@ import (
 	"time"
 )
 
-func CreateSshdService(instanceId string, sourcePvcInfo pvc.Info, serviceType corev1.ServiceType) (*corev1.Service, error) {
-	kubeClient := sourcePvcInfo.KubeClient()
+func CreateSshdService(instanceId string, sourcePvcInfo *pvc.Info, serviceType corev1.ServiceType) (*corev1.Service, error) {
+	kubeClient := sourcePvcInfo.KubeClient
 	serviceName := "pv-migrate-sshd-" + instanceId
-	createdService, err := kubeClient.CoreV1().Services(sourcePvcInfo.Claim().Namespace).Create(
+	createdService, err := kubeClient.CoreV1().Services(sourcePvcInfo.Claim.Namespace).Create(
 		context.TODO(),
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      serviceName,
-				Namespace: sourcePvcInfo.Claim().Namespace,
+				Namespace: sourcePvcInfo.Claim.Namespace,
 				Labels:    k8s.ComponentLabels(instanceId, k8s.Sshd),
 			},
 			Spec: corev1.ServiceSpec{
@@ -86,9 +86,9 @@ func CreateSshdPodWaitTillRunning(kubeClient kubernetes.Interface, pod *corev1.P
 	return nil
 }
 
-func createSshdPublicKeySecret(instanceId string, sourcePvcInfo pvc.Info, publicKey string) (*corev1.Secret, error) {
-	kubeClient := sourcePvcInfo.KubeClient()
-	namespace := sourcePvcInfo.Claim().Namespace
+func createSshdPublicKeySecret(instanceId string, sourcePvcInfo *pvc.Info, publicKey string) (*corev1.Secret, error) {
+	kubeClient := sourcePvcInfo.KubeClient
+	namespace := sourcePvcInfo.Claim.Namespace
 	name := "pv-migrate-sshd-" + instanceId
 	secret := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -105,12 +105,12 @@ func createSshdPublicKeySecret(instanceId string, sourcePvcInfo pvc.Info, public
 	return secrets.Create(context.TODO(), &secret, metav1.CreateOptions{})
 }
 
-func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info, publicKeySecretName string, sshdImage string) *corev1.Pod {
+func PrepareSshdPod(instanceId string, sourcePvcInfo *pvc.Info, publicKeySecretName string, sshdImage string) *corev1.Pod {
 	podName := "pv-migrate-sshd-" + instanceId
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      podName,
-			Namespace: sourcePvcInfo.Claim().Namespace,
+			Namespace: sourcePvcInfo.Claim.Namespace,
 			Labels:    k8s.ComponentLabels(instanceId, k8s.Sshd),
 		},
 		Spec: corev1.PodSpec{
@@ -119,7 +119,7 @@ func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info, publicKeySecretNa
 					Name: "source-vol",
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: sourcePvcInfo.Claim().Name,
+							ClaimName: sourcePvcInfo.Claim.Name,
 							ReadOnly:  true,
 						},
 					},
@@ -162,7 +162,7 @@ func PrepareSshdPod(instanceId string, sourcePvcInfo pvc.Info, publicKeySecretNa
 					},
 				},
 			},
-			NodeName: sourcePvcInfo.MountedNode(),
+			NodeName: sourcePvcInfo.MountedNode,
 		},
 	}
 }

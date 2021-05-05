@@ -9,7 +9,7 @@ import (
 type LbSvc struct {
 }
 
-func (r *LbSvc) Run(task task.Task) (bool, error) {
-	defer cleanup(task)
-	return true, rsync.RunRsyncJobOverSsh(task, corev1.ServiceTypeLoadBalancer)
+func (r *LbSvc) Run(t *task.Task) (bool, error) {
+	defer cleanup(t)
+	return true, rsync.RunRsyncJobOverSsh(t, corev1.ServiceTypeLoadBalancer)
 }

@@ -6,15 +6,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// KubernetesClientProvider provides a kubernetes.Interface instance for the given kubeconfig path and the context.
-type KubernetesClientProvider interface {
-	GetClientAndNsInContext(kubeconfigPath string, context string) (kubernetes.Interface, string, error)
-}
-
-type kubernetesClientProvider struct {
-}
-
-func (k *kubernetesClientProvider) GetClientAndNsInContext(kubeconfigPath string, context string) (kubernetes.Interface, string, error) {
+func GetClientAndNsInContext(kubeconfigPath string, context string) (kubernetes.Interface, string, error) {
 	config, namespace, err := buildK8sConfig(kubeconfigPath, context)
 	if err != nil {
 		return nil, "", err
@@ -25,11 +17,6 @@ func (k *kubernetesClientProvider) GetClientAndNsInContext(kubeconfigPath string
 	}
 
 	return kubeClient, namespace, err
-}
-
-// NewKubernetesClientProvider creates a new KubernetesClientProvider that provides "real" kubernetes api clients.
-func NewKubernetesClientProvider() KubernetesClientProvider {
-	return &kubernetesClientProvider{}
 }
 
 func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config, string, error) {

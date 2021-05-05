@@ -7,49 +7,16 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type Info interface {
-	KubeClient() kubernetes.Interface
-	Claim() *corev1.PersistentVolumeClaim
-	MountedNode() string
-	SupportsRWO() bool
-	SupportsROX() bool
-	SupportsRWX() bool
+type Info struct {
+	KubeClient  kubernetes.Interface
+	Claim       *corev1.PersistentVolumeClaim
+	MountedNode string
+	SupportsRWO bool
+	SupportsROX bool
+	SupportsRWX bool
 }
 
-type info struct {
-	kubeClient  kubernetes.Interface
-	claim       *corev1.PersistentVolumeClaim
-	mountedNode string
-	supportsRWO bool
-	supportsROX bool
-	supportsRWX bool
-}
-
-func (p *info) KubeClient() kubernetes.Interface {
-	return p.kubeClient
-}
-
-func (p *info) Claim() *corev1.PersistentVolumeClaim {
-	return p.claim
-}
-
-func (p *info) MountedNode() string {
-	return p.mountedNode
-}
-
-func (p *info) SupportsRWO() bool {
-	return p.supportsRWO
-}
-
-func (p *info) SupportsROX() bool {
-	return p.supportsROX
-}
-
-func (p *info) SupportsRWX() bool {
-	return p.supportsRWX
-}
-
-func New(kubeClient kubernetes.Interface, namespace string, name string) (Info, error) {
+func New(kubeClient kubernetes.Interface, namespace string, name string) (*Info, error) {
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
@@ -75,13 +42,13 @@ func New(kubeClient kubernetes.Interface, namespace string, name string) (Info, 
 		}
 	}
 
-	return &info{
-		kubeClient:  kubeClient,
-		claim:       claim,
-		mountedNode: mountedNode,
-		supportsRWO: supportsRWO,
-		supportsROX: supportsROX,
-		supportsRWX: supportsRWX,
+	return &Info{
+		KubeClient:  kubeClient,
+		Claim:       claim,
+		MountedNode: mountedNode,
+		SupportsRWO: supportsRWO,
+		SupportsROX: supportsROX,
+		SupportsRWX: supportsRWX,
 	}, nil
 }
 

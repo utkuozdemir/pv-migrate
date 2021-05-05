@@ -28,7 +28,7 @@ type Strategy interface {
 	// Run executes the migration for the given task.
 	//
 	// This is the actual implementation of the migration.
-	Run(task task.Task) (bool, error)
+	Run(task *task.Task) (bool, error)
 }
 
 func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
@@ -44,15 +44,14 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func cleanup(task task.Task) {
+func cleanup(t *task.Task) {
 	log.Info("Cleaning up")
-	migrationJob := task.Job()
 	var result *multierror.Error
-	err := k8s.CleanupForID(migrationJob.Source().KubeClient(), migrationJob.Source().Claim().Namespace, task.ID())
+	err := k8s.CleanupForID(t.SourceInfo.KubeClient, t.SourceInfo.Claim.Namespace, t.ID)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
-	err = k8s.CleanupForID(migrationJob.Dest().KubeClient(), migrationJob.Dest().Claim().Namespace, task.ID())
+	err = k8s.CleanupForID(t.DestInfo.KubeClient, t.DestInfo.Claim.Namespace, t.ID)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}

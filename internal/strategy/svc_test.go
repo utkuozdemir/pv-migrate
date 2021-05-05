@@ -2,8 +2,8 @@ package strategy
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/utkuozdemir/pv-migrate/internal/job"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
+	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/testutil"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -30,9 +30,13 @@ func TestSvcCanDoSameCluster(t *testing.T) {
 	c := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
-	j := job.New(src, dst, defaultJobOptions, "", "")
+
+	tsk := task.Task{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
 
 	s := Svc{}
-	canDo := s.canDo(j)
+	canDo := s.canDo(&tsk)
 	assert.True(t, canDo)
 }
