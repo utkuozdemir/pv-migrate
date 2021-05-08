@@ -30,10 +30,12 @@ const (
 
 func New(version string, commit string) *cli.App {
 	return &cli.App{
-		Name:    "pv-migrate",
-		Usage:   "A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another",
-		Version: fmt.Sprintf("%s (commit: %s)", version, commit),
+		Name:                 "pv-migrate",
+		Usage:                "A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another",
+		Version:              fmt.Sprintf("%s (commit: %s)", version, commit),
+		EnableBashCompletion: true,
 		Commands: []*cli.Command{
+			&completionCommand,
 			{
 				Name:      CommandMigrate,
 				Usage:     "Migrate data from the source PVC to the destination PVC",
