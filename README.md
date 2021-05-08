@@ -77,7 +77,8 @@ USAGE:
    pv-migrate [global options] command [command options] [arguments...]
 
 COMMANDS:
-   migrate, m  Migrate data from the source pvc to the destination pvc
+   completion  Output shell completion code for the specified shell (bash or zsh)
+   migrate, m  Migrate data from the source PVC to the destination PVC
    help, h     Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
