@@ -1,18 +1,18 @@
 ---
-name: build-rsync-image
+name: build-sshd-image
 on:
   push:
     branches:
       - master
     paths:
-      - docker/rsync/**
+      - docker/sshd/**
   pull_request:
     branches:
       - master
     paths:
-      - docker/rsync/**
+      - docker/sshd/**
 jobs:
-  build-rsync-image:
+  build-sshd-image:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -29,7 +29,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v2.4.0
         with:
-          context: ./docker/rsync/
+          context: ./docker/sshd/
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: docker.io/utkuozdemir/pv-migrate-rsync:latest
+          tags: docker.io/utkuozdemir/pv-migrate-sshd:latest

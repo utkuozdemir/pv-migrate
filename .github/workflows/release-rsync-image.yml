@@ -27,4 +27,6 @@ jobs:
           context: ./docker/rsync/
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-${{ env.IMAGE_VERSION }}
+          tags: |
+            docker.io/utkuozdemir/pv-migrate-rsync:latest
+            docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-${{ env.IMAGE_VERSION }}

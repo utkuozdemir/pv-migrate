@@ -1,18 +1,11 @@
 ---
-name: build-rsync-image
+name: release-sshd-image
 on:
   push:
-    branches:
-      - master
-    paths:
-      - docker/rsync/**
-  pull_request:
-    branches:
-      - master
-    paths:
-      - docker/rsync/**
+    tags:
+      - docker-sshd-*
 jobs:
-  build-rsync-image:
+  release-sshd-image:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -26,10 +19,14 @@ jobs:
         with:
           username: utkuozdemir
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Set image tag as env variable
+        run: echo "IMAGE_VERSION=$(echo ${GITHUB_REF#refs/*/} | sed 's/^docker-sshd-//')" >> $GITHUB_ENV
       - name: Build and push
         uses: docker/build-push-action@v2.4.0
         with:
-          context: ./docker/rsync/
+          context: ./docker/sshd/
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: docker.io/utkuozdemir/pv-migrate-rsync:latest
+          tags: |
+            docker.io/utkuozdemir/pv-migrate-sshd:latest
+            docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-${{ env.IMAGE_VERSION }}
