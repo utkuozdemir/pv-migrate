@@ -1,6 +1,6 @@
 ---
 name: build-rsync-image
-on:  # yamllint disable-line rule:truthy
+on:
   push:
     branches:
       - master
