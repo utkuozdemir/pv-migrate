@@ -8,6 +8,8 @@
 ![GitHub stars](https://img.shields.io/github/stars/utkuozdemir/pv-migrate.svg?label=github%20stars)
 [![GitHub forks](https://img.shields.io/github/forks/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/network)
 [![GitHub issues](https://img.shields.io/github/issues/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/issues)
+![SSHD Docker Pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-sshd?label=sshd%20-%20docker%20pulls)
+![Rsync Docker Pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-rsync?label=rsync%20-%20docker%20pulls)
 
 `pv-migrate` is a CLI tool/kubectl plugin to easily migrate 
 the contents of one Kubernetes `PersistentVolume[Claim]` to another.
@@ -49,6 +51,7 @@ Just use `pv-migrate` to clone the data **securely over the internet**.
 - Allows specifying your own docker images for rsync and sshd
 - Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed
 - Customizable strategy order
+- Supports arm32v7 (Raspberry Pi etc.) and arm64 architectures as well as amd64
 
 ## Installation
 
@@ -105,8 +108,8 @@ OPTIONS:
    --ignore-mounted, -i                 Do not fail if the source or destination PVC is mounted (default: false)
    --no-chown, -o                       Omit chown on rsync (default: false)
    --strategies value, -s value         The strategies to be used in the given order (default: "mnt2", "svc", "lbsvc")
-   --rsync-image value, -r value        Image to use for running rsync (default: "docker.io/instrumentisto/rsync-ssh:alpine")
-   --sshd-image value, -S value         Image to use for running sshd server (default: "docker.io/panubo/sshd:1.3.0")
+   --rsync-image value, -r value        Image to use for running rsync (default: "docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-20210522")
+   --sshd-image value, -S value         Image to use for running sshd server (default: "docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522")
    --help, -h                           show help (default: false)
 ```
 
