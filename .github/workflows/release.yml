@@ -1,5 +1,4 @@
 ---
-# Used ahmetb/kubectx as reference: https://github.com/ahmetb/kubectx
 name: release
 on:  # yamllint disable-line rule:truthy
   push:

@@ -1,5 +1,4 @@
 ---
-# Used ahmetb/kubectx as reference: https://github.com/ahmetb/kubectx
 name: build
 on:  # yamllint disable-line rule:truthy
   push:
@@ -9,6 +8,7 @@ on:  # yamllint disable-line rule:truthy
       - "**.md"
       - "test/**"
       - ".gitignore"
+      - "docker/**"
   pull_request:
     branches:
       - master
@@ -16,6 +16,7 @@ on:  # yamllint disable-line rule:truthy
       - "**.md"
       - "test/**"
       - ".gitignore"
+      - "docker/**"
 jobs:
   build:
     runs-on: ubuntu-20.04
