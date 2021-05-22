@@ -62,7 +62,7 @@ Just use `pv-migrate` to clone the data **securely over the internet**.
 
 Steps for MacOS:
 ```bash
-$ VERSION=v0.5.3
+$ VERSION=v0.5.4
 $ wget https://github.com/utkuozdemir/pv-migrate/releases/download/${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ tar -xvzf pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ mv pv-migrate /usr/local/bin
