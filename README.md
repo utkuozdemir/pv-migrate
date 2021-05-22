@@ -69,6 +69,13 @@ $ mv pv-migrate /usr/local/bin
 $ pv-migrate --help
 ```
 
+**Tip:** Alternatively, you can use the 
+[official Docker images](https://hub.docker.com/repository/docker/utkuozdemir/pv-migrate) 
+that come with the `pv-migrate` binary pre-installed:
+```bash
+docker run --rm -it utkuozdemir/pv-migrate:0.5.4 pv-migrate migrate ...
+```
+
 ## Usage
 
 Main command:
