@@ -30,6 +30,6 @@ jobs:
         uses: docker/build-push-action@v2.4.0
         with:
           context: ./docker/sshd/
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64,linux/arm,linux/arm64
           push: true
           tags: docker.io/utkuozdemir/pv-migrate-sshd:latest
