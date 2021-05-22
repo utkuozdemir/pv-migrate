@@ -51,6 +51,7 @@ changelog:
       - '^test:'
       - '^ci:'
       - '^refactor:'
+      - '^docker:'
       - Merge pull request
       - Merge branch
       - go mod tidy
