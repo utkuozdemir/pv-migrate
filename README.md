@@ -107,8 +107,8 @@ OPTIONS:
    --ignore-mounted, -i                 Do not fail if the source or destination PVC is mounted (default: false)
    --no-chown, -o                       Omit chown on rsync (default: false)
    --strategies value, -s value         The strategies to be used in the given order (default: "mnt2", "svc", "lbsvc")
-   --rsync-image value, -r value        Image to use for running rsync (default: "docker.io/instrumentisto/rsync-ssh:alpine")
-   --sshd-image value, -S value         Image to use for running sshd server (default: "docker.io/panubo/sshd:1.3.0")
+   --rsync-image value, -r value        Image to use for running rsync (default: "docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-20210522")
+   --sshd-image value, -S value         Image to use for running sshd server (default: "docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522")
    --help, -h                           show help (default: false)
 ```
 
