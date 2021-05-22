@@ -20,11 +20,11 @@ jobs:
           username: utkuozdemir
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Set image tag as env variable
-        run: echo "IMAGE_TAG=${GITHUB_REF#refs/*/}" | sed "s/^docker-rsync-//" >> $GITHUB_ENV
+        run: echo "IMAGE_VERSION=${GITHUB_REF#refs/*/}" | sed "s/^docker-rsync-//" >> $GITHUB_ENV
       - name: Build and push
         uses: docker/build-push-action@v2.4.0
         with:
           context: ./docker/rsync/
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: docker.io/utkuozdemir/pv-migrate-rsync:${{ env.IMAGE_TAG }}
+          tags: docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-${{ env.IMAGE_VERSION }}
