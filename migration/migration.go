@@ -1,8 +1,8 @@
 package migration
 
 const (
-	DefaultRsyncImage    = "docker.io/instrumentisto/rsync-ssh:alpine"
-	DefaultSshdImage     = "docker.io/panubo/sshd:1.3.0"
+	DefaultRsyncImage    = "docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-20210522"
+	DefaultSshdImage     = "docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522"
 	DefaultIgnoreMounted = false
 	DefaultNoChown       = false
 )
