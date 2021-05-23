@@ -50,3 +50,5 @@ jobs:
         with:
           version: v0.161.1
           args: release --snapshot --skip-publish --rm-dist
+        env:
+          PRIVATE_ACCESS_TOKEN: placeholder
