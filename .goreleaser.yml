@@ -93,3 +93,15 @@ docker_manifests:
 # goreleaser release --skip-validate --rm-dist --debug
 #release:
 #  disable: true
+
+brews:
+  - tap:
+      owner: utkuozdemir
+      name: homebrew-pv-migrate
+      token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"
+    folder: Formula
+    homepage: https://github.com/utkuozdemir/pv-migrate
+    description: Persistent volume migration plugin for Kubernetes
+    license: Apache-2.0
+    test: |
+      system "#{bin}/pv-migrate -v"

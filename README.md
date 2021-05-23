@@ -55,6 +55,15 @@ Just use `pv-migrate` to clone the data **securely over the internet**.
 
 ## Installation
 
+### Using Homebrew
+If you have homebrew, the installation is as simple as:
+```bash
+brew tap utkuozdemir/pv-migrate
+brew install pv-migrate
+```
+
+### By downloading the binaries
+
 1. Go to the [releases](https://github.com/utkuozdemir/pv-migrate/releases) and download 
    the latest release archive for your platform.
 2. Extract the archive.
@@ -62,18 +71,20 @@ Just use `pv-migrate` to clone the data **securely over the internet**.
 
 Steps for MacOS:
 ```bash
-$ VERSION=v0.5.4
-$ wget https://github.com/utkuozdemir/pv-migrate/releases/download/${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
+$ VERSION=0.5.5
+$ wget https://github.com/utkuozdemir/pv-migrate/releases/download/v${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ tar -xvzf pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ mv pv-migrate /usr/local/bin
 $ pv-migrate --help
 ```
 
-**Tip:** Alternatively, you can use the 
+### Running directly in Docker container
+
+Alternatively, you can use the 
 [official Docker images](https://hub.docker.com/repository/docker/utkuozdemir/pv-migrate) 
 that come with the `pv-migrate` binary pre-installed:
 ```bash
-docker run --rm -it utkuozdemir/pv-migrate:0.5.4 pv-migrate migrate ...
+docker run --rm -it utkuozdemir/pv-migrate:0.5.5 pv-migrate migrate ...
 ```
 
 ## Usage
