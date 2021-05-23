@@ -3,34 +3,34 @@ package main
 import (
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/app"
+	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	"math/rand"
-	"os"
 	"time"
 	// load all auth plugins - needed for gcp, azure etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 var (
-	// will be overridden by goreleaser: https://goreleaser.com/environment/#using-the-mainversion
+	// will be overridden by goreleaser: https://goreleaser.com/cookbooks/using-main.version
 	version = "dev"
 	commit  = "none"
+	date    = "unknown"
 )
 
 func init() {
-	log.SetFormatter(&log.TextFormatter{
-		FullTimestamp: true,
-		PadLevelText:  true,
-	})
-	log.SetOutput(os.Stdout)
-	log.SetLevel(log.DebugLevel)
+
 	rand.Seed(time.Now().UnixNano())
 }
 
 func main() {
-	rootLogger := log.New()
-	cliApp := app.New(rootLogger, version, commit)
-	err := cliApp.Run(os.Args)
+	logger, err := applog.New()
 	if err != nil {
-		rootLogger.Fatalf(":cross_mark: Error: %s", err.Error())
+		log.Fatalf("Error: %s", err.Error())
+	}
+
+	rootCmd := app.New(logger, version, commit, date)
+	err = rootCmd.Execute()
+	if err != nil {
+		logger.Fatalf(":cross_mark: Error: %s", err.Error())
 	}
 }

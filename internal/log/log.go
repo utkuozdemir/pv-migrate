@@ -31,22 +31,39 @@ var (
 		LevelError, LevelFatal, LevelPanic}
 )
 
-func BuildLogger(logger *log.Logger, level string, format string) (*log.Entry, error) {
-	logger.SetOutput(os.Stdout)
-	formatter, err := getLogFormatter(format)
+func New() (*log.Entry, error) {
+	configureGlobalLogger()
+
+	l := log.New()
+	l.SetOutput(os.Stdout)
+
+	e := l.WithContext(context.Background())
+	err := Configure(e, LevelInfo, FormatFancy)
 	if err != nil {
 		return nil, err
+	}
+
+	return e, nil
+}
+
+func Configure(e *log.Entry, level string, format string) error {
+	l := e.Logger
+	l.SetOutput(os.Stdout)
+	formatter, err := getLogFormatter(format)
+	if err != nil {
+		return err
 	}
 
 	logLevel, err := getLogLevel(level)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	logger.SetFormatter(formatter)
-	logger.SetLevel(logLevel)
-	ctx := context.WithValue(context.Background(), FormatContextKey, format)
-	return logger.WithContext(ctx), nil
+	l.SetFormatter(formatter)
+	l.SetLevel(logLevel)
+	e.Context = context.WithValue(e.Context, FormatContextKey, format)
+
+	return nil
 }
 
 func getLogFormatter(format string) (log.Formatter, error) {
@@ -87,4 +104,13 @@ func (f *fancyFormatter) Format(e *log.Entry) ([]byte, error) {
 	msg := emoji.Sprintf("%s\n", e.Message)
 	bytes := []byte(msg)
 	return bytes, nil
+}
+
+func configureGlobalLogger() {
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+		PadLevelText:  true,
+	})
+	log.SetOutput(os.Stdout)
+	log.SetLevel(log.DebugLevel)
 }

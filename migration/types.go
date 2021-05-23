@@ -6,13 +6,6 @@ import (
 	"helm.sh/helm/v3/pkg/chart"
 )
 
-const (
-	DefaultIgnoreMounted       = false
-	DefaultNoChown             = false
-	DefaultNoProgressBar       = false
-	DefaultSourceMountReadOnly = true
-)
-
 type PVCInfo struct {
 	KubeconfigPath string
 	Context        string
