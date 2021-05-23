@@ -98,7 +98,7 @@ brews:
   - tap:
       owner: utkuozdemir
       name: homebrew-pv-migrate
-      #token: "{{ .Env.DEBUG_TOKEN }}"
+      token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"
     folder: Formula
     homepage: https://github.com/utkuozdemir/pv-migrate
     description: Persistent volume migration plugin for Kubernetes
