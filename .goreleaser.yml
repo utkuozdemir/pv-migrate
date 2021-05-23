@@ -88,11 +88,6 @@ docker_manifests:
       - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-amd64
       - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-arm64
       - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-armv7
-  - name_template: docker.io/utkuozdemir/pv-migrate:latest
-    image_templates:
-      - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-amd64
-      - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-arm64
-      - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-armv7
 
 # To test docker image push, uncomment the following and run
 # goreleaser release --skip-validate --rm-dist --debug
