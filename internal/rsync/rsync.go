@@ -3,6 +3,7 @@ package rsync
 import (
 	"bytes"
 	"context"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
@@ -167,7 +168,7 @@ func buildRsyncJobDest(t *task.Task, targetHost string, privateKeySecretName str
 								},
 								{
 									Name:      "private-key-vol",
-									MountPath: "/root/.ssh/id_rsa",
+									MountPath: fmt.Sprintf("/root/.ssh/id_%s", t.Migration.Options.KeyAlgorithm),
 									SubPath:   "privateKey",
 								},
 							},
@@ -189,8 +190,8 @@ func RunRsyncJobOverSSH(t *task.Task, serviceType corev1.ServiceType) error {
 	d := t.DestInfo
 	destKubeClient := d.KubeClient
 
-	log.Info("Generating RSA SSH key pair")
-	publicKey, privateKey, err := CreateSSHKeyPair()
+	log.Info("Generating SSH key pair")
+	publicKey, privateKey, err := CreateSSHKeyPair(t.Migration.Options.KeyAlgorithm)
 	if err != nil {
 		return err
 	}

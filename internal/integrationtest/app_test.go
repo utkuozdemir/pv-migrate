@@ -17,6 +17,7 @@ const (
 	sourceNsParamKey          = flagPrefix + app.FlagSourceNamespace
 	destKubeconfigParamKey    = flagPrefix + app.FlagDestKubeconfig
 	destNsParamKey            = flagPrefix + app.FlagDestNamespace
+	sshKeyAlgorithmParamKey   = flagPrefix + app.FlagSSHKeyAlgorithm
 	ignoreMountedFlag         = flagPrefix + app.FlagIgnoreMounted
 	noChownFlag               = flagPrefix + app.FlagNoChown
 	deleteExtraneousFilesFlag = flagPrefix + app.FlagDestDeleteExtraneousFiles
@@ -268,6 +269,41 @@ func TestDifferentNS(t *testing.T) {
 		sourceNsParamKey, sourceNs,
 		destKubeconfigParamKey, ctx.kubeconfig,
 		destNsParamKey, destNs,
+		source, dest,
+	}
+	defer func() {
+		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
+		assert.NoError(t, err)
+		err = ensureNamespaceIsDeleted(ctx.kubeClient, destNs)
+		assert.NoError(t, err)
+	}()
+
+	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
+	assert.NoError(t, err)
+
+	err = cliApp.Run(args)
+	assert.NoError(t, err)
+
+	stdout, stderr, err := execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, printDataContentShellCommand)
+	assert.NoError(t, err)
+	assert.Empty(t, stderr)
+	assert.Equal(t, generateDataContent, stdout)
+}
+
+func TestDifferentNSRSA(t *testing.T) {
+	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
+	assert.NoError(t, err)
+	destNs, dest, err := randomTestNamespaceWithRandomBoundPVC()
+	assert.NoError(t, err)
+	cliApp := app.New("", "")
+
+	args := []string{
+		os.Args[0], migrateCommand,
+		sourceKubeconfigParamKey, ctx.kubeconfig,
+		sourceNsParamKey, sourceNs,
+		destKubeconfigParamKey, ctx.kubeconfig,
+		destNsParamKey, destNs,
+		sshKeyAlgorithmParamKey, "rsa",
 		source, dest,
 	}
 	defer func() {
