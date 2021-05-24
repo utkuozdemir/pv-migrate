@@ -43,7 +43,7 @@ func createSSHRSAKeyPair() (string, string, error) {
 	// generate and write private key as PEM
 	var privKeyBuf strings.Builder
 
-	privateKeyPEM := &pem.Block{Type: "OPENSSH PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)}
+	privateKeyPEM := &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privateKey)}
 	if err := pem.Encode(&privKeyBuf, privateKeyPEM); err != nil {
 		return "", "", err
 	}
