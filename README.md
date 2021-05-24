@@ -130,6 +130,7 @@ OPTIONS:
    --strategies value, -s value         The strategies to be used in the given order (default: "mnt2", "svc", "lbsvc")
    --rsync-image value, -r value        Image to use for running rsync (default: "docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-20210522")
    --sshd-image value, -S value         Image to use for running sshd server (default: "docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522")
+   --ssh-key-algorithm value, -a value  SSH key algorithm to be used. Valid values are rsa,ed25519 (default: "ed25519")
    --help, -h                           show help (default: false)
 ```
 
