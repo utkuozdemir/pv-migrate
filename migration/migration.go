@@ -27,4 +27,5 @@ type Options struct {
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
+	KeyAlgorithm          string
 }

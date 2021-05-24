@@ -5,6 +5,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"github.com/utkuozdemir/pv-migrate/engine"
+	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	"strings"
@@ -26,9 +27,11 @@ const (
 	FlagStrategies                = "strategies"
 	FlagRsyncImage                = "rsync-image"
 	FlagSshdImage                 = "sshd-image"
+	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
 )
 
 func New(version string, commit string) *cli.App {
+	sshKeyAlgs := strings.Join(rsync.SSHKeyAlgorithms, ",")
 	return &cli.App{
 		Name:    "pv-migrate",
 		Usage:   "A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another",
@@ -58,6 +61,7 @@ func New(version string, commit string) *cli.App {
 						DeleteExtraneousFiles: c.Bool(FlagDestDeleteExtraneousFiles),
 						IgnoreMounted:         c.Bool(FlagIgnoreMounted),
 						NoChown:               c.Bool(FlagNoChown),
+						KeyAlgorithm:          c.String(FlagSSHKeyAlgorithm),
 					}
 
 					strategies := strings.Split(c.String(FlagStrategies), ",")
@@ -156,6 +160,12 @@ func New(version string, commit string) *cli.App {
 						Aliases: []string{"S"},
 						Usage:   "Image to use for running sshd server",
 						Value:   migration.DefaultSshdImage,
+					},
+					&cli.StringFlag{
+						Name:    FlagSSHKeyAlgorithm,
+						Aliases: []string{"a"},
+						Usage:   fmt.Sprintf("SSH key algorithm to be used. Valid values are %s", sshKeyAlgs),
+						Value:   rsync.Ed25519KeyAlgorithm,
 					},
 				},
 			},
