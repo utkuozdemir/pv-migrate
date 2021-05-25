@@ -14,40 +14,44 @@ import (
 	"strings"
 )
 
+type strategyMapGetter func(names []string) (map[string]strategy.Strategy, error)
 type kubeClientGetter func(kubeconfigPath string, context string) (kubernetes.Interface, string, error)
 
 type migrator struct {
-	getKubeClient kubeClientGetter
+	getKubeClient  kubeClientGetter
+	getStrategyMap strategyMapGetter
 }
 
 // New creates a new migrator
 func New() *migrator {
 	return &migrator{
-		getKubeClient: k8s.GetClientAndNsInContext,
+		getKubeClient:  k8s.GetClientAndNsInContext,
+		getStrategyMap: strategy.GetStrategiesMapForNames,
 	}
 }
 
-func (e *migrator) Run(m *migration.Migration) error {
-	nameToStrategyMap, err := strategy.GetStrategiesMapForNames(m.Strategies)
+func (m *migrator) Run(mig *migration.Migration) error {
+	nameToStrategyMap, err := m.getStrategyMap(mig.Strategies)
 	if err != nil {
 		return err
 	}
 
-	t, err := e.buildTask(m)
+	t, err := m.buildTask(mig)
 	if err != nil {
 		return err
 	}
 
 	logger := log.WithFields(t.LogFields)
 	logger.
-		WithField("strategies", strings.Join(m.Strategies, ",")).
+		WithField("strategies", strings.Join(mig.Strategies, ",")).
 		Infof("Will attempt %v strategies", len(nameToStrategyMap))
 
-	for name, s := range nameToStrategyMap {
+	for _, name := range mig.Strategies {
 		t.ID = util.RandomHexadecimalString(5)
 
 		logger = log.WithField("strategy", name)
 		logger.Info("Attempting strategy")
+		s := nameToStrategyMap[name]
 		accepted, runErr := s.Run(t)
 		if !accepted {
 			logger.Info("Strategy cannot handle this migration, will try the next one")
@@ -66,18 +70,18 @@ func (e *migrator) Run(m *migration.Migration) error {
 	return errors.New("all strategies have failed")
 }
 
-func (e *migrator) buildTask(m *migration.Migration) (*task.Task, error) {
-	source := m.Source
-	dest := m.Dest
+func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
+	source := mig.Source
+	dest := mig.Dest
 
-	var sourceClient, sourceNsInContext, err = e.getKubeClient(source.KubeconfigPath, source.Context)
+	var sourceClient, sourceNsInContext, err = m.getKubeClient(source.KubeconfigPath, source.Context)
 	if err != nil {
 		return nil, err
 	}
 
 	destClient, destNsInContext := sourceClient, sourceNsInContext
 	if source.KubeconfigPath != dest.KubeconfigPath || source.Context != dest.Context {
-		destClient, destNsInContext, err = e.getKubeClient(dest.KubeconfigPath, dest.Context)
+		destClient, destNsInContext, err = m.getKubeClient(dest.KubeconfigPath, dest.Context)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +107,7 @@ func (e *migrator) buildTask(m *migration.Migration) (*task.Task, error) {
 		return nil, err
 	}
 
-	ignoreMounted := m.Options.IgnoreMounted
+	ignoreMounted := mig.Options.IgnoreMounted
 	err = handleMounted(sourcePvcInfo, ignoreMounted)
 	if err != nil {
 		return nil, err
@@ -123,7 +127,7 @@ func (e *migrator) buildTask(m *migration.Migration) (*task.Task, error) {
 	}
 
 	t := task.Task{
-		Migration:  m,
+		Migration:  mig,
 		LogFields:  logFields,
 		SourceInfo: sourcePvcInfo,
 		DestInfo:   destPvcInfo,

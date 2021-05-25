@@ -3,6 +3,7 @@ package migrator
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
+	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
@@ -54,7 +55,51 @@ func TestBuildTaskMounted(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestRunStrategiesInOrder(t *testing.T) {
+	var result []int
+	str1 := mockStrategy{
+		runFunc: func(_ *task.Task) (bool, error) {
+			result = append(result, 1)
+			return false, nil
+		},
+	}
+
+	str2 := mockStrategy{
+		runFunc: func(_ *task.Task) (bool, error) {
+			result = append(result, 2)
+			return true, nil
+		},
+	}
+
+	str3 := mockStrategy{
+		runFunc: func(_ *task.Task) (bool, error) {
+			result = append(result, 3)
+			return false, nil
+		},
+	}
+
+	m := migrator{getKubeClient: fakeKubeClientGetter(),
+		getStrategyMap: func(names []string) (map[string]strategy.Strategy, error) {
+			return map[string]strategy.Strategy{
+				"str1": &str1,
+				"str2": &str2,
+				"str3": &str3,
+			}, nil
+		}}
+
+	strs := []string{"str3", "str1", "str2"}
+	mig := buildMigrationWithStrategies(strs, &migration.Options{IgnoreMounted: true})
+
+	err := m.Run(mig)
+	assert.NoError(t, err)
+	assert.Equal(t, []int{3, 1, 2}, result)
+}
+
 func buildMigration(options *migration.Options) *migration.Migration {
+	return buildMigrationWithStrategies(strategy.DefaultStrategies, options)
+}
+
+func buildMigrationWithStrategies(strategies []string, options *migration.Options) *migration.Migration {
 	return &migration.Migration{
 		Source: &migration.PVC{
 			Namespace: sourceNS,
@@ -65,7 +110,7 @@ func buildMigration(options *migration.Options) *migration.Migration {
 			Name:      destPVC,
 		},
 		Options:    options,
-		Strategies: strategy.DefaultStrategies,
+		Strategies: strategies,
 		RsyncImage: migration.DefaultRsyncImage,
 		SshdImage:  migration.DefaultSshdImage,
 	}
@@ -117,4 +162,12 @@ func buildTestPVC(namespace string, name string,
 			},
 		},
 	}
+}
+
+type mockStrategy struct {
+	runFunc func(*task.Task) (bool, error)
+}
+
+func (m *mockStrategy) Run(t *task.Task) (bool, error) {
+	return m.runFunc(t)
 }
