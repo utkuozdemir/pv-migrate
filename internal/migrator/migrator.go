@@ -43,11 +43,12 @@ func (e *migrator) Run(m *migration.Migration) error {
 		WithField("strategies", strings.Join(m.Strategies, ",")).
 		Infof("Will attempt %v strategies", len(nameToStrategyMap))
 
-	for name, s := range nameToStrategyMap {
+	for _, name := range m.Strategies {
 		t.ID = util.RandomHexadecimalString(5)
 
 		logger = log.WithField("strategy", name)
 		logger.Info("Attempting strategy")
+		s := nameToStrategyMap[name]
 		accepted, runErr := s.Run(t)
 		if !accepted {
 			logger.Info("Strategy cannot handle this migration, will try the next one")
