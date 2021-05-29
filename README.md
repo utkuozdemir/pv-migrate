@@ -57,23 +57,31 @@ Just use `pv-migrate` to clone the data **securely over the internet**.
 
 ## Installation
 
-### Using Homebrew
+### Using Homebrew (MacOS/Linux)
 If you have homebrew, the installation is as simple as:
 ```bash
 brew tap utkuozdemir/pv-migrate
 brew install pv-migrate
 ```
 
-### By downloading the binaries
+### Using Scoop (Windows)
+If you use [Scoop package manager](https://scoop.sh) on Windows, 
+run the following commands in a command prompt (CMD/Powershell):
+```powershell
+scoop bucket add org https://github.com/utkuozdemir/scoop-pv-migrate.git
+scoop install utkuozdemir/pv-migrate
+```
+
+### By downloading the binaries (MacOS/Linux/Windows)
 
 1. Go to the [releases](https://github.com/utkuozdemir/pv-migrate/releases) and download 
    the latest release archive for your platform.
 2. Extract the archive.
 3. Move the binary to somewhere in your `PATH`.
 
-Steps for MacOS:
+Sample steps for MacOS:
 ```bash
-$ VERSION=0.5.5
+$ VERSION=0.5.7
 $ wget https://github.com/utkuozdemir/pv-migrate/releases/download/v${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ tar -xvzf pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ mv pv-migrate /usr/local/bin
@@ -86,7 +94,7 @@ Alternatively, you can use the
 [official Docker images](https://hub.docker.com/repository/docker/utkuozdemir/pv-migrate) 
 that come with the `pv-migrate` binary pre-installed:
 ```bash
-docker run --rm -it utkuozdemir/pv-migrate:0.5.5 pv-migrate migrate ...
+docker run --rm -it utkuozdemir/pv-migrate:0.5.7 pv-migrate migrate ...
 ```
 
 ## Usage
