@@ -49,7 +49,8 @@ Just use `pv-migrate` to clone the data **securely over the internet**.
 ## Highlights
 
 - Supports in-namespace, in-cluster as well as cross-cluster migrations
-- Uses rsync over SSH with a freshly generated RSA keys each time to securely migrate the files
+- Uses rsync over SSH with a freshly generated [Ed25519](https://en.wikipedia.org/wiki/EdDSA) 
+  or RSA keys each time to securely migrate the files
 - Allows specifying your own docker images for rsync and sshd
 - Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed
 - Customizable strategy order
