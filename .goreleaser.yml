@@ -52,7 +52,7 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
-      - '^ci:'
+      - '^cicd:'
       - '^refactor:'
       - '^docker:'
       - Merge pull request
@@ -99,9 +99,25 @@ brews:
       owner: utkuozdemir
       name: homebrew-pv-migrate
       token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"
+    commit_author:
+      name: Utku Ozdemir
+      email: uoz@protonmail.com
     folder: Formula
     homepage: https://github.com/utkuozdemir/pv-migrate
     description: Persistent volume migration plugin for Kubernetes
     license: Apache-2.0
     test: |
       system "#{bin}/pv-migrate -v"
+
+scoop:
+  bucket:
+    owner: utkuozdemir
+    name: scoop-pv-migrate
+    token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"
+  commit_author:
+    name: Utku Ozdemir
+    email: uoz@protonmail.com
+  commit_msg_template: "Scoop update for {{ .ProjectName }} version {{ .Tag }}"
+  homepage: https://github.com/utkuozdemir/pv-migrate
+  description: Persistent volume migration plugin for Kubernetes
+  license: Apache-2.0
