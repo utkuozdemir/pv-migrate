@@ -23,7 +23,7 @@ func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interfa
 		return err
 	}
 
-	pod, err := waitForJobPodIsCreated(kubeClient, job.Namespace, job.Name)
+	pod, err := waitUntilJobPodIsCreated(kubeClient, job.Namespace, job.Name)
 	if err != nil {
 		return err
 	}
@@ -47,7 +47,7 @@ func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interfa
 	return nil
 }
 
-func waitForJobPodIsCreated(kubeClient kubernetes.Interface, namespace string, job string) (*corev1.Pod, error) {
+func waitUntilJobPodIsCreated(kubeClient kubernetes.Interface, namespace string, job string) (*corev1.Pod, error) {
 	pods := kubeClient.CoreV1().Pods(namespace)
 	listOptions := metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("job-name=%s", job),
