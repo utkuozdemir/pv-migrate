@@ -17,7 +17,7 @@ const (
 	serviceLbCheckTimeout         = 120 * time.Second
 )
 
-func GetServiceAddress(kubeClient kubernetes.Interface, service *corev1.Service) (string, error) {
+func GetServiceAddress(logger *log.Entry, kubeClient kubernetes.Interface, service *corev1.Service) (string, error) {
 	if service.Spec.Type == corev1.ServiceTypeClusterIP {
 		return service.Name + "." + service.Namespace, nil
 	}
@@ -43,7 +43,7 @@ func GetServiceAddress(kubeClient kubernetes.Interface, service *corev1.Service)
 				return lbService.Status.LoadBalancer.Ingress[0].IP, nil
 			}
 
-			log.WithField("service", service.Name).
+			logger.WithField("service", service.Name).
 				WithField("elapsedSecs", elapsedSecs).
 				WithField("intervalSecs", serviceLbCheckIntervalSeconds).
 				WithField("timeoutSecs", serviceLbCheckTimeoutSeconds).

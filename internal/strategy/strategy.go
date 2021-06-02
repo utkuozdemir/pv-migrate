@@ -3,9 +3,11 @@ package strategy
 import (
 	"fmt"
 	"github.com/hashicorp/go-multierror"
-	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"os"
+	"os/signal"
+	"syscall"
 )
 
 const (
@@ -25,10 +27,10 @@ var (
 )
 
 type Strategy interface {
-	// Run executes the migration for the given task.
+	// Run runs the migration for the given task execution.
 	//
 	// This is the actual implementation of the migration.
-	Run(task *task.Task) (bool, error)
+	Run(execution *task.Execution) (bool, error)
 }
 
 func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
@@ -44,14 +46,40 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func cleanup(t *task.Task) {
-	log.Info("Cleaning up")
+func registerCleanupHook(e *task.Execution) chan<- bool {
+	doneCh := make(chan bool)
+	signalCh := make(chan os.Signal)
+	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-signalCh:
+			e.Logger.Warn("Received termination signal")
+			cleanup(e)
+			os.Exit(1)
+		case <-doneCh:
+			return
+		}
+	}()
+	return doneCh
+}
+
+func cleanupAndReleaseHook(e *task.Execution, doneCh chan<- bool) {
+	cleanup(e)
+	doneCh <- true
+}
+
+func cleanup(e *task.Execution) {
+	t := e.Task
+	logger := e.Logger
+	logger.Info("Cleaning up")
 	var result *multierror.Error
-	err := k8s.CleanupForID(t.SourceInfo.KubeClient, t.SourceInfo.Claim.Namespace, t.ID)
+	s := t.SourceInfo
+	err := k8s.CleanupForID(s.KubeClient, s.Claim.Namespace, e.ID)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
-	err = k8s.CleanupForID(t.DestInfo.KubeClient, t.DestInfo.Claim.Namespace, t.ID)
+	d := t.DestInfo
+	err = k8s.CleanupForID(d.KubeClient, d.Claim.Namespace, e.ID)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
@@ -59,6 +87,8 @@ func cleanup(t *task.Task) {
 	//goland:noinspection GoNilness
 	err = result.ErrorOrNil()
 	if err != nil {
-		log.WithError(err).Warn("Cleanup failed, you might want to clean up manually")
+		logger.WithError(err).Warn("Cleanup failed, you might want to clean up manually")
+	} else {
+		logger.Info("Cleanup successful")
 	}
 }

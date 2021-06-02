@@ -8,10 +8,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func tailPodLogs(kubeClient kubernetes.Interface, namespace string, pod string, stopCh <-chan bool) {
-	logger := log.WithFields(log.Fields{
-		"namespace": namespace,
-		"pod":       pod,
+func tailPodLogs(logger *log.Entry, kubeClient kubernetes.Interface, namespace string, pod string, stopCh <-chan bool) {
+	logger = logger.WithFields(log.Fields{
+		"ns":  namespace,
+		"pod": pod,
 	})
 
 	podLogOptions := corev1.PodLogOptions{

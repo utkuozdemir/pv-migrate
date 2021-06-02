@@ -16,10 +16,12 @@ func (r *Svc) canDo(t *task.Task) bool {
 	return sameCluster
 }
 
-func (r *Svc) Run(t *task.Task) (bool, error) {
-	if !r.canDo(t) {
+func (r *Svc) Run(e *task.Execution) (bool, error) {
+	if !r.canDo(e.Task) {
 		return false, nil
 	}
-	defer cleanup(t)
-	return true, rsync.RunRsyncJobOverSSH(t, corev1.ServiceTypeClusterIP)
+
+	doneCh := registerCleanupHook(e)
+	defer cleanupAndReleaseHook(e, doneCh)
+	return true, rsync.RunRsyncJobOverSSH(e, corev1.ServiceTypeClusterIP)
 }

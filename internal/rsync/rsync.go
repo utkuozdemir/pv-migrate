@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
@@ -102,10 +101,11 @@ func createRsyncPrivateKeySecret(instanceId string, pvcInfo *pvc.Info, privateKe
 	return secrets.Create(context.TODO(), &secret, metav1.CreateOptions{})
 }
 
-func buildRsyncJobDest(t *task.Task, targetHost string, privateKeySecretName string) (*batchv1.Job, error) {
+func buildRsyncJobDest(e *task.Execution, targetHost string, privateKeySecretName string) (*batchv1.Job, error) {
+	t := e.Task
 	jobTTLSeconds := int32(600)
 	backoffLimit := int32(0)
-	id := t.ID
+	id := e.ID
 	jobName := "pv-migrate-rsync-" + id
 	d := t.DestInfo
 
@@ -183,27 +183,29 @@ func buildRsyncJobDest(t *task.Task, targetHost string, privateKeySecretName str
 	return &job, nil
 }
 
-func RunRsyncJobOverSSH(t *task.Task, serviceType corev1.ServiceType) error {
-	instanceId := t.ID
+func RunRsyncJobOverSSH(e *task.Execution, serviceType corev1.ServiceType) error {
+	logger := e.Logger
+	instanceId := e.ID
+	t := e.Task
 	s := t.SourceInfo
-	sourceKubeClient := s.KubeClient
 	d := t.DestInfo
+	sourceKubeClient := s.KubeClient
 	destKubeClient := d.KubeClient
 
-	log.Info("Generating SSH key pair")
+	logger.Info("Generating SSH key pair")
 	publicKey, privateKey, err := CreateSSHKeyPair(t.Migration.Options.KeyAlgorithm)
 	if err != nil {
 		return err
 	}
 
-	log.Info("Creating secret for the public key")
+	logger.Info("Creating secret for the public key")
 	secret, err := createSshdPublicKeySecret(instanceId, s, publicKey)
 	if err != nil {
 		return err
 	}
 
 	sftpPod := PrepareSshdPod(instanceId, s, secret.Name, t.Migration.SshdImage)
-	err = CreateSshdPodWaitTillRunning(sourceKubeClient, sftpPod)
+	err = CreateSshdPodWaitTillRunning(logger, sourceKubeClient, sftpPod)
 	if err != nil {
 		return err
 	}
@@ -212,24 +214,24 @@ func RunRsyncJobOverSSH(t *task.Task, serviceType corev1.ServiceType) error {
 	if err != nil {
 		return err
 	}
-	targetHost, err := k8s.GetServiceAddress(sourceKubeClient, createdService)
+	targetHost, err := k8s.GetServiceAddress(logger, sourceKubeClient, createdService)
 	if err != nil {
 		return err
 	}
 
-	log.Info("Creating secret for the private key")
+	logger.Info("Creating secret for the private key")
 	secret, err = createRsyncPrivateKeySecret(instanceId, d, privateKey)
 	if err != nil {
 		return err
 	}
 
-	log.WithField("targetHost", targetHost).Info("Connecting to the rsync server")
-	rsyncJob, err := buildRsyncJobDest(t, targetHost, secret.Name)
+	logger.WithField("targetHost", targetHost).Info("Connecting to the rsync server")
+	rsyncJob, err := buildRsyncJobDest(e, targetHost, secret.Name)
 	if err != nil {
 		return err
 	}
 
-	err = k8s.CreateJobWaitTillCompleted(destKubeClient, rsyncJob)
+	err = k8s.CreateJobWaitTillCompleted(logger, destKubeClient, rsyncJob)
 	if err != nil {
 		return err
 	}

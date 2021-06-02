@@ -8,8 +8,13 @@ import (
 
 type Task struct {
 	Migration  *migration.Migration
-	LogFields  log.Fields
+	Logger     *log.Entry
 	SourceInfo *pvc.Info
 	DestInfo   *pvc.Info
-	ID         string
+}
+
+type Execution struct {
+	ID     string
+	Task   *Task
+	Logger *log.Entry
 }

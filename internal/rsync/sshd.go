@@ -45,13 +45,13 @@ func CreateSshdService(instanceId string, sourcePvcInfo *pvc.Info, serviceType c
 	return createdService, nil
 }
 
-func CreateSshdPodWaitTillRunning(kubeClient kubernetes.Interface, pod *corev1.Pod) error {
+func CreateSshdPodWaitTillRunning(logger *log.Entry, kubeClient kubernetes.Interface, pod *corev1.Pod) error {
 	running := make(chan bool)
 	defer close(running)
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	sharedInformerFactory := informers.NewSharedInformerFactory(kubeClient, 5*time.Second)
-	logger := log.WithField("podName", pod.Name)
+	logger = logger.WithField("pod", pod.Name)
 	sharedInformerFactory.Core().V1().Pods().Informer().AddEventHandler(
 		cache.ResourceEventHandlerFuncs{
 			UpdateFunc: func(old interface{}, new interface{}) {
