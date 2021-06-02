@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,7 +17,7 @@ const (
 	jobPodSpawnTimeout = 5 * time.Minute
 )
 
-func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job *batchv1.Job) error {
+func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interface, job *batchv1.Job) error {
 	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(context.TODO(), job, metav1.CreateOptions{})
 	if err != nil {
 		return err
@@ -33,7 +34,7 @@ func CreateJobWaitTillCompleted(kubeClient kubernetes.Interface, job *batchv1.Jo
 	}
 
 	stopCh := make(chan bool)
-	go tailPodLogs(kubeClient, pod.Namespace, pod.Name, stopCh)
+	go tailPodLogs(logger, kubeClient, pod.Namespace, pod.Name, stopCh)
 	p, err := waitUntilPodIsNotRunning(kubeClient, pod.Namespace, pod.Name)
 	if err != nil {
 		return err

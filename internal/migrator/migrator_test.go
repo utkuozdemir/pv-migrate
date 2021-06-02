@@ -58,21 +58,21 @@ func TestBuildTaskMounted(t *testing.T) {
 func TestRunStrategiesInOrder(t *testing.T) {
 	var result []int
 	str1 := mockStrategy{
-		runFunc: func(_ *task.Task) (bool, error) {
+		runFunc: func(_ *task.Execution) (bool, error) {
 			result = append(result, 1)
 			return false, nil
 		},
 	}
 
 	str2 := mockStrategy{
-		runFunc: func(_ *task.Task) (bool, error) {
+		runFunc: func(_ *task.Execution) (bool, error) {
 			result = append(result, 2)
 			return true, nil
 		},
 	}
 
 	str3 := mockStrategy{
-		runFunc: func(_ *task.Task) (bool, error) {
+		runFunc: func(_ *task.Execution) (bool, error) {
 			result = append(result, 3)
 			return false, nil
 		},
@@ -165,9 +165,9 @@ func buildTestPVC(namespace string, name string,
 }
 
 type mockStrategy struct {
-	runFunc func(*task.Task) (bool, error)
+	runFunc func(*task.Execution) (bool, error)
 }
 
-func (m *mockStrategy) Run(t *task.Task) (bool, error) {
-	return m.runFunc(t)
+func (m *mockStrategy) Run(e *task.Execution) (bool, error) {
+	return m.runFunc(e)
 }

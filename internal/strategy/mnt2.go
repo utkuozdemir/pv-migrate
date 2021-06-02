@@ -29,19 +29,21 @@ func (r *Mnt2) canDo(t *task.Task) bool {
 	return sameNode || s.SupportsROX || s.SupportsRWX || d.SupportsRWX
 }
 
-func (r *Mnt2) Run(t *task.Task) (bool, error) {
+func (r *Mnt2) Run(e *task.Execution) (bool, error) {
+	t := e.Task
 	if !r.canDo(t) {
 		return false, nil
 	}
 
 	node := determineTargetNode(t)
-	migrationJob, err := buildRsyncJob(t, node)
+	migrationJob, err := buildRsyncJob(e, node)
 	if err != nil {
 		return true, err
 	}
 
-	defer cleanup(t)
-	return true, k8s.CreateJobWaitTillCompleted(t.SourceInfo.KubeClient, migrationJob)
+	doneCh := registerCleanupHook(e)
+	defer cleanupAndReleaseHook(e, doneCh)
+	return true, k8s.CreateJobWaitTillCompleted(e.Logger, t.SourceInfo.KubeClient, migrationJob)
 }
 
 func determineTargetNode(t *task.Task) string {
@@ -56,10 +58,11 @@ func determineTargetNode(t *task.Task) string {
 	return d.MountedNode
 }
 
-func buildRsyncJob(t *task.Task, node string) (*batchv1.Job, error) {
+func buildRsyncJob(e *task.Execution, node string) (*batchv1.Job, error) {
+	t := e.Task
 	jobTTLSeconds := int32(600)
 	backoffLimit := int32(0)
-	id := t.ID
+	id := e.ID
 	jobName := "pv-migrate-rsync-" + id
 	m := t.Migration
 	opts := m.Options

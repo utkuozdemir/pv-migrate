@@ -41,29 +41,33 @@ func (m *migrator) Run(mig *migration.Migration) error {
 		return err
 	}
 
-	logger := log.WithFields(t.LogFields)
-	logger.
+	t.Logger.
 		WithField("strategies", strings.Join(mig.Strategies, ",")).
 		Infof("Will attempt %v strategies", len(nameToStrategyMap))
 
 	for _, name := range mig.Strategies {
-		t.ID = util.RandomHexadecimalString(5)
+		id := util.RandomHexadecimalString(5)
+		e := task.Execution{
+			ID:     id,
+			Task:   t,
+			Logger: t.Logger.WithField("id", id),
+		}
 
-		logger = log.WithField("strategy", name)
-		logger.Info("Attempting strategy")
+		sLogger := e.Logger.WithField("strategy", name)
+		sLogger.Info("Attempting strategy")
 		s := nameToStrategyMap[name]
-		accepted, runErr := s.Run(t)
+		accepted, runErr := s.Run(&e)
 		if !accepted {
-			logger.Info("Strategy cannot handle this migration, will try the next one")
+			sLogger.Info("Strategy cannot handle this migration, will try the next one")
 			continue
 		}
 
 		if runErr == nil {
-			logger.Info("Migration succeeded")
+			sLogger.Info("Migration succeeded")
 			return nil
 		}
 
-		logger.WithError(runErr).
+		sLogger.WithError(runErr).
 			Warn("Migration failed with this strategy, will try with the remaining strategies")
 	}
 
@@ -107,12 +111,19 @@ func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
 		return nil, err
 	}
 
+	logger := log.WithFields(log.Fields{
+		"source_ns": source.Namespace,
+		"source":    source.Name,
+		"dest_ns":   dest.Namespace,
+		"dest":      dest.Name,
+	})
+
 	ignoreMounted := mig.Options.IgnoreMounted
-	err = handleMounted(sourcePvcInfo, ignoreMounted)
+	err = handleMounted(logger, sourcePvcInfo, ignoreMounted)
 	if err != nil {
 		return nil, err
 	}
-	err = handleMounted(destPvcInfo, ignoreMounted)
+	err = handleMounted(logger, destPvcInfo, ignoreMounted)
 	if err != nil {
 		return nil, err
 	}
@@ -121,14 +132,9 @@ func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
 		return nil, errors.New("destination pvc is not writeable")
 	}
 
-	logFields := log.Fields{
-		"source": source.Namespace + "/" + source.Name,
-		"dest":   dest.Namespace + "/" + dest.Name,
-	}
-
 	t := task.Task{
 		Migration:  mig,
-		LogFields:  logFields,
+		Logger:     logger,
 		SourceInfo: sourcePvcInfo,
 		DestInfo:   destPvcInfo,
 	}
@@ -136,13 +142,13 @@ func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
 	return &t, nil
 }
 
-func handleMounted(info *pvc.Info, ignoreMounted bool) error {
+func handleMounted(logger *log.Entry, info *pvc.Info, ignoreMounted bool) error {
 	if info.MountedNode == "" {
 		return nil
 	}
 
 	if ignoreMounted {
-		log.Infof("PVC %s is mounted to node %s, ignoring...", info.Claim.Name, info.MountedNode)
+		logger.Infof("PVC %s is mounted to node %s, ignoring...", info.Claim.Name, info.MountedNode)
 		return nil
 	}
 	return fmt.Errorf("PVC %s is mounted to node %s and ignore-mounted is not requested",
