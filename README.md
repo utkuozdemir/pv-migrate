@@ -82,7 +82,7 @@ scoop install utkuozdemir/pv-migrate
 
 Sample steps for MacOS:
 ```bash
-$ VERSION=0.5.7
+$ VERSION=0.5.8
 $ wget https://github.com/utkuozdemir/pv-migrate/releases/download/v${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ tar -xvzf pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ mv pv-migrate /usr/local/bin
@@ -95,7 +95,7 @@ Alternatively, you can use the
 [official Docker images](https://hub.docker.com/repository/docker/utkuozdemir/pv-migrate) 
 that come with the `pv-migrate` binary pre-installed:
 ```bash
-docker run --rm -it utkuozdemir/pv-migrate:0.5.7 pv-migrate migrate ...
+docker run --rm -it utkuozdemir/pv-migrate:0.5.8 pv-migrate migrate ...
 ```
 
 ## Usage
