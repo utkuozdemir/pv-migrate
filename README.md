@@ -69,8 +69,8 @@ brew install pv-migrate
 If you use [Scoop package manager](https://scoop.sh) on Windows, 
 run the following commands in a command prompt (CMD/Powershell):
 ```powershell
-scoop bucket add utkuozdemir https://github.com/utkuozdemir/scoop-pv-migrate.git
-scoop install utkuozdemir/pv-migrate
+scoop bucket add pv-migrate https://github.com/utkuozdemir/scoop-pv-migrate.git
+scoop install pv-migrate/pv-migrate
 ```
 
 ### By downloading the binaries (MacOS/Linux/Windows)
