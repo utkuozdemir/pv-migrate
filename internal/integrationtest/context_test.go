@@ -20,7 +20,7 @@ func prepareTestContext() *pvMigrateTestContext {
 	kubeconfig := fmt.Sprintf("%s/.kube/config", homeDir)
 	client, config, err := buildKubeClient(filepath.Clean(kubeconfig))
 	if err != nil {
-		log.WithError(err).Fatal("Couldn't initalize kubernetes client")
+		log.WithError(err).Fatal("Couldn't initialize kubernetes client")
 	}
 
 	return &pvMigrateTestContext{
