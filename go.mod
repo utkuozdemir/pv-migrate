@@ -11,5 +11,5 @@ require (
 	k8s.io/api v0.20.5
 	k8s.io/apimachinery v0.20.5
 	k8s.io/client-go v0.20.5
-	sigs.k8s.io/kind v0.10.0
+	sigs.k8s.io/kind v0.11.1
 )

@@ -33,7 +33,10 @@ const (
 	pollInterval            = 5 * time.Second
 	pollTimeout             = 5 * time.Minute
 	kindWaitForReadyTimeout = 2 * time.Minute
-	kindImage               = "kindest/node:v1.20.2"
+
+	// kindImage must be cross-checked with the kind-version:
+	// https://github.com/kubernetes-sigs/kind/releases
+	kindImage = "docker.io/kindest/node:v1.20.7@sha256:cbeaf907fc78ac97ce7b625e4bf0de16e3ea725daf6b04f930bd14c67c671ff9"
 )
 
 var (
