@@ -39,6 +39,8 @@ jobs:
           args: --timeout=3m0s
       - name: Install go-acc
         run: go install github.com/ory/go-acc@v0.2.6
+      - name: Set nf_conntrack_max for kind
+        run: sudo sysctl net/netfilter/nf_conntrack_max=131072
       - name: Run tests
         run: go-acc --output profile.cov ./... -- -v
       - name: Send coverage
