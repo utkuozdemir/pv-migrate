@@ -105,7 +105,7 @@ func createSshdPublicKeySecret(instanceId string, sourcePvcInfo *pvc.Info, publi
 	return secrets.Create(context.TODO(), &secret, metav1.CreateOptions{})
 }
 
-func PrepareSshdPod(instanceId string, sourcePvcInfo *pvc.Info, publicKeySecretName string, sshdImage string) *corev1.Pod {
+func PrepareSshdPod(instanceId string, sourcePvcInfo *pvc.Info, publicKeySecretName string, sshdImage string, readOnlyMount bool) *corev1.Pod {
 	podName := "pv-migrate-sshd-" + instanceId
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -120,7 +120,7 @@ func PrepareSshdPod(instanceId string, sourcePvcInfo *pvc.Info, publicKeySecretN
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
 							ClaimName: sourcePvcInfo.Claim.Name,
-							ReadOnly:  true,
+							ReadOnly:  readOnlyMount,
 						},
 					},
 				},
@@ -147,7 +147,7 @@ func PrepareSshdPod(instanceId string, sourcePvcInfo *pvc.Info, publicKeySecretN
 						{
 							Name:      "source-vol",
 							MountPath: "/source",
-							ReadOnly:  true,
+							ReadOnly:  readOnlyMount,
 						},
 						{
 							Name:      "public-key-vol",

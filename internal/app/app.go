@@ -24,6 +24,7 @@ const (
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
 	FlagNoChown                   = "no-chown"
+	FlagReadOnlyMount             = "read-only-mount"
 	FlagStrategies                = "strategies"
 	FlagRsyncImage                = "rsync-image"
 	FlagSshdImage                 = "sshd-image"
@@ -60,6 +61,7 @@ func New(version string, commit string) *cli.App {
 					opts := migration.Options{
 						DeleteExtraneousFiles: c.Bool(FlagDestDeleteExtraneousFiles),
 						IgnoreMounted:         c.Bool(FlagIgnoreMounted),
+						ReadOnlyMount:         c.Bool(FlagReadOnlyMount),
 						NoChown:               c.Bool(FlagNoChown),
 						KeyAlgorithm:          c.String(FlagSSHKeyAlgorithm),
 					}
@@ -142,6 +144,12 @@ func New(version string, commit string) *cli.App {
 						Aliases: []string{"o"},
 						Usage:   "Omit chown on rsync",
 						Value:   migration.DefaultNoChown,
+					},
+					&cli.BoolFlag{
+						Name:    FlagReadOnlyMount,
+						Aliases: []string{"R"},
+						Usage:   "Mount the PVC in ReadOnly mode",
+						Value:   migration.DefaultReadOnlyMount,
 					},
 					&cli.StringFlag{
 						Name:    FlagStrategies,

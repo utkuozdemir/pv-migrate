@@ -5,6 +5,7 @@ const (
 	DefaultSshdImage     = "docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522"
 	DefaultIgnoreMounted = false
 	DefaultNoChown       = false
+	DefaultReadOnlyMount = true
 )
 
 type PVC struct {
@@ -27,5 +28,6 @@ type Options struct {
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
+	ReadOnlyMount         bool
 	KeyAlgorithm          string
 }
