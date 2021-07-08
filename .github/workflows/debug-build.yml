@@ -1,0 +1,42 @@
+---
+name: debug-build
+on:
+  push:
+    branches:
+      - master
+    paths-ignore:
+      - "**.md"
+      - "test/**"
+      - ".gitignore"
+      - "docker/**"
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - "**.md"
+      - "test/**"
+      - ".gitignore"
+      - "docker/**"
+jobs:
+  debug-build:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: Setup Go
+        uses: actions/setup-go@v2.1.3
+        with:
+          go-version: 1.16
+      - name: Install go-acc
+        run: go install github.com/ory/go-acc@v0.2.6
+      - name: Start SSH session
+        uses: luchihoratiu/debug-via-ssh@main
+        with:
+          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+          SSH_PASS: ${{ secrets.SSH_PASS }}
+          NGROK_REGION: eu
+      - name: Run tests
+        run: go-acc --output profile.cov ./... -- -v
+      - name: Don't kill instance
+        if: ${{ failure() }}
+        run: sleep 1h
