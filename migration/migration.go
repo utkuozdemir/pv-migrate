@@ -1,11 +1,11 @@
 package migration
 
 const (
-	DefaultRsyncImage    = "docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-20210522"
-	DefaultSshdImage     = "docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522"
-	DefaultIgnoreMounted = false
-	DefaultNoChown       = false
-	DefaultReadOnlyMount = true
+	DefaultRsyncImage          = "docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-20210522"
+	DefaultSshdImage           = "docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522"
+	DefaultIgnoreMounted       = false
+	DefaultNoChown             = false
+	DefaultSourceMountReadOnly = true
 )
 
 type PVC struct {
@@ -28,6 +28,6 @@ type Options struct {
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
-	ReadOnlyMount         bool
+	SourceMountReadOnly   bool
 	KeyAlgorithm          string
 }

@@ -204,7 +204,7 @@ func RunRsyncJobOverSSH(e *task.Execution, serviceType corev1.ServiceType) error
 		return err
 	}
 
-	sftpPod := PrepareSshdPod(instanceId, s, secret.Name, t.Migration.SshdImage, t.Migration.Options.ReadOnlyMount)
+	sftpPod := PrepareSshdPod(instanceId, s, secret.Name, t.Migration.SshdImage, t.Migration.Options.SourceMountReadOnly)
 	err = CreateSshdPodWaitTillRunning(logger, sourceKubeClient, sftpPod)
 	if err != nil {
 		return err
