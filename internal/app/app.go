@@ -24,7 +24,7 @@ const (
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
 	FlagNoChown                   = "no-chown"
-	FlagReadOnlyMount             = "read-only-mount"
+	FlagReadOnlyMount             = "source-mount-read-only"
 	FlagStrategies                = "strategies"
 	FlagRsyncImage                = "rsync-image"
 	FlagSshdImage                 = "sshd-image"
@@ -105,6 +105,12 @@ func New(version string, commit string) *cli.App {
 						Value:       "",
 						DefaultText: "currently selected namespace in the source context",
 					},
+					&cli.BoolFlag{
+						Name:    FlagReadOnlyMount,
+						Aliases: []string{"R"},
+						Usage:   "Mount the source PVC in ReadOnly mode",
+						Value:   migration.DefaultReadOnlyMount,
+					},
 					&cli.StringFlag{
 						Name:        FlagDestKubeconfig,
 						Aliases:     []string{"K"},
@@ -144,12 +150,6 @@ func New(version string, commit string) *cli.App {
 						Aliases: []string{"o"},
 						Usage:   "Omit chown on rsync",
 						Value:   migration.DefaultNoChown,
-					},
-					&cli.BoolFlag{
-						Name:    FlagReadOnlyMount,
-						Aliases: []string{"R"},
-						Usage:   "Mount the PVC in ReadOnly mode",
-						Value:   migration.DefaultReadOnlyMount,
 					},
 					&cli.StringFlag{
 						Name:    FlagStrategies,
