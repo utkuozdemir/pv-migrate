@@ -130,6 +130,7 @@ OPTIONS:
    --source-kubeconfig value, -k value  Path of the kubeconfig file of the source PVC (default: ~/.kube/config or KUBECONFIG env variable)
    --source-context value, -c value     Context in the kubeconfig file of the source PVC (default: currently selected context in the source kubeconfig)
    --source-namespace value, -n value   Namespace of the source PVC (default: currently selected namespace in the source context)
+   --source-mount-read-only, -R         Mount the source PVC in ReadOnly mode (default: true)
    --dest-kubeconfig value, -K value    Path of the kubeconfig file of the destination PVC (default: ~/.kube/config or KUBECONFIG env variable)
    --dest-context value, -C value       Context in the kubeconfig file of the destination PVC (default: currently selected context in the destination kubeconfig)
    --dest-namespace value, -N value     Namespace of the destination PVC (default: currently selected namespace in the destination context)
