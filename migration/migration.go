@@ -13,6 +13,7 @@ type PVC struct {
 	Context        string
 	Namespace      string
 	Name           string
+	Path           string
 }
 
 type Migration struct {
