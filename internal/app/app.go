@@ -18,9 +18,11 @@ const (
 	FlagSourceKubeconfig          = "source-kubeconfig"
 	FlagSourceContext             = "source-context"
 	FlagSourceNamespace           = "source-namespace"
+	FlagSourcePath                = "source-path"
 	FlagDestKubeconfig            = "dest-kubeconfig"
 	FlagDestContext               = "dest-context"
 	FlagDestNamespace             = "dest-namespace"
+	FlagDestPath                  = "dest-path"
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
 	FlagNoChown                   = "no-chown"
@@ -49,6 +51,7 @@ func New(version string, commit string) *cli.App {
 						Context:        c.String(FlagSourceContext),
 						Namespace:      c.String(FlagSourceNamespace),
 						Name:           c.Args().Get(0),
+						Path:           c.String(FlagSourcePath),
 					}
 
 					d := migration.PVC{
@@ -56,6 +59,7 @@ func New(version string, commit string) *cli.App {
 						Context:        c.String(FlagDestContext),
 						Namespace:      c.String(FlagDestNamespace),
 						Name:           c.Args().Get(1),
+						Path:           c.String(FlagDestPath),
 					}
 
 					opts := migration.Options{
@@ -105,6 +109,12 @@ func New(version string, commit string) *cli.App {
 						Value:       "",
 						DefaultText: "currently selected namespace in the source context",
 					},
+					&cli.StringFlag{
+						Name:    FlagSourcePath,
+						Aliases: []string{"p"},
+						Usage:   "The filesystem path to migrate in the the source PVC",
+						Value:   "/",
+					},
 					&cli.BoolFlag{
 						Name:    FlagSourceMountReadOnly,
 						Aliases: []string{"R"},
@@ -132,6 +142,12 @@ func New(version string, commit string) *cli.App {
 						Usage:       "Namespace of the destination PVC",
 						Value:       "",
 						DefaultText: "currently selected namespace in the destination context",
+					},
+					&cli.StringFlag{
+						Name:    FlagDestPath,
+						Aliases: []string{"P"},
+						Usage:   "The filesystem path to migrate in the the destination PVC",
+						Value:   "/",
 					},
 					&cli.BoolFlag{
 						Name:    FlagDestDeleteExtraneousFiles,

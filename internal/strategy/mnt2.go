@@ -67,8 +67,7 @@ func buildRsyncJob(e *task.Execution, node string) (*batchv1.Job, error) {
 	m := t.Migration
 	opts := m.Options
 	rsyncScript, err := rsync.BuildRsyncScript(opts.DeleteExtraneousFiles,
-		opts.NoChown,
-		"")
+		opts.NoChown, "", m.Source.Path, m.Dest.Path)
 	if err != nil {
 		return nil, err
 	}
