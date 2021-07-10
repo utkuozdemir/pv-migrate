@@ -47,7 +47,7 @@ func tailPodLogs(logger *log.Entry, kubeClient kubernetes.Interface, namespace s
 			}
 
 			if err != nil {
-				logger.WithError(err).Errorf("Failed real from log tail stream")
+				logger.WithError(err).Errorf("Failed to read from log tail stream")
 			}
 			message := string(buf[:numBytes])
 			logger.Info(message)
