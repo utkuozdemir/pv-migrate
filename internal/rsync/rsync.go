@@ -26,8 +26,9 @@ retries={{.MaxRetries}}
 until [ "$n" -ge "$retries" ]
 do
   rsync \
-    -avzh \
-    --progress \
+    -azv \
+    --info=progress2,misc0,flist0 \
+    --no-inc-recursive \
     {{ if .DeleteExtraneousFiles -}}
     --delete \
     {{ end -}}

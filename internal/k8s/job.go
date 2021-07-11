@@ -33,15 +33,19 @@ func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interfa
 		return err
 	}
 
-	stopCh := make(chan bool)
-	go tailPodLogs(logger, kubeClient, pod.Namespace, pod.Name, stopCh)
+	err = tailLogsForProgress(logger, kubeClient, pod.Namespace, pod.Name)
+	if err != nil {
+		logger.WithError(err).Debug("Failed to tail logs for progress")
+	}
+
 	p, err := waitUntilPodIsNotRunning(kubeClient, pod.Namespace, pod.Name)
 	if err != nil {
 		return err
 	}
-	stopCh <- true
+
 	if *p != corev1.PodSucceeded {
-		return fmt.Errorf("job %s failed", job.Name)
+		err := fmt.Errorf("job %s failed", job.Name)
+		return err
 	}
 
 	return nil
