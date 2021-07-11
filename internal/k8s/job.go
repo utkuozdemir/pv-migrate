@@ -33,7 +33,7 @@ func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interfa
 		return err
 	}
 
-	err = tailLogsForProgress(logger, kubeClient, pod.Namespace, pod.Name)
+	err = tailLogsForProgress(kubeClient, pod.Namespace, pod.Name)
 	if err != nil {
 		logger.WithError(err).Debug("Failed to tail logs for progress")
 	}

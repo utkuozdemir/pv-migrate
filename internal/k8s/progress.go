@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/schollz/progressbar/v3"
-	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -19,10 +18,8 @@ var (
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
 
-func tailLogsForProgress(logger *log.Entry, kubeClient kubernetes.Interface, namespace string, pod string) error {
+func tailLogsForProgress(kubeClient kubernetes.Interface, namespace string, pod string) error {
 	defer fmt.Println()
-	logger = logger.WithFields(log.Fields{"ns": namespace, "pod": pod})
-
 	bar := progressbar.NewOptions64(
 		1,
 		progressbar.OptionEnableColorCodes(true),
