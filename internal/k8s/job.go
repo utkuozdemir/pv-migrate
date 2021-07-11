@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	"sync"
 	"time"
 )
 
@@ -33,8 +34,11 @@ func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interfa
 		return err
 	}
 
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Wait()
 	successCh := make(chan bool, 1)
-	go tryRenderProgressBarFromRsyncLogs(kubeClient, pod, successCh, logger)
+	go tryRenderProgressBarFromRsyncLogs(&wg, kubeClient, pod, successCh, logger)
 	p, err := waitUntilPodIsNotRunning(kubeClient, pod.Namespace, pod.Name)
 	if err != nil {
 		successCh <- false

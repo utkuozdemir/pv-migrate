@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,16 +20,17 @@ var (
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
 
-func tryRenderProgressBarFromRsyncLogs(kubeClient kubernetes.Interface,
+func tryRenderProgressBarFromRsyncLogs(wg *sync.WaitGroup, kubeClient kubernetes.Interface,
 	pod *corev1.Pod, successCh chan bool, logger *log.Entry) {
+	defer wg.Done()
 	err := renderProgressBarFromRsyncLogs(kubeClient, pod.Namespace, pod.Name, successCh)
 	if err != nil {
 		logger.WithError(err).Debug("Cannot tail logs to display progress")
 	}
 }
 
-func renderProgressBarFromRsyncLogs(kubeClient kubernetes.Interface,
-	namespace string, pod string, successCh <-chan bool) error {
+func renderProgressBarFromRsyncLogs(kubeClient kubernetes.Interface, namespace string,
+	pod string, successCh <-chan bool) error {
 	// probe logs to see if we can read them at all
 	_, err := getLogs(kubeClient, &namespace, &pod, nil)
 	if err != nil {
@@ -42,6 +44,7 @@ func renderProgressBarFromRsyncLogs(kubeClient kubernetes.Interface,
 		progressbar.OptionSetRenderBlankState(true),
 		progressbar.OptionFullWidth(),
 		progressbar.OptionOnCompletion(func() { fmt.Println() }),
+		progressbar.OptionSetDescription("Copying data..."),
 	)
 
 	ticker := time.NewTicker(1 * time.Second)
