@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/schollz/progressbar/v3"
+	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -18,40 +19,67 @@ var (
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
 
-func tailLogsForProgress(kubeClient kubernetes.Interface, namespace string, pod string) error {
-	defer fmt.Println()
+func tryRenderProgressBarFromRsyncLogs(kubeClient kubernetes.Interface,
+	pod *corev1.Pod, successCh chan bool, logger *log.Entry) {
+	err := renderProgressBarFromRsyncLogs(kubeClient, pod.Namespace, pod.Name, successCh)
+	if err != nil {
+		logger.WithError(err).Debug("Cannot tail logs to display progress")
+	}
+}
+
+func renderProgressBarFromRsyncLogs(kubeClient kubernetes.Interface,
+	namespace string, pod string, successCh <-chan bool) error {
+	// probe logs to see if we can read them at all
+	_, err := getLogs(kubeClient, &namespace, &pod, nil)
+	if err != nil {
+		return err
+	}
+
 	bar := progressbar.NewOptions64(
 		1,
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowBytes(true),
 		progressbar.OptionSetRenderBlankState(true),
 		progressbar.OptionFullWidth(),
+		progressbar.OptionOnCompletion(func() { fmt.Println() }),
 	)
+
+	ticker := time.NewTicker(1 * time.Second)
 	var since metav1.Time
 	for {
-		logs, err := getLogs(kubeClient, &namespace, &pod, &since)
-		if err != nil {
-			return err
-		}
-
-		pr, err := getLatestProgress(logs)
-		if err != nil {
-			return err
-		}
-
-		if pr != nil {
-			bar.ChangeMax64(pr.total)
-			err = bar.Set64(pr.transferred)
+		select {
+		case success := <-successCh:
+			if success {
+				err := bar.Finish()
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		case <-ticker.C:
+			logs, err := getLogs(kubeClient, &namespace, &pod, &since)
 			if err != nil {
 				return err
 			}
-			if pr.percentage == 100 {
-				return nil
-			}
-		}
 
-		since = metav1.Now()
-		time.Sleep(1 * time.Second)
+			pr, err := getLatestProgress(logs)
+			if err != nil {
+				return err
+			}
+
+			if pr != nil {
+				bar.ChangeMax64(pr.total)
+				err = bar.Set64(pr.transferred)
+				if err != nil {
+					return err
+				}
+				if pr.percentage == 100 {
+					return nil
+				}
+			}
+
+			since = metav1.Now()
+		}
 	}
 }
 
@@ -72,9 +100,7 @@ func getLatestProgress(logs []string) (*progress, error) {
 
 func getLogs(kubeClient kubernetes.Interface, namespace *string,
 	pod *string, since *metav1.Time) ([]string, error) {
-	podLogOptions := corev1.PodLogOptions{
-		SinceTime: since,
-	}
+	podLogOptions := corev1.PodLogOptions{SinceTime: since}
 
 	podLogRequest := kubeClient.CoreV1().Pods(*namespace).GetLogs(*pod, &podLogOptions)
 	bytes, err := podLogRequest.DoRaw(context.TODO())
