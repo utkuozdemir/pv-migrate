@@ -26,8 +26,9 @@ retries={{.MaxRetries}}
 until [ "$n" -ge "$retries" ]
 do
   rsync \
-    -avzh \
-    --progress \
+    -azv \
+    --info=progress2,misc0,flist0 \
+    --no-inc-recursive \
     {{ if .DeleteExtraneousFiles -}}
     --delete \
     {{ end -}}
@@ -36,11 +37,11 @@ do
     {{ end -}}
     {{ if .SshTargetHost -}}
     -e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout={{.SshConnectTimeoutSecs}}" \
-    root@{{.SshTargetHost}}:/source/ \
+    root@{{.SshTargetHost}}:/source/{{.SourcePath}} \
     {{ else -}}
-    /source/ \
+    /source/{{.SourcePath}} \
     {{ end -}}
-    /dest/ && \
+    /dest/{{.DestPath}} && \
     rc=0 && \
     break
   n=$((n+1))
@@ -61,9 +62,12 @@ type script struct {
 	SshTargetHost         string
 	SshConnectTimeoutSecs int
 	RetryIntervalSecs     int
+	SourcePath            string
+	DestPath              string
 }
 
-func BuildRsyncScript(deleteExtraneousFiles bool, noChown bool, sshTargetHost string) (string, error) {
+func BuildRsyncScript(deleteExtraneousFiles bool, noChown bool,
+	sshTargetHost string, sourcePath string, destPath string) (string, error) {
 	s := script{
 		MaxRetries:            maxRetries,
 		DeleteExtraneousFiles: deleteExtraneousFiles,
@@ -71,6 +75,8 @@ func BuildRsyncScript(deleteExtraneousFiles bool, noChown bool, sshTargetHost st
 		SshTargetHost:         sshTargetHost,
 		SshConnectTimeoutSecs: sshConnectTimeoutSecs,
 		RetryIntervalSecs:     retryIntervalSecs,
+		SourcePath:            sourcePath,
+		DestPath:              destPath,
 	}
 
 	var templatedScript bytes.Buffer
@@ -101,7 +107,8 @@ func createRsyncPrivateKeySecret(instanceId string, pvcInfo *pvc.Info, privateKe
 	return secrets.Create(context.TODO(), &secret, metav1.CreateOptions{})
 }
 
-func buildRsyncJobDest(e *task.Execution, targetHost string, privateKeySecretName string) (*batchv1.Job, error) {
+func buildRsyncJobDest(e *task.Execution, targetHost string, privateKeySecretName string,
+	sourcePath string, destPath string) (*batchv1.Job, error) {
 	t := e.Task
 	jobTTLSeconds := int32(600)
 	backoffLimit := int32(0)
@@ -111,7 +118,7 @@ func buildRsyncJobDest(e *task.Execution, targetHost string, privateKeySecretNam
 
 	opts := t.Migration.Options
 	rsyncScript, err := BuildRsyncScript(opts.DeleteExtraneousFiles,
-		opts.NoChown, targetHost)
+		opts.NoChown, targetHost, sourcePath, destPath)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +233,8 @@ func RunRsyncJobOverSSH(e *task.Execution, serviceType corev1.ServiceType) error
 	}
 
 	logger.WithField("targetHost", targetHost).Info("Connecting to the rsync server")
-	rsyncJob, err := buildRsyncJobDest(e, targetHost, secret.Name)
+	m := e.Task.Migration
+	rsyncJob, err := buildRsyncJobDest(e, targetHost, secret.Name, m.Source.Path, m.Dest.Path)
 	if err != nil {
 		return err
 	}
