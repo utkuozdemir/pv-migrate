@@ -26,6 +26,8 @@ but they also store data in the underlying storage backend.
 
 In these cases, moving the data stored in the PVC can become a problem, making migrations more difficult.
 
+![pv-migrate demo GIF](img/demo.gif)
+
 ## Use Cases
 
 - **Case 1:** You have a database that has a PersistentVolumeClaim `db-data` of size `50Gi`.
