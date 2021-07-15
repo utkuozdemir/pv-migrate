@@ -2,6 +2,7 @@ package integrationtest
 
 import (
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/app"
 	"io/ioutil"
@@ -58,7 +59,7 @@ func TestSameNS(t *testing.T) {
 	assert.NoError(t, err)
 	destNs := sourceNs
 
-	cliApp := app.New(nil, "", "")
+	cliApp := app.New(log.New(), "", "")
 	args := []string{
 		os.Args[0], migrateCommand,
 		sourceKubeconfigParamKey, ctx.kubeconfig,
@@ -106,7 +107,7 @@ func TestNoChown(t *testing.T) {
 	assert.NoError(t, err)
 	destNs := sourceNs
 
-	cliApp := app.New(nil, "", "")
+	cliApp := app.New(log.New(), "", "")
 	args := []string{
 		os.Args[0], migrateCommand,
 		sourceKubeconfigParamKey, ctx.kubeconfig,
@@ -155,7 +156,7 @@ func TestSameNSDeleteExtraneousFiles(t *testing.T) {
 	assert.NoError(t, err)
 	destNs := sourceNs
 
-	cliApp := app.New(nil, "", "")
+	cliApp := app.New(log.New(), "", "")
 	args := []string{
 		os.Args[0], migrateCommand,
 		sourceKubeconfigParamKey, ctx.kubeconfig,
@@ -196,7 +197,7 @@ func TestMountedError(t *testing.T) {
 	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
 	assert.NoError(t, err)
 	destNs := sourceNs
-	cliApp := app.New(nil, "", "")
+	cliApp := app.New(log.New(), "", "")
 	args := []string{
 		os.Args[0], migrateCommand,
 		sourceKubeconfigParamKey, ctx.kubeconfig,
@@ -226,7 +227,7 @@ func TestIgnoreMounted(t *testing.T) {
 	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
 	assert.NoError(t, err)
 	destNs := sourceNs
-	cliApp := app.New(nil, "", "")
+	cliApp := app.New(log.New(), "", "")
 	args := []string{
 		os.Args[0], migrateCommand,
 		sourceKubeconfigParamKey, ctx.kubeconfig,
@@ -261,7 +262,7 @@ func TestDifferentNS(t *testing.T) {
 	assert.NoError(t, err)
 	destNs, dest, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
-	cliApp := app.New(nil, "", "")
+	cliApp := app.New(log.New(), "", "")
 
 	args := []string{
 		os.Args[0], migrateCommand,
@@ -295,7 +296,7 @@ func TestDifferentNSRSA(t *testing.T) {
 	assert.NoError(t, err)
 	destNs, dest, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
-	cliApp := app.New(nil, "", "")
+	cliApp := app.New(log.New(), "", "")
 
 	args := []string{
 		os.Args[0], migrateCommand,
@@ -338,7 +339,7 @@ func TestDifferentCluster(t *testing.T) {
 	_ = ioutil.WriteFile(kubeconfigCopy, kubeconfigBytes, 0600)
 	defer func() { _ = os.Remove(kubeconfigCopy) }()
 
-	cliApp := app.New(nil, "", "")
+	cliApp := app.New(log.New(), "", "")
 
 	args := []string{
 		os.Args[0], migrateCommand,
