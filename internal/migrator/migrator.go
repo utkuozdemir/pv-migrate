@@ -115,7 +115,7 @@ func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
 		return nil, err
 	}
 
-	logger := log.WithFields(log.Fields{
+	logger := mig.Logger.WithFields(log.Fields{
 		"source_ns": source.Namespace,
 		"source":    source.Name,
 		"dest_ns":   dest.Namespace,

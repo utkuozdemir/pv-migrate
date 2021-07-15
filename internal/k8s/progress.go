@@ -6,6 +6,7 @@ import (
 	"github.com/kyokomi/emoji/v2"
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
+	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -21,16 +22,58 @@ var (
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
 
-func tryRenderProgressBarFromRsyncLogs(wg *sync.WaitGroup, kubeClient kubernetes.Interface,
+func tryLogProgressFromRsyncLogs(wg *sync.WaitGroup, kubeClient kubernetes.Interface,
 	pod *corev1.Pod, successCh chan bool, logger *log.Entry) {
 	defer wg.Done()
-	err := renderProgressBarFromRsyncLogs(kubeClient, pod.Namespace, pod.Name, successCh)
+
+	var err error
+	logfmt := logger.Context.Value(applog.LogFormatContextKey)
+	switch logfmt {
+	case applog.LogFormatFancy:
+		err = drawProgressBarFromRsyncLogs(kubeClient, pod.Namespace, pod.Name, successCh)
+	default:
+		err = tailPodLogs(logger, kubeClient, pod.Namespace, pod.Name, successCh)
+	}
+
 	if err != nil {
-		logger.WithError(err).Debug("Cannot tail logs to display progress")
+		logger.WithError(err).Warn(":warn: Cannot tail logs to display progress")
 	}
 }
 
-func renderProgressBarFromRsyncLogs(kubeClient kubernetes.Interface, namespace string,
+func tailPodLogs(logger *log.Entry, kubeClient kubernetes.Interface,
+	namespace string, pod string, successCh <-chan bool) error {
+	ticker := time.NewTicker(1 * time.Second)
+	var since metav1.Time
+	for {
+		select {
+		case success := <-successCh:
+			if success {
+				return logPodLogs(logger, kubeClient, &namespace, &pod, &since)
+			}
+			return nil
+		case <-ticker.C:
+			err := logPodLogs(logger, kubeClient, &namespace, &pod, &since)
+			if err != nil {
+				return err
+			}
+			since = metav1.Now()
+		}
+	}
+}
+
+func logPodLogs(logger *log.Entry, kubeClient kubernetes.Interface,
+	namespace *string, pod *string, since *metav1.Time) error {
+	logs, err := getLogs(kubeClient, namespace, pod, since)
+	if err != nil {
+		return err
+	}
+	for _, l := range logs {
+		logger.Debug(l)
+	}
+	return nil
+}
+
+func drawProgressBarFromRsyncLogs(kubeClient kubernetes.Interface, namespace string,
 	pod string, successCh <-chan bool) error {
 	// probe logs to see if we can read them at all
 	_, err := getLogs(kubeClient, &namespace, &pod, nil)

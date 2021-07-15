@@ -1,5 +1,9 @@
 package migration
 
+import (
+	log "github.com/sirupsen/logrus"
+)
+
 const (
 	DefaultRsyncImage          = "docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-20210522"
 	DefaultSshdImage           = "docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522"
@@ -23,6 +27,7 @@ type Migration struct {
 	Strategies []string
 	RsyncImage string
 	SshdImage  string
+	Logger     *log.Entry
 }
 
 type Options struct {
