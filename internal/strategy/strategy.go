@@ -53,7 +53,7 @@ func registerCleanupHook(e *task.Execution) chan<- bool {
 	go func() {
 		select {
 		case <-signalCh:
-			e.Logger.Warn("Received termination signal")
+			e.Logger.Warn(":warn: Received termination signal")
 			cleanup(e)
 			os.Exit(1)
 		case <-doneCh:
@@ -71,7 +71,7 @@ func cleanupAndReleaseHook(e *task.Execution, doneCh chan<- bool) {
 func cleanup(e *task.Execution) {
 	t := e.Task
 	logger := e.Logger
-	logger.Info("Cleaning up")
+	logger.Info(":broom: Cleaning up")
 	var result *multierror.Error
 	s := t.SourceInfo
 	err := k8s.CleanupForID(s.KubeClient, s.Claim.Namespace, e.ID)
@@ -87,8 +87,10 @@ func cleanup(e *task.Execution) {
 	//goland:noinspection GoNilness
 	err = result.ErrorOrNil()
 	if err != nil {
-		logger.WithError(err).Warn("Cleanup failed, you might want to clean up manually")
-	} else {
-		logger.Info("Cleanup successful")
+		logger.WithError(err).
+			Warn(":warn: Cleanup failed, you might want to clean up manually")
+		return
 	}
+
+	logger.Info(":sparkles: Cleanup successful")
 }

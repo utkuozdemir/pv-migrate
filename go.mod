@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/kyokomi/emoji/v2 v2.2.8
 	github.com/schollz/progressbar/v3 v3.8.2
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0

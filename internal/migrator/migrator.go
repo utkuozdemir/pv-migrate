@@ -41,9 +41,11 @@ func (m *migrator) Run(mig *migration.Migration) error {
 		return err
 	}
 
+	strs := strings.Join(mig.Strategies, ",")
 	t.Logger.
-		WithField("strategies", strings.Join(mig.Strategies, ",")).
-		Infof("Will attempt %v strategies", len(nameToStrategyMap))
+		WithField("strategies", strs).
+		Infof(":thought_balloon: Will attempt %v strategies: %s",
+			len(nameToStrategyMap), strs)
 
 	for _, name := range mig.Strategies {
 		id := util.RandomHexadecimalString(5)
@@ -54,21 +56,23 @@ func (m *migrator) Run(mig *migration.Migration) error {
 		}
 
 		sLogger := e.Logger.WithField("strategy", name)
-		sLogger.Info("Attempting strategy")
+		sLogger.Infof(":helicopter: Attempting strategy: %s", name)
 		s := nameToStrategyMap[name]
 		accepted, runErr := s.Run(&e)
 		if !accepted {
-			sLogger.Info("Strategy cannot handle this migration, will try the next one")
+			sLogger.Infof(":fox: Strategy '%s' cannot handle this migration, "+
+				"will try the next one", name)
 			continue
 		}
 
 		if runErr == nil {
-			sLogger.Info("Migration succeeded")
+			sLogger.Info(":check_mark_button: Migration succeeded")
 			return nil
 		}
 
 		sLogger.WithError(runErr).
-			Warn("Migration failed with this strategy, will try with the remaining strategies")
+			Warn(":warning: Migration failed with this strategy, " +
+				"will try with the remaining strategies")
 	}
 
 	return errors.New("all strategies have failed")
@@ -148,7 +152,8 @@ func handleMounted(logger *log.Entry, info *pvc.Info, ignoreMounted bool) error 
 	}
 
 	if ignoreMounted {
-		logger.Infof("PVC %s is mounted to node %s, ignoring...", info.Claim.Name, info.MountedNode)
+		logger.Infof(":bulb: PVC %s is mounted to node %s, ignoring...",
+			info.Claim.Name, info.MountedNode)
 		return nil
 	}
 	return fmt.Errorf("PVC %s is mounted to node %s and ignore-mounted is not requested",

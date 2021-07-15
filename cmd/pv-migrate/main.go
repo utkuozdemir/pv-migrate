@@ -31,6 +31,6 @@ func main() {
 	cliApp := app.New(version, commit)
 	err := cliApp.Run(os.Args)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatalf(":cross_mark: Error: %s", err.Error())
 	}
 }

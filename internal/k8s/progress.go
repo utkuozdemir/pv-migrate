@@ -3,6 +3,7 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"github.com/kyokomi/emoji/v2"
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
@@ -44,7 +45,7 @@ func renderProgressBarFromRsyncLogs(kubeClient kubernetes.Interface, namespace s
 		progressbar.OptionSetRenderBlankState(true),
 		progressbar.OptionFullWidth(),
 		progressbar.OptionOnCompletion(func() { fmt.Println() }),
-		progressbar.OptionSetDescription("Copying data..."),
+		progressbar.OptionSetDescription(emoji.Sprint(":open_file_folder: Copying data...")),
 	)
 
 	ticker := time.NewTicker(1 * time.Second)
