@@ -8,6 +8,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/migration"
+	"os"
 	"strings"
 )
 
@@ -15,6 +16,8 @@ const (
 	authorName                    = "Utku Ozdemir"
 	authorEmail                   = "uoz@protonmail.com"
 	CommandMigrate                = "migrate"
+	FlagLogLevel                  = "log-level"
+	FlagLogFormat                 = "log-format"
 	FlagSourceKubeconfig          = "source-kubeconfig"
 	FlagSourceContext             = "source-context"
 	FlagSourceNamespace           = "source-namespace"
@@ -80,8 +83,10 @@ func New(version string, commit string) *cli.App {
 						SshdImage:  c.String(FlagSshdImage),
 					}
 
+					log.Info(":rocket: Starting migration")
 					if opts.DeleteExtraneousFiles {
-						log.Info("Extraneous files will be deleted from the destination")
+						log.Info(":white_exclamation_mark: " +
+							"Extraneous files will be deleted from the destination")
 					}
 
 					return engine.New().Run(&m)
@@ -194,11 +199,38 @@ func New(version string, commit string) *cli.App {
 				},
 			},
 		},
+		Flags: []cli.Flag{
+			cli.HelpFlag,
+			cli.VersionFlag,
+			&cli.StringFlag{
+				Name:    FlagLogLevel,
+				Aliases: []string{"l"},
+				Usage: fmt.Sprintf("Log level. Must be one of: %s",
+					strings.Join(logLevels, ", ")),
+				Value: "info",
+			},
+			&cli.StringFlag{
+				Name:    FlagLogFormat,
+				Aliases: []string{"f"},
+				Usage: fmt.Sprintf("Log format. Must be one of: %s",
+					strings.Join(logFormats, ", ")),
+				Value: logFormatFancy,
+			},
+		},
+		Before: func(c *cli.Context) error {
+			l := c.String(FlagLogLevel)
+			f := c.String(FlagLogFormat)
+			return configureLogging(l, f)
+		},
 		Authors: []*cli.Author{
 			{
 				Name:  authorName,
 				Email: authorEmail,
 			},
+		},
+		CommandNotFound: func(c *cli.Context, s string) {
+			log.Errorf(":cross_mark: Error: no help topic for '%s'", s)
+			os.Exit(3)
 		},
 	}
 }
