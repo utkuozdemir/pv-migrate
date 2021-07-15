@@ -109,7 +109,8 @@ USAGE:
    pv-migrate [global options] command [command options] [arguments...]
 
 COMMANDS:
-   migrate, m  Migrate data from the source pvc to the destination pvc
+   completion  Output shell completion code for the specified shell (bash or zsh)
+   migrate, m  Migrate data from the source PVC to the destination PVC
    help, h     Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -183,6 +184,22 @@ pv-migrate migrate \
 **Note:** For it to run as kubectl plugin via `kubectl pv-migrate ...`, 
 put the binary with name `kubectl-pv_migrate` under your `PATH`.
 
-# Contributing
+## Shell Completion
+
+`pv-migrate` supports limited shell completion at the moment. `bash` and `zsh` are supported.
+
+To enable it, source the completion script in your shell configuration file:
+
+For bash:
+```bash
+echo 'source <(pv-migrate completion bash)' >> ~/.bashrc
+```
+
+For zsh:
+```zsh
+echo 'source <(pv-migrate completion zsh)' >> ~/.zshrc
+```
+
+## Contributing
 
 See [CONTRIBUTING](CONTRIBUTING.md) for details.
