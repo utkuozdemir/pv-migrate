@@ -26,8 +26,6 @@ but they also store data in the underlying storage backend.
 
 In these cases, moving the data stored in the PVC can become a problem, making migrations more difficult.
 
-![pv-migrate demo GIF](img/demo.gif)
-
 ## Use Cases
 
 - **Case 1:** You have a database that has a PersistentVolumeClaim `db-data` of size `50Gi`.
@@ -47,7 +45,7 @@ Simply create the PVC with the same name and manifest in `ns-b` and use `pv-migr
 from one Kubernetes cluster to the other.  
 Both clusters have internet access and the source cluster supports `LoadBalancer` type services with public IPs.  
 Just use `pv-migrate` to clone the data **securely over the internet**.
-  
+
 ## Highlights
 
 - Supports in-namespace, in-cluster as well as cross-cluster migrations
@@ -57,6 +55,10 @@ Just use `pv-migrate` to clone the data **securely over the internet**.
 - Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed
 - Customizable strategy order
 - Supports arm32v7 (Raspberry Pi etc.) and arm64 architectures as well as amd64
+
+## Demo
+
+![pv-migrate demo GIF](img/demo.gif)
 
 ## Installation
 
