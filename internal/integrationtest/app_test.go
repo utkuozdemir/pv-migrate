@@ -61,7 +61,10 @@ func TestSameNS(t *testing.T) {
 
 	cliApp := app.New(log.New(), "", "")
 	args := []string{
-		os.Args[0], migrateCommand,
+		os.Args[0],
+		"--log-level", "debug",
+		"--log-format", "json",
+		migrateCommand,
 		sourceKubeconfigParamKey, ctx.kubeconfig,
 		sourceNsParamKey, sourceNs,
 		destKubeconfigParamKey, ctx.kubeconfig,
