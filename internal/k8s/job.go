@@ -38,7 +38,13 @@ func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interfa
 	wg.Add(1)
 	defer wg.Wait()
 	successCh := make(chan bool, 1)
-	go tryRenderProgressBarFromRsyncLogs(&wg, kubeClient, pod, successCh, logger)
+
+	//logfmt := logger.Context.Value("log-format")
+	//if logfmt ==  {
+	//
+	//}
+
+	go tryLogProgressFromRsyncLogs(&wg, kubeClient, pod, successCh, logger)
 	p, err := waitUntilPodIsNotRunning(kubeClient, pod.Namespace, pod.Name)
 	if err != nil {
 		successCh <- false

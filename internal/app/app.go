@@ -1,20 +1,27 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/urfave/cli/v2"
 	"github.com/utkuozdemir/pv-migrate/engine"
+	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/migration"
+	"os"
 	"strings"
 )
+
+type cliAppContextKey string
 
 const (
 	authorName                    = "Utku Ozdemir"
 	authorEmail                   = "uoz@protonmail.com"
 	CommandMigrate                = "migrate"
+	FlagLogLevel                  = "log-level"
+	FlagLogFormat                 = "log-format"
 	FlagSourceKubeconfig          = "source-kubeconfig"
 	FlagSourceContext             = "source-context"
 	FlagSourceNamespace           = "source-namespace"
@@ -31,9 +38,11 @@ const (
 	FlagRsyncImage                = "rsync-image"
 	FlagSshdImage                 = "sshd-image"
 	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
+
+	loggerContextKey cliAppContextKey = "logger"
 )
 
-func New(version string, commit string) *cli.App {
+func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 	sshKeyAlgs := strings.Join(rsync.SSHKeyAlgorithms, ",")
 	return &cli.App{
 		Name:    "pv-migrate",
@@ -46,6 +55,8 @@ func New(version string, commit string) *cli.App {
 				Aliases:   []string{"m"},
 				ArgsUsage: "[SOURCE_PVC] [DESTINATION_PVC]",
 				Action: func(c *cli.Context) error {
+					logger := extractLogger(c.Context)
+
 					s := migration.PVC{
 						KubeconfigPath: c.String(FlagSourceKubeconfig),
 						Context:        c.String(FlagSourceContext),
@@ -78,10 +89,13 @@ func New(version string, commit string) *cli.App {
 						Strategies: strategies,
 						RsyncImage: c.String(FlagRsyncImage),
 						SshdImage:  c.String(FlagSshdImage),
+						Logger:     logger,
 					}
 
+					logger.Info(":rocket: Starting migration")
 					if opts.DeleteExtraneousFiles {
-						log.Info("Extraneous files will be deleted from the destination")
+						logger.Info(":white_exclamation_mark: " +
+							"Extraneous files will be deleted from the destination")
 					}
 
 					return engine.New().Run(&m)
@@ -194,11 +208,50 @@ func New(version string, commit string) *cli.App {
 				},
 			},
 		},
+		Flags: []cli.Flag{
+			cli.HelpFlag,
+			cli.VersionFlag,
+			&cli.StringFlag{
+				Name:    FlagLogLevel,
+				Aliases: []string{"l"},
+				Usage: fmt.Sprintf("Log level. Must be one of: %s",
+					strings.Join(applog.LogLevels, ", ")),
+				Value: "info",
+			},
+			&cli.StringFlag{
+				Name:    FlagLogFormat,
+				Aliases: []string{"f"},
+				Usage: fmt.Sprintf("Log format. Must be one of: %s",
+					strings.Join(applog.LogFormats, ", ")),
+				Value: applog.LogFormatFancy,
+			},
+		},
+		Before: func(c *cli.Context) error {
+			l := c.String(FlagLogLevel)
+			f := c.String(FlagLogFormat)
+			entry, err := applog.BuildLogger(rootLogger, l, f)
+			if err != nil {
+				return err
+			}
+
+			ctx := c.Context
+			c.Context = context.WithValue(ctx, loggerContextKey, entry)
+			return nil
+		},
 		Authors: []*cli.Author{
 			{
 				Name:  authorName,
 				Email: authorEmail,
 			},
 		},
+		CommandNotFound: func(c *cli.Context, s string) {
+			logger := extractLogger(c.Context)
+			logger.Errorf(":cross_mark: Error: no help topic for '%s'", s)
+			os.Exit(3)
+		},
 	}
+}
+
+func extractLogger(c context.Context) *log.Entry {
+	return c.Value(loggerContextKey).(*log.Entry)
 }

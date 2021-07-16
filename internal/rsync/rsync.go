@@ -199,13 +199,13 @@ func RunRsyncJobOverSSH(e *task.Execution, serviceType corev1.ServiceType) error
 	sourceKubeClient := s.KubeClient
 	destKubeClient := d.KubeClient
 
-	logger.Info("Generating SSH key pair")
+	logger.Info(":key: Generating SSH key pair")
 	publicKey, privateKey, err := CreateSSHKeyPair(t.Migration.Options.KeyAlgorithm)
 	if err != nil {
 		return err
 	}
 
-	logger.Info("Creating secret for the public key")
+	logger.Info(":key: Creating secret for the public key")
 	secret, err := createSshdPublicKeySecret(instanceId, s, publicKey)
 	if err != nil {
 		return err
@@ -226,13 +226,14 @@ func RunRsyncJobOverSSH(e *task.Execution, serviceType corev1.ServiceType) error
 		return err
 	}
 
-	logger.Info("Creating secret for the private key")
+	logger.Info(":key: Creating secret for the private key")
 	secret, err = createRsyncPrivateKeySecret(instanceId, d, privateKey)
 	if err != nil {
 		return err
 	}
 
-	logger.WithField("targetHost", targetHost).Info("Connecting to the rsync server")
+	logger.WithField("targetHost", targetHost).
+		Info(":link: Connecting to the rsync server")
 	m := e.Task.Migration
 	rsyncJob, err := buildRsyncJobDest(e, targetHost, secret.Name, m.Source.Path, m.Dest.Path)
 	if err != nil {

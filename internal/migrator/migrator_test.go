@@ -1,6 +1,7 @@
 package migrator
 
 import (
+	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
@@ -113,6 +114,7 @@ func buildMigrationWithStrategies(strategies []string, options *migration.Option
 		Strategies: strategies,
 		RsyncImage: migration.DefaultRsyncImage,
 		SshdImage:  migration.DefaultSshdImage,
+		Logger:     log.NewEntry(log.New()),
 	}
 }
 

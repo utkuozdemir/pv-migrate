@@ -59,11 +59,11 @@ func CreateSshdPodWaitTillRunning(logger *log.Entry, kubeClient kubernetes.Inter
 				if newPod.Namespace == pod.Namespace && newPod.Name == pod.Name {
 					switch newPod.Status.Phase {
 					case corev1.PodRunning:
-						logger.Info("Sshd pod running")
+						logger.Info(":rocket: Sshd pod started")
 						running <- true
 
 					case corev1.PodFailed, corev1.PodUnknown:
-						logger.Error("Sshd pod failed")
+						logger.Error(":cross_mark: Sshd pod failed")
 						running <- false
 					}
 				}
@@ -72,13 +72,13 @@ func CreateSshdPodWaitTillRunning(logger *log.Entry, kubeClient kubernetes.Inter
 	)
 	sharedInformerFactory.Start(stopCh)
 
-	logger.Info("Creating sshd pod")
+	logger.Info(":rocket: Creating sshd pod")
 	_, err := kubeClient.CoreV1().Pods(pod.Namespace).Create(context.TODO(), pod, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
 
-	logger.Info("Waiting for the sshd pod to start running")
+	logger.Info(":hourglass_not_done: Waiting for the sshd pod to start running")
 	if !<-running {
 		return errors.New("sshd pod failed to start")
 	}

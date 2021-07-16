@@ -28,9 +28,10 @@ func init() {
 }
 
 func main() {
-	cliApp := app.New(version, commit)
+	rootLogger := log.New()
+	cliApp := app.New(rootLogger, version, commit)
 	err := cliApp.Run(os.Args)
 	if err != nil {
-		log.Fatal(err.Error())
+		rootLogger.Fatalf(":cross_mark: Error: %s", err.Error())
 	}
 }
