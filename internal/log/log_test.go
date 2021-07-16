@@ -16,12 +16,6 @@ func TestBuildLoggerJson(t *testing.T) {
 	l, err := BuildLogger(logrus.New(), "info", "json")
 	assert.NoError(t, err)
 	assert.Equal(t, logrus.InfoLevel, l.Logger.Level)
-
-	l, err = BuildLogger(logrus.New(), "invalid", "json")
-	assert.Error(t, err)
-
-	l, err = BuildLogger(logrus.New(), "debug", "invalid")
-	assert.Error(t, err)
 }
 
 func TestBuildInvalidLevel(t *testing.T) {
