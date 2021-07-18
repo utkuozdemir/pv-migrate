@@ -119,6 +119,8 @@ COMMANDS:
 GLOBAL OPTIONS:
    --help, -h     show help (default: false)
    --version, -v  print the version (default: false)
+   --log-level value, -l value   Log level. Must be one of: trace, debug, info, warn, error, fatal, panic (default: "info")
+   --log-format value, -f value  Log format. Must be one of: json, fancy (default: "fancy")
 ```
 
 
