@@ -23,7 +23,7 @@ on:
       - "renovate.json"
 jobs:
   pre_job:
-    continue-on-error: true # Uncomment once integration is finished
+    continue-on-error: true
     runs-on: ubuntu-20.04
     outputs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
