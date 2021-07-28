@@ -4,13 +4,5 @@
   ],
   "postUpdateOptions": [
     "gomodTidy"
-  ],
-  "packageRules": [
-    {
-      "groupName": "github-actions",
-      "matchFiles": [
-        "^(workflow-templates|\\.github\\/workflows)\\/[^/]+\\.ya?ml$"
-      ]
-    }
   ]
 }
