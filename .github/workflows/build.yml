@@ -65,7 +65,7 @@ jobs:
         with:
           path-to-profile: profile.cov
       - name: Build with Goreleaser
-        uses: goreleaser/goreleaser-action@v2.4.1
+        uses: goreleaser/goreleaser-action@v2.7.0
         with:
           version: v0.161.1
           args: release --snapshot --skip-publish --rm-dist
