@@ -1,4 +1,4 @@
-FROM alpine:3
+FROM alpine:20210212
 
 RUN apk add --no-cache rsync openssh openssh-server-pam tini && ssh-keygen -A
 
