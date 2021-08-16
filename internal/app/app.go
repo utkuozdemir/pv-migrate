@@ -36,7 +36,9 @@ const (
 	FlagSourceMountReadOnly       = "source-mount-read-only"
 	FlagStrategies                = "strategies"
 	FlagRsyncImage                = "rsync-image"
+	FlagRsyncServiceAccount       = "rsync-service-account"
 	FlagSshdImage                 = "sshd-image"
+	FlagSshdServiceAccount        = "sshd-service-account"
 	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
 
 	loggerContextKey cliAppContextKey = "logger"
@@ -83,13 +85,15 @@ func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 
 					strategies := strings.Split(c.String(FlagStrategies), ",")
 					m := migration.Migration{
-						Source:     &s,
-						Dest:       &d,
-						Options:    &opts,
-						Strategies: strategies,
-						RsyncImage: c.String(FlagRsyncImage),
-						SshdImage:  c.String(FlagSshdImage),
-						Logger:     logger,
+						Source:              &s,
+						Dest:                &d,
+						Options:             &opts,
+						Strategies:          strategies,
+						RsyncImage:          c.String(FlagRsyncImage),
+						RsyncServiceAccount: c.String(FlagRsyncServiceAccount),
+						SshdImage:           c.String(FlagSshdImage),
+						SshdServiceAccount:  c.String(FlagSshdServiceAccount),
+						Logger:              logger,
 					}
 
 					logger.Info(":rocket: Starting migration")
@@ -194,10 +198,20 @@ func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 						Value:   migration.DefaultRsyncImage,
 					},
 					&cli.StringFlag{
+						Name:  FlagRsyncServiceAccount,
+						Usage: "Service account for the rsync pod",
+						Value: migration.DefaultRsyncServiceAccount,
+					},
+					&cli.StringFlag{
 						Name:    FlagSshdImage,
 						Aliases: []string{"S"},
 						Usage:   "Image to use for running sshd server",
 						Value:   migration.DefaultSshdImage,
+					},
+					&cli.StringFlag{
+						Name:  FlagSshdServiceAccount,
+						Usage: "Service account for the sshd pod",
+						Value: migration.DefaultSshdServiceAccount,
 					},
 					&cli.StringFlag{
 						Name:    FlagSSHKeyAlgorithm,

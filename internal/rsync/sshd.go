@@ -106,7 +106,7 @@ func createSshdPublicKeySecret(instanceId string, sourcePvcInfo *pvc.Info, publi
 }
 
 func PrepareSshdPod(instanceId string, sourcePvcInfo *pvc.Info, publicKeySecretName string,
-	sshdImage string, mountReadOnly bool) *corev1.Pod {
+	sshdImage string, sshdServiceAccount string, mountReadOnly bool) *corev1.Pod {
 	podName := "pv-migrate-sshd-" + instanceId
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -163,7 +163,8 @@ func PrepareSshdPod(instanceId string, sourcePvcInfo *pvc.Info, publicKeySecretN
 					},
 				},
 			},
-			NodeName: sourcePvcInfo.MountedNode,
+			NodeName:           sourcePvcInfo.MountedNode,
+			ServiceAccountName: sshdServiceAccount,
 		},
 	}
 }
