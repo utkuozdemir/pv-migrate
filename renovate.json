@@ -11,6 +11,12 @@
         "go"
       ],
       "groupName": "go packages"
+    },
+    {
+      "matchPaths": [
+        ".github/workflows/**"
+      ],
+      "groupName": "github actions"
     }
   ]
 }
