@@ -52,7 +52,7 @@ jobs:
         uses: golangci/golangci-lint-action@v2.5.2
         with:
           # renovate: golangci-lint
-          version: v1.41.0
+          version: v1.42.0
           skip-go-installation: true
           args: --timeout=3m0s
       - name: Install go-acc
@@ -69,7 +69,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v2.7.0
         with:
           # renovate: goreleaser
-          version: v0.175.0
+          version: v0.176.0
           args: release --snapshot --skip-publish --rm-dist
         env:
           PRIVATE_ACCESS_TOKEN: placeholder
