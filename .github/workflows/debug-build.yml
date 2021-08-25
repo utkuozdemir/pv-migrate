@@ -30,6 +30,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v2.1.4
         with:
+          # renovate: go
           go-version: 1.17
       - name: Install go-acc
         run: go install github.com/ory/go-acc@v0.2.6
