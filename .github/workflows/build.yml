@@ -57,6 +57,7 @@ jobs:
           skip-go-installation: true
           args: --timeout=3m0s
       - name: Install go-acc
+        # renovate: go-acc
         run: go install github.com/ory/go-acc@v0.2.6
       - name: Set nf_conntrack_max for kind
         run: sudo sysctl net/netfilter/nf_conntrack_max=131072
