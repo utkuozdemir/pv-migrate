@@ -68,7 +68,8 @@ jobs:
       - name: Build with Goreleaser
         uses: goreleaser/goreleaser-action@v2.7.0
         with:
-          version: v0.176.0
+          # renovate: goreleaser
+          version: v0.175.0
           args: release --snapshot --skip-publish --rm-dist
         env:
           PRIVATE_ACCESS_TOKEN: placeholder

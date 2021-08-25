@@ -33,6 +33,17 @@
       "depNameTemplate": "golangci/golangci-lint",
       "datasourceTemplate": "github-tags",
       "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": [
+        "\\.github\\/workflows\\/.*"
+      ],
+      "matchStrings": [
+        "# renovate: goreleaser\\s+version: (?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)"
+      ],
+      "depNameTemplate": "goreleaser/goreleaser",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "semver"
     }
   ]
 }

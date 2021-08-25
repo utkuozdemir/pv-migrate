@@ -26,6 +26,7 @@ jobs:
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v2.7.0
         with:
+          # renovate: goreleaser
           version: v0.176.1
           args: release --rm-dist
         env:
