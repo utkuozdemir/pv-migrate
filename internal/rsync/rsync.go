@@ -7,11 +7,11 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"html/template"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"strings"
 )
 
 const (
@@ -69,17 +69,11 @@ type script struct {
 
 func BuildRsyncScript(deleteExtraneousFiles bool, noChown bool,
 	sshTargetHost string, sourcePath string, destPath string) (string, error) {
-
-	if strings.Count(sshTargetHost, ":") >= 2 {
-		//Rsync needs IPv6 host in brackets
-		sshTargetHost = "[" + sshTargetHost + "]"
-	}
-
 	s := script{
 		MaxRetries:            maxRetries,
 		DeleteExtraneousFiles: deleteExtraneousFiles,
 		NoChown:               noChown,
-		SshTargetHost:         sshTargetHost,
+		SshTargetHost:         formatSSHTargetHost(sshTargetHost),
 		SshConnectTimeoutSecs: sshConnectTimeoutSecs,
 		RetryIntervalSecs:     retryIntervalSecs,
 		SourcePath:            sourcePath,
@@ -93,6 +87,13 @@ func BuildRsyncScript(deleteExtraneousFiles bool, noChown bool,
 	}
 
 	return templatedScript.String(), nil
+}
+
+func formatSSHTargetHost(host string) string {
+	if util.IsIPv6(host) {
+		return fmt.Sprintf("[%s]", host)
+	}
+	return host
 }
 
 func createRsyncPrivateKeySecret(instanceId string, pvcInfo *pvc.Info, privateKey string) (*corev1.Secret, error) {

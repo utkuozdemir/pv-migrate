@@ -2,6 +2,7 @@ package util
 
 import (
 	"math/rand"
+	"net"
 	"time"
 )
 
@@ -17,4 +18,12 @@ func RandomHexadecimalString(length int) string {
 		b[i] = letters[random.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+func IsIPv6(host string) bool {
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false
+	}
+	return ip.To4() == nil
 }
