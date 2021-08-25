@@ -43,7 +43,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v2.1.3
         with:
-          go-version: 1.16
+          go-version: 1.17
       - name: Ensure gofmt
         run: test -z "$(gofmt -s -d .)"
       - name: Ensure go.mod is already tidied
