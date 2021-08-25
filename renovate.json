@@ -5,6 +5,9 @@
   "postUpdateOptions": [
     "gomodTidy"
   ],
+  "docker": {
+    "enabled": false
+  },
   "packageRules": [
     {
       "matchDatasources": [
