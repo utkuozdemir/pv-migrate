@@ -4,5 +4,13 @@
   ],
   "postUpdateOptions": [
     "gomodTidy"
+  ],
+  "packageRules": [
+    {
+      "matchDatasources": [
+        "go"
+      ],
+      "groupName": "go packages"
+    }
   ]
 }
