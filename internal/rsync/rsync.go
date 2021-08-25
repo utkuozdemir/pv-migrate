@@ -11,6 +11,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 )
 
 const (
@@ -68,6 +69,12 @@ type script struct {
 
 func BuildRsyncScript(deleteExtraneousFiles bool, noChown bool,
 	sshTargetHost string, sourcePath string, destPath string) (string, error) {
+
+	if strings.Count(sshTargetHost, ":") >= 2 {
+		//Rsync needs IPv6 host in brackets
+		sshTargetHost = "[" + sshTargetHost + "]"
+	}
+
 	s := script{
 		MaxRetries:            maxRetries,
 		DeleteExtraneousFiles: deleteExtraneousFiles,
