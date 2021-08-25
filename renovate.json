@@ -21,5 +21,17 @@
       ],
       "groupName": "github actions"
     }
+  ],
+  "regexManagers": [
+    {
+      "fileMatch": [
+        ".github/workflows/**"
+      ],
+      "matchStrings": [
+        "# renovate: golangci-lint\\s+version: (?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)"
+      ],
+      "depNameTemplate": "github-tags",
+      "datasourceTemplate": "golangci/golangci-lint"
+    }
   ]
 }

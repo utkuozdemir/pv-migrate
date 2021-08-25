@@ -51,7 +51,8 @@ jobs:
       - name: Run linters
         uses: golangci/golangci-lint-action@v2.5.2
         with:
-          version: v1.42.0
+          # renovate: golangci-lint
+          version: v1.41.0
           skip-go-installation: true
           args: --timeout=3m0s
       - name: Install go-acc
