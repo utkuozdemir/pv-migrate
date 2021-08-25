@@ -25,7 +25,7 @@
   "regexManagers": [
     {
       "fileMatch": [
-        ".github/workflows/**"
+        "\\.github\\/workflows\\/.*"
       ],
       "matchStrings": [
         "# renovate: golangci-lint\\s+version: (?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)"
