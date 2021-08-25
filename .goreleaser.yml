@@ -62,20 +62,20 @@ changelog:
 dockers:
   - image_templates:
       - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-amd64
-    use_buildx: true
+    use: buildx
     dockerfile: Dockerfile
     build_flag_templates:
       - --platform=linux/amd64
   - image_templates:
       - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-arm64
-    use_buildx: true
+    use: buildx
     goarch: arm64
     dockerfile: Dockerfile
     build_flag_templates:
       - --platform=linux/arm64
   - image_templates:
       - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-armv7
-    use_buildx: true
+    use: buildx
     goarch: arm
     goarm: 7
     dockerfile: Dockerfile
