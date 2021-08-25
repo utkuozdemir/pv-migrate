@@ -48,7 +48,7 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 
 func registerCleanupHook(e *task.Execution) chan<- bool {
 	doneCh := make(chan bool)
-	signalCh := make(chan os.Signal)
+	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		select {
