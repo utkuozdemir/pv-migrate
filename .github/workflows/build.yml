@@ -53,7 +53,7 @@ jobs:
         uses: golangci/golangci-lint-action@v2.5.2
         with:
           # renovate: golangci-lint
-          version: v1.42.0
+          version: v1.42.1
           skip-go-installation: true
           args: --timeout=3m0s
       - name: Install go-acc
