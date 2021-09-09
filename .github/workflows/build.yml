@@ -71,7 +71,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v2.7.0
         with:
           # renovate: goreleaser
-          version: v0.177.0
+          version: v0.178.0
           args: release --snapshot --skip-publish --rm-dist
         env:
           PRIVATE_ACCESS_TOKEN: placeholder
