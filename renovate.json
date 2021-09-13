@@ -21,7 +21,8 @@
       "matchPaths": [
         ".github/workflows/**"
       ],
-      "groupName": "github actions"
+      "groupName": "github actions",
+      "automerge": true
     }
   ],
   "regexManagers": [
