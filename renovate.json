@@ -1,7 +1,7 @@
 {
   "extends": [
     "config:base",
-    ":automergePatch",
+    ":automergeMinor",
     ":disableDependencyDashboard"
   ],
   "postUpdateOptions": [
@@ -9,6 +9,9 @@
   ],
   "docker": {
     "enabled": false
+  },
+  "digest": {
+    "automerge": true
   },
   "packageRules": [
     {
