@@ -18,6 +18,12 @@
       "groupName": "go packages"
     },
     {
+      "matchDatasources": [
+        "docker"
+      ],
+      "groupName": "docker images"
+    },
+    {
       "matchPaths": [
         ".github/workflows/**"
       ],
