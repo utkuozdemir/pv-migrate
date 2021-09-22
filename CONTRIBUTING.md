@@ -24,13 +24,13 @@ That's it.
 
 - To make a release of docker images, use their special tag prefixes, followed by the version. Example:
   ```bash
-  git tag -a "docker-sshd-20210522" -m "Docker Sshd Image Release 20210522"
-  git tag -a "docker-rsync-20210522" -m "Docker Rsync Image Release 20210522"
+  git tag -a "docker-sshd-1.0.0" -m "Docker Sshd Image Release 1.0.0"
+  git tag -a "docker-rsync-1.0.0" -m "Docker Rsync Image Release 1.0.0"
   git push
   push --tags
   ```
   These will result in the Docker images with the following tags being pushed:
   ```
-  docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522
-  docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-20210522
+  docker.io/utkuozdemir/pv-migrate-sshd:1.0.0
+  docker.io/utkuozdemir/pv-migrate-rsync:1.0.0
   ```
