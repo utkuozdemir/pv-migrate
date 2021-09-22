@@ -5,9 +5,9 @@ import (
 )
 
 const (
-	DefaultRsyncImage          = "docker.io/utkuozdemir/pv-migrate-rsync:alpine-3-20210522"
+	DefaultRsyncImage          = "docker.io/utkuozdemir/pv-migrate-rsync:1.0.0"
 	DefaultRsyncServiceAccount = "default"
-	DefaultSshdImage           = "docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-20210522"
+	DefaultSshdImage           = "docker.io/utkuozdemir/pv-migrate-sshd:1.0.0"
 	DefaultSshdServiceAccount  = "default"
 	DefaultIgnoreMounted       = false
 	DefaultNoChown             = false
