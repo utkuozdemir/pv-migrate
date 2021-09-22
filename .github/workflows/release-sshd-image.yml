@@ -29,4 +29,4 @@ jobs:
           push: true
           tags: |
             docker.io/utkuozdemir/pv-migrate-sshd:latest
-            docker.io/utkuozdemir/pv-migrate-sshd:alpine-3-${{ env.IMAGE_VERSION }}
+            docker.io/utkuozdemir/pv-migrate-sshd:${{ env.IMAGE_VERSION }}
