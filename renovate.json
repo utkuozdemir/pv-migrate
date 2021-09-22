@@ -7,9 +7,6 @@
   "postUpdateOptions": [
     "gomodTidy"
   ],
-  "docker": {
-    "enabled": false
-  },
   "digest": {
     "automerge": true
   },
