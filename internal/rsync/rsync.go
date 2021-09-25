@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"html/template"
+
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
-	"html/template"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -192,6 +193,16 @@ func buildRsyncJobDest(e *task.Execution, targetHost string, privateKeySecretNam
 					NodeName:           d.MountedNode,
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ServiceAccountName: t.Migration.RsyncServiceAccount,
+					Tolerations: []corev1.Toleration{
+						{
+							Effect:   corev1.TaintEffectNoExecute,
+							Operator: corev1.TolerationOpExists,
+						},
+						{
+							Effect:   corev1.TaintEffectNoSchedule,
+							Operator: corev1.TolerationOpExists,
+						},
+					},
 				},
 			},
 		},
