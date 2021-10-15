@@ -39,7 +39,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v2.3.5
       - name: Setup Go
         uses: actions/setup-go@v2.1.4
         with:
@@ -69,7 +69,7 @@ jobs:
           path-to-profile: profile.cov
           shallow: true
       - name: Build with Goreleaser
-        uses: goreleaser/goreleaser-action@v2.7.0
+        uses: goreleaser/goreleaser-action@v2.8.0
         with:
           # renovate: goreleaser
           version: v0.182.1
