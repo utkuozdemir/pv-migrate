@@ -62,7 +62,7 @@ jobs:
       - name: Set nf_conntrack_max for kind
         run: sudo sysctl net/netfilter/nf_conntrack_max=131072
       - name: Run tests
-        run: go-acc --output profile.cov ./... -- -v
+        run: go-acc --output profile.cov ./... -- -v -timeout 20m
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.0
         with:
