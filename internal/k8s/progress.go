@@ -36,7 +36,7 @@ func tryLogProgressFromRsyncLogs(wg *sync.WaitGroup, kubeClient kubernetes.Inter
 	}
 
 	if err != nil {
-		logger.WithError(err).Warn(":warn: Cannot tail logs to display progress")
+		logger.WithError(err).Warn(":large_orange_diamond: Cannot tail logs to display progress")
 	}
 }
 

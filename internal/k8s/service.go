@@ -47,7 +47,7 @@ func GetServiceAddress(logger *log.Entry, kubeClient kubernetes.Interface, servi
 				WithField("elapsedSecs", elapsedSecs).
 				WithField("intervalSecs", serviceLbCheckIntervalSeconds).
 				WithField("timeoutSecs", serviceLbCheckTimeoutSeconds).
-				Info("Waiting for LoadBalancer IP")
+				Info(":hourglass_not_done: Waiting for LoadBalancer IP")
 		}
 	}
 }
