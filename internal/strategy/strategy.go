@@ -53,7 +53,7 @@ func registerCleanupHook(e *task.Execution) chan<- bool {
 	go func() {
 		select {
 		case <-signalCh:
-			e.Logger.Warn(":warn: Received termination signal")
+			e.Logger.Warn(":large_orange_diamond: Received termination signal")
 			cleanup(e)
 			os.Exit(1)
 		case <-doneCh:
@@ -88,9 +88,9 @@ func cleanup(e *task.Execution) {
 	err = result.ErrorOrNil()
 	if err != nil {
 		logger.WithError(err).
-			Warn(":warn: Cleanup failed, you might want to clean up manually")
+			Warn(":large_orange_diamond: Cleanup failed, you might want to clean up manually")
 		return
 	}
 
-	logger.Info(":sparkles: Cleanup successful")
+	logger.Info(":sparkles: Cleanup done")
 }
