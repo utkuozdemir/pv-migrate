@@ -62,7 +62,7 @@ func CreateSshdPodWaitTillRunning(logger *log.Entry, kubeClient kubernetes.Inter
 						logger.Info(":rocket: Sshd pod started")
 						running <- true
 
-					case corev1.PodFailed, corev1.PodUnknown:
+					case corev1.PodFailed:
 						logger.Error(":cross_mark: Sshd pod failed")
 						running <- false
 					}

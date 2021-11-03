@@ -32,7 +32,7 @@ func waitUntilPodIsScheduled(kubeClient kubernetes.Interface, namespace string, 
 			return true, nil
 		}
 
-		return false, fmt.Errorf("Pod in unexpected phase: %v", phase)
+		return false, fmt.Errorf("pod in unexpected phase: %v", phase)
 	})
 }
 

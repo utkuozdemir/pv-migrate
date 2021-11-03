@@ -26,9 +26,9 @@ func tryLogProgressFromRsyncLogs(wg *sync.WaitGroup, kubeClient kubernetes.Inter
 	defer wg.Done()
 
 	var err error
-	logfmt := logger.Context.Value(applog.LogFormatContextKey)
+	logfmt := logger.Context.Value(applog.FormatContextKey)
 	switch logfmt {
-	case applog.LogFormatFancy:
+	case applog.FormatFancy:
 		if showProgressBar {
 			err = drawProgressBarFromRsyncLogs(kubeClient, pod.Namespace, pod.Name, successCh)
 		} else {

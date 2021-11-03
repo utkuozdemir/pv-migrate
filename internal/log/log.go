@@ -11,24 +11,24 @@ import (
 type LoggerContextKey string
 
 const (
-	LogFormatJson  = "json"
-	LogFormatFancy = "fancy"
+	FormatJson  = "json"
+	FormatFancy = "fancy"
 
-	LogLevelTrace = "trace"
-	LogLevelDebug = "debug"
-	LogLevelInfo  = "info"
-	LogLevelWarn  = "warn"
-	LogLevelError = "error"
-	LogLevelFatal = "fatal"
-	LogLevelPanic = "panic"
+	LevelTrace = "trace"
+	LevelDebug = "debug"
+	LevelInfo  = "info"
+	LevelWarn  = "warn"
+	LevelError = "error"
+	LevelFatal = "fatal"
+	LevelPanic = "panic"
 
-	LogFormatContextKey LoggerContextKey = "log-format"
+	FormatContextKey LoggerContextKey = "log-format"
 )
 
 var (
-	LogFormats = []string{LogFormatJson, LogFormatFancy}
-	LogLevels  = []string{LogLevelTrace, LogLevelDebug, LogLevelInfo, LogLevelWarn,
-		LogLevelError, LogLevelFatal, LogLevelPanic}
+	Formats = []string{FormatJson, FormatFancy}
+	Levels  = []string{LevelTrace, LevelDebug, LevelInfo, LevelWarn,
+		LevelError, LevelFatal, LevelPanic}
 )
 
 func BuildLogger(logger *log.Logger, level string, format string) (*log.Entry, error) {
@@ -45,15 +45,15 @@ func BuildLogger(logger *log.Logger, level string, format string) (*log.Entry, e
 
 	logger.SetFormatter(formatter)
 	logger.SetLevel(logLevel)
-	ctx := context.WithValue(context.Background(), LogFormatContextKey, format)
+	ctx := context.WithValue(context.Background(), FormatContextKey, format)
 	return logger.WithContext(ctx), nil
 }
 
 func getLogFormatter(format string) (log.Formatter, error) {
 	switch format {
-	case LogFormatJson:
+	case FormatJson:
 		return &log.JSONFormatter{}, nil
-	case LogFormatFancy:
+	case FormatFancy:
 		return &fancyFormatter{}, nil
 	}
 	return nil, fmt.Errorf("unknown log format: %s", format)
@@ -61,19 +61,19 @@ func getLogFormatter(format string) (log.Formatter, error) {
 
 func getLogLevel(level string) (log.Level, error) {
 	switch level {
-	case LogLevelTrace:
+	case LevelTrace:
 		return log.TraceLevel, nil
-	case LogLevelDebug:
+	case LevelDebug:
 		return log.DebugLevel, nil
-	case LogLevelInfo:
+	case LevelInfo:
 		return log.InfoLevel, nil
-	case LogLevelWarn:
+	case LevelWarn:
 		return log.WarnLevel, nil
-	case LogLevelError:
+	case LevelError:
 		return log.ErrorLevel, nil
-	case LogLevelFatal:
+	case LevelFatal:
 		return log.FatalLevel, nil
-	case LogLevelPanic:
+	case LevelPanic:
 		return log.PanicLevel, nil
 	}
 
