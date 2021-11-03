@@ -69,13 +69,14 @@ func buildRsyncJob(e *task.Execution, node string) (*batchv1.Job, error) {
 	opts := m.Options
 	rsyncScript, err := rsync.BuildRsyncScript(opts.DeleteExtraneousFiles,
 		opts.NoChown, "", m.Source.Path, m.Dest.Path)
+	destNs := t.DestInfo.Claim.Namespace
 	if err != nil {
 		return nil, err
 	}
 	k8sJob := batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      jobName,
-			Namespace: m.Dest.Namespace,
+			Namespace: destNs,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoffLimit,
@@ -84,7 +85,7 @@ func buildRsyncJob(e *task.Execution, node string) (*batchv1.Job, error) {
 
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      jobName,
-					Namespace: m.Dest.Namespace,
+					Namespace: destNs,
 					Labels:    k8s.Labels(id),
 				},
 				Spec: corev1.PodSpec{
