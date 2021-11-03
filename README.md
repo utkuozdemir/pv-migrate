@@ -145,6 +145,7 @@ OPTIONS:
    --dest-delete-extraneous-files, -d   Delete extraneous files on the destination by using rsync's '--delete' flag (default: false)
    --ignore-mounted, -i                 Do not fail if the source or destination PVC is mounted (default: false)
    --no-chown, -o                       Omit chown on rsync (default: false)
+   --no-progress-bar, -b                Do not display a progress bar (default: false)
    --strategies value, -s value         The strategies to be used in the given order (default: "mnt2", "svc", "lbsvc")
    --rsync-image value, -r value        Image to use for running rsync (default: "docker.io/utkuozdemir/pv-migrate-rsync:1.0.0")
    --rsync-service-account value        Service account for the rsync pod (default: "default")
