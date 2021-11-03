@@ -22,15 +22,18 @@ var (
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
 
-func tryLogProgressFromRsyncLogs(wg *sync.WaitGroup, kubeClient kubernetes.Interface,
-	pod *corev1.Pod, successCh chan bool, logger *log.Entry) {
+func tryLogProgressFromRsyncLogs(wg *sync.WaitGroup, kubeClient kubernetes.Interface, pod *corev1.Pod, successCh chan bool, showProgressBar bool, logger *log.Entry) {
 	defer wg.Done()
 
 	var err error
 	logfmt := logger.Context.Value(applog.LogFormatContextKey)
 	switch logfmt {
 	case applog.LogFormatFancy:
-		err = drawProgressBarFromRsyncLogs(kubeClient, pod.Namespace, pod.Name, successCh)
+		if showProgressBar {
+			err = drawProgressBarFromRsyncLogs(kubeClient, pod.Namespace, pod.Name, successCh)
+		} else {
+			logger.Info(":open_file_folder: Copying data...")
+		}
 	default:
 		err = tailPodLogs(logger, kubeClient, pod.Namespace, pod.Name, successCh)
 	}

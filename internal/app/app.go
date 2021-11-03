@@ -33,6 +33,7 @@ const (
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
 	FlagNoChown                   = "no-chown"
+	FlagNoProgressBar             = "no-progress-bar"
 	FlagSourceMountReadOnly       = "source-mount-read-only"
 	FlagStrategies                = "strategies"
 	FlagRsyncImage                = "rsync-image"
@@ -80,6 +81,7 @@ func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 						IgnoreMounted:         c.Bool(FlagIgnoreMounted),
 						SourceMountReadOnly:   c.Bool(FlagSourceMountReadOnly),
 						NoChown:               c.Bool(FlagNoChown),
+						NoProgressBar:         c.Bool(FlagNoProgressBar),
 						KeyAlgorithm:          c.String(FlagSSHKeyAlgorithm),
 					}
 
@@ -184,6 +186,12 @@ func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 						Aliases: []string{"o"},
 						Usage:   "Omit chown on rsync",
 						Value:   migration.DefaultNoChown,
+					},
+					&cli.BoolFlag{
+						Name:    FlagNoProgressBar,
+						Aliases: []string{"b"},
+						Usage:   "Do not display a progress bar",
+						Value:   migration.DefaultNoProgressBar,
 					},
 					&cli.StringFlag{
 						Name:    FlagStrategies,

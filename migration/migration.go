@@ -11,6 +11,7 @@ const (
 	DefaultSshdServiceAccount  = "default"
 	DefaultIgnoreMounted       = false
 	DefaultNoChown             = false
+	DefaultNoProgressBar       = false
 	DefaultSourceMountReadOnly = true
 )
 
@@ -38,6 +39,7 @@ type Options struct {
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
+	NoProgressBar         bool
 	SourceMountReadOnly   bool
 	KeyAlgorithm          string
 }

@@ -267,7 +267,7 @@ func RunRsyncJobOverSSH(e *task.Execution, serviceType corev1.ServiceType) error
 		return err
 	}
 
-	err = k8s.CreateJobWaitTillCompleted(logger, destKubeClient, rsyncJob)
+	err = k8s.CreateJobWaitTillCompleted(logger, destKubeClient, rsyncJob, !m.Options.NoProgressBar)
 	if err != nil {
 		return err
 	}
