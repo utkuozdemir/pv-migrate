@@ -43,7 +43,8 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 
 	doneCh := registerCleanupHook(e)
 	defer cleanupAndReleaseHook(e, doneCh)
-	return true, k8s.CreateJobWaitTillCompleted(e.Logger, t.SourceInfo.KubeClient, migrationJob)
+	return true, k8s.CreateJobWaitTillCompleted(e.Logger, t.SourceInfo.KubeClient,
+		migrationJob, !t.Migration.Options.NoProgressBar)
 }
 
 func determineTargetNode(t *task.Task) string {

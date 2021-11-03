@@ -41,7 +41,7 @@ func (m *migrator) Run(mig *migration.Migration) error {
 		return err
 	}
 
-	strs := strings.Join(mig.Strategies, ",")
+	strs := strings.Join(mig.Strategies, ", ")
 	t.Logger.
 		WithField("strategies", strs).
 		Infof(":thought_balloon: Will attempt %v strategies: %s",

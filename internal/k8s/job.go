@@ -18,7 +18,7 @@ const (
 	jobPodSpawnTimeout = 5 * time.Minute
 )
 
-func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interface, job *batchv1.Job) error {
+func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interface, job *batchv1.Job, showProgressBar bool) error {
 	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(context.TODO(), job, metav1.CreateOptions{})
 	if err != nil {
 		return err
@@ -39,12 +39,7 @@ func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interfa
 	defer wg.Wait()
 	successCh := make(chan bool, 1)
 
-	//logfmt := logger.Context.Value("log-format")
-	//if logfmt ==  {
-	//
-	//}
-
-	go tryLogProgressFromRsyncLogs(&wg, kubeClient, pod, successCh, logger)
+	go tryLogProgressFromRsyncLogs(&wg, kubeClient, pod, successCh, showProgressBar, logger)
 	p, err := waitUntilPodIsNotRunning(kubeClient, pod.Namespace, pod.Name)
 	if err != nil {
 		successCh <- false
