@@ -48,15 +48,15 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - "^build(\(.+\))?:"
-      - "^chore(\(.+\))?:"
-      - "^cd(\(.+\))?:"
-      - "^ci(\(.+\))?:"
-      - "^cicd(\(.+\))?:"
-      - "^docker(\(.+\))?:"
-      - "^docs(\(.+\))?:"
-      - "^refactor(\(.+\))?:"
-      - "^test(\(.+\))?:"
+      - '^build(\(.+\))?:'
+      - '^chore(\(.+\))?:'
+      - '^cd(\(.+\))?:'
+      - '^ci(\(.+\))?:'
+      - '^cicd(\(.+\))?:'
+      - '^docker(\(.+\))?:'
+      - '^docs(\(.+\))?:'
+      - '^refactor(\(.+\))?:'
+      - '^test(\(.+\))?:'
       - Merge pull request
       - Merge branch
       - go mod tidy
