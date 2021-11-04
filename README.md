@@ -16,6 +16,10 @@
 `pv-migrate` is a CLI tool/kubectl plugin to easily migrate 
 the contents of one Kubernetes `PersistentVolume[Claim]` to another.
 
+## Demo
+
+![pv-migrate demo GIF](img/demo.gif)
+
 ## Introduction
 
 On Kubernetes, if you need to rename a resource (like a `Deployment`) or to move it to a different namespace, 
@@ -55,10 +59,6 @@ Just use `pv-migrate` to clone the data **securely over the internet**.
 - Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed
 - Customizable strategy order
 - Supports arm32v7 (Raspberry Pi etc.) and arm64 architectures as well as amd64
-
-## Demo
-
-![pv-migrate demo GIF](img/demo.gif)
 
 ## Installation
 
