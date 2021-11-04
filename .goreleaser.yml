@@ -48,11 +48,15 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - '^docs:'
-      - '^test:'
-      - '^cicd:'
-      - '^refactor:'
-      - '^docker:'
+      - "^build(\(.+\))?:"
+      - "^chore(\(.+\))?:"
+      - "^cd(\(.+\))?:"
+      - "^ci(\(.+\))?:"
+      - "^cicd(\(.+\))?:"
+      - "^docker(\(.+\))?:"
+      - "^docs(\(.+\))?:"
+      - "^refactor(\(.+\))?:"
+      - "^test(\(.+\))?:"
       - Merge pull request
       - Merge branch
       - go mod tidy
