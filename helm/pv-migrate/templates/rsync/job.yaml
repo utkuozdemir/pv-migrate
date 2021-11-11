@@ -1,0 +1,103 @@
+{{- if .Values.rsync.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "pv-migrate.fullname" . }}-rsync
+  namespace: {{ .Values.dest.namespace }}
+  labels:
+    app.kubernetes.io/component: rsync
+    {{- include "pv-migrate.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: rsync
+      {{- include "pv-migrate.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.rsync.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app.kubernetes.io/component: rsync
+        {{- include "pv-migrate.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.rsync.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "pv-migrate.rsync.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.rsync.podSecurityContext | nindent 8 }}
+      containers:
+        - name: rsync
+          command:
+            - sh
+            - -c
+            - |
+              n=0
+              rc=1
+              retries=10
+              until [ "$n" -ge "$retries" ]
+              do
+                {{ .Values.rsync.rawCommand }}
+                  {{- if .Values.rsync.mountSource }}
+                  /source/{{ .Values.source.path }}
+                  {{- else }}
+                  -e "{{ .Values.rsync.sshRawCommand }}" \
+                  {{ .Values.rsync.sshUser }}@{{ include "pv-migrate.fullname" . }}-sshd.{{ .Values.source.namespace | default .Release.Namespace }}:/source/{{ .Values.source.path }} \
+                  {{- end }}
+                  /dest/{{ .Values.dest.path }} && \
+                  rc=0 && \
+                  break
+                n=$((n+1))
+                echo "rsync attempt $n/10 failed, waiting 5 seconds before trying again"
+                sleep 5
+              done
+
+              if [ $rc -ne 0 ]; then
+                echo "rsync job failed after $retries retries"
+              fi
+              exit $rc
+          securityContext:
+            {{- toYaml .Values.rsync.securityContext | nindent 12 }}
+          image: "{{ .Values.rsync.image.repository }}:{{ .Values.rsync.image.tag }}"
+          imagePullPolicy: {{ .Values.rsync.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.rsync.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.rsync.mountSource }}
+            - mountPath: /source
+              name: source
+              readOnly: {{ .Values.source.pvcMountReadOnly }}
+            {{- end }}
+            - mountPath: /dest
+              name: dest
+            - mountPath: {{ .Values.rsync.privateKeyMountPath }}
+              name: private-key
+              subPath: privateKey
+      {{- with .Values.rsync.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rsync.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rsync.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        {{- if .Values.rsync.mountSource }}
+        - name: source
+          persistentVolumeClaim:
+            claimName: {{ .Values.source.pvcName }}
+        {{- end }}
+        - name: dest
+          persistentVolumeClaim:
+            claimName: {{ .Values.dest.pvcName }}
+        - name: private-key
+          secret:
+            secretName: {{ include "pv-migrate.fullname" . }}-rsync
+{{- end }}

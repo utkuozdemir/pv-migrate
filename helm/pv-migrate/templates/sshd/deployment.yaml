@@ -1,0 +1,69 @@
+{{- if .Values.sshd.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pv-migrate.fullname" . }}-sshd
+  namespace: {{ .Values.source.namespace }}
+  labels:
+    app.kubernetes.io/component: sshd
+    {{- include "pv-migrate.labels" . | nindent 4 }}
+spec:
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: sshd
+      {{- include "pv-migrate.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.sshd.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app.kubernetes.io/component: sshd
+        {{- include "pv-migrate.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.sshd.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "pv-migrate.sshd.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.sshd.podSecurityContext | nindent 8 }}
+      containers:
+        - name: sshd
+          securityContext:
+            {{- toYaml .Values.sshd.securityContext | nindent 12 }}
+          image: "{{ .Values.sshd.image.repository }}:{{ .Values.sshd.image.tag }}"
+          imagePullPolicy: {{ .Values.sshd.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.sshd.resources | nindent 12 }}
+          volumeMounts:
+            - mountPath: /source
+              name: source
+              readOnly: {{ .Values.source.pvcMountReadOnly }}
+            - mountPath: {{ .Values.sshd.publicKeyMountPath }}
+              name: public-key
+              subPath: publicKey
+      {{- with .Values.sshd.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.sshd.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.sshd.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+      - name: source
+        persistentVolumeClaim:
+          claimName: {{ .Values.source.pvcName }}
+          readOnly: {{ .Values.source.pvcMountReadOnly }}
+        - name: public-key
+          secret:
+            secretName: {{ include "pv-migrate.fullname" . }}-sshd
+{{- end }}

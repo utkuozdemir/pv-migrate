@@ -1,0 +1,85 @@
+nameOverride: ""
+fullnameOverride: ""
+
+source:
+  namespace: ""
+  pvcName: ""
+  pvcMountReadOnly: true
+  path: ""
+
+dest:
+  namespace: ""
+  pvcName: ""
+  path: ""
+
+
+sshd:
+  enabled: false
+  image:
+    repository: docker.io/utkuozdemir/pv-migrate-sshd
+    pullPolicy: IfNotPresent
+    tag: 1.0.0
+  imagePullSecrets: []
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+  service:
+    type: ClusterIP
+    port: 80
+  resources: {}
+  nodeSelector: {}
+  tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+  affinity: {}
+
+  publicKeyMountPath: /root/.ssh/authorized_keys
+  publicKey: ""
+
+rsync:
+  enabled: false
+  image:
+    repository: docker.io/utkuozdemir/pv-migrate-rsync
+    pullPolicy: IfNotPresent
+    tag: 1.0.0
+  imagePullSecrets: []
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+  podAnnotations: {}
+  podSecurityContext: {}
+  securityContext: {}
+  service:
+    type: ClusterIP
+    port: 80
+  resources: {}
+  nodeSelector: {}
+  tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+  affinity: {}
+
+  privateKeyMountPath: /root/.ssh/id_ed25519
+  privateKey: ""
+
+  mountSource: false
+  rawCommand: rsync -azv --info=progress2,misc0,flist0 --no-inc-recursive --delete
+  sshUser: root
+  sshRawCommand: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5
