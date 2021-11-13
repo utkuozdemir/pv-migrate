@@ -11,9 +11,9 @@ spec:
   type: {{ .Values.sshd.service.type }}
   ports:
     - port: {{ .Values.sshd.service.port }}
-      targetPort: http
+      targetPort: 22
       protocol: TCP
-      name: http
+      name: ssh
   selector:
     app.kubernetes.io/component: sshd
     {{- include "pv-migrate.selectorLabels" . | nindent 4 }}
