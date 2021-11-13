@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	log "github.com/sirupsen/logrus"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -17,18 +16,6 @@ const (
 	jobPodPollInterval = 2 * time.Second
 	jobPodSpawnTimeout = 5 * time.Minute
 )
-
-// CreateJobWaitTillCompleted TODO eventually delete this
-func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interface,
-	job *batchv1.Job, showProgressBar bool) error {
-	_, err := kubeClient.BatchV1().
-		Jobs(job.Namespace).Create(context.TODO(), job, metav1.CreateOptions{})
-	if err != nil {
-		return err
-	}
-
-	return WaitUntilJobIsCompleted(logger, kubeClient, job.Namespace, job.Name, showProgressBar)
-}
 
 func WaitUntilJobIsCompleted(logger *log.Entry, kubeClient kubernetes.Interface,
 	jobNs string, jobName string, showProgressBar bool) error {

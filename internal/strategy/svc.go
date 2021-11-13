@@ -2,7 +2,7 @@ package strategy
 
 import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
-	"github.com/utkuozdemir/pv-migrate/internal/rsync"
+	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"helm.sh/helm/v3/pkg/action"
 	"time"
