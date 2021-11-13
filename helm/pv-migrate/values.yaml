@@ -91,3 +91,4 @@ rsync:
   noChown: false
   sshUser: root
   sshRawCommand: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5
+  sshRemoteHost: ""

@@ -7,7 +7,7 @@ import (
 	"github.com/urfave/cli/v2"
 	"github.com/utkuozdemir/pv-migrate/engine"
 	applog "github.com/utkuozdemir/pv-migrate/internal/log"
-	"github.com/utkuozdemir/pv-migrate/internal/rsync"
+	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	"os"
@@ -46,7 +46,7 @@ const (
 )
 
 func New(rootLogger *log.Logger, version string, commit string) *cli.App {
-	sshKeyAlgs := strings.Join(rsync.SSHKeyAlgorithms, ",")
+	sshKeyAlgs := strings.Join(ssh.KeyAlgorithms, ",")
 	return &cli.App{
 		Name:    "pv-migrate",
 		Usage:   "A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another",
@@ -225,7 +225,7 @@ func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 						Name:    FlagSSHKeyAlgorithm,
 						Aliases: []string{"a"},
 						Usage:   fmt.Sprintf("SSH key algorithm to be used. Valid values are %s", sshKeyAlgs),
-						Value:   rsync.Ed25519KeyAlgorithm,
+						Value:   ssh.Ed25519KeyAlgorithm,
 					},
 				},
 			},
