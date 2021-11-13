@@ -18,13 +18,21 @@ const (
 	jobPodSpawnTimeout = 5 * time.Minute
 )
 
-func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interface, job *batchv1.Job, showProgressBar bool) error {
-	_, err := kubeClient.BatchV1().Jobs(job.Namespace).Create(context.TODO(), job, metav1.CreateOptions{})
+// CreateJobWaitTillCompleted TODO eventually delete this
+func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interface,
+	job *batchv1.Job, showProgressBar bool) error {
+	_, err := kubeClient.BatchV1().
+		Jobs(job.Namespace).Create(context.TODO(), job, metav1.CreateOptions{})
 	if err != nil {
 		return err
 	}
 
-	pod, err := waitUntilJobPodIsCreated(kubeClient, job.Namespace, job.Name)
+	return WaitUntilJobIsCompleted(logger, kubeClient, job.Namespace, job.Name, showProgressBar)
+}
+
+func WaitUntilJobIsCompleted(logger *log.Entry, kubeClient kubernetes.Interface,
+	jobNs string, jobName string, showProgressBar bool) error {
+	pod, err := waitUntilJobPodIsCreated(kubeClient, jobNs, jobName)
 	if err != nil {
 		return err
 	}
@@ -48,7 +56,7 @@ func CreateJobWaitTillCompleted(logger *log.Entry, kubeClient kubernetes.Interfa
 
 	if *p != corev1.PodSucceeded {
 		successCh <- false
-		err := fmt.Errorf("job %s failed", job.Name)
+		err := fmt.Errorf("job %s failed", jobName)
 		return err
 	}
 

@@ -8,10 +8,7 @@ metadata:
     app.kubernetes.io/component: rsync
     {{- include "pv-migrate.labels" . | nindent 4 }}
 spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/component: rsync
-      {{- include "pv-migrate.selectorLabels" . | nindent 6 }}
+  backoffLimit: {{ .Values.rsync.backoffLimit }}
   template:
     metadata:
       {{- with .Values.rsync.podAnnotations }}
@@ -27,6 +24,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ include "pv-migrate.rsync.serviceAccountName" . }}
+      restartPolicy: {{ .Values.rsync.restartPolicy }}
       securityContext:
         {{- toYaml .Values.rsync.podSecurityContext | nindent 8 }}
       containers:
@@ -40,9 +38,9 @@ spec:
               retries=10
               until [ "$n" -ge "$retries" ]
               do
-                {{ .Values.rsync.rawCommand }}
+                {{ .Values.rsync.rawCommand }} \
                   {{- if .Values.rsync.mountSource }}
-                  /source/{{ .Values.source.path }}
+                  /source/{{ .Values.source.path }} \
                   {{- else }}
                   -e "{{ .Values.rsync.sshRawCommand }}" \
                   {{ .Values.rsync.sshUser }}@{{ include "pv-migrate.fullname" . }}-sshd.{{ .Values.source.namespace | default .Release.Namespace }}:/source/{{ .Values.source.path }} \
@@ -73,9 +71,12 @@ spec:
             {{- end }}
             - mountPath: /dest
               name: dest
+            {{- if .Values.rsync.privateKeyMount }}
             - mountPath: {{ .Values.rsync.privateKeyMountPath }}
               name: private-key
               subPath: privateKey
+            {{- end }}
+      nodeName: {{ .Values.rsync.nodeName }}
       {{- with .Values.rsync.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -97,7 +98,9 @@ spec:
         - name: dest
           persistentVolumeClaim:
             claimName: {{ .Values.dest.pvcName }}
+        {{- if .Values.rsync.privateKeyMount }}
         - name: private-key
           secret:
             secretName: {{ include "pv-migrate.fullname" . }}-rsync
+        {{- end }}
 {{- end }}

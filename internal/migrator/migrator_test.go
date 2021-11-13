@@ -3,6 +3,7 @@ package migrator
 import (
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/migration"
@@ -10,7 +11,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 	"testing"
 )
@@ -27,7 +27,7 @@ const (
 )
 
 func TestBuildTask(t *testing.T) {
-	m := migrator{getKubeClient: fakeKubeClientGetter()}
+	m := migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(&migration.Options{IgnoreMounted: true})
 	tsk, err := m.buildTask(mig)
 	assert.Nil(t, err)
@@ -49,7 +49,7 @@ func TestBuildTask(t *testing.T) {
 }
 
 func TestBuildTaskMounted(t *testing.T) {
-	m := migrator{getKubeClient: fakeKubeClientGetter()}
+	m := migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(&migration.Options{})
 	tsk, err := m.buildTask(mig)
 	assert.Nil(t, tsk)
@@ -79,7 +79,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 		},
 	}
 
-	m := migrator{getKubeClient: fakeKubeClientGetter(),
+	m := migrator{getKubeClient: fakeClusterClientGetter(),
 		getStrategyMap: func(names []string) (map[string]strategy.Strategy, error) {
 			return map[string]strategy.Strategy{
 				"str1": &str1,
@@ -118,14 +118,16 @@ func buildMigrationWithStrategies(strategies []string, options *migration.Option
 	}
 }
 
-func fakeKubeClientGetter() kubeClientGetter {
+func fakeClusterClientGetter() clusterClientGetter {
 	pvcA := buildTestPVC(sourceNS, sourcePVC, v1.ReadOnlyMany)
 	pvcB := buildTestPVC(destNS, destPVC, v1.ReadWriteOnce, v1.ReadWriteMany)
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPVC)
 
-	return func(kubeconfigPath string, context string) (kubernetes.Interface, string, error) {
-		return fake.NewSimpleClientset(pvcA, pvcB, podA, podB), "", nil
+	return func(kubeconfigPath string, context string) (*k8s.ClusterClient, error) {
+		return &k8s.ClusterClient{
+			KubeClient: fake.NewSimpleClientset(pvcA, pvcB, podA, podB),
+		}, nil
 	}
 }
 

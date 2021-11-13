@@ -5,7 +5,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes/fake"
 	"testing"
 )
 
@@ -26,7 +25,7 @@ func TestSvcCanDoSameCluster(t *testing.T) {
 	pvcB := buildTestPVC(destNS, destPvc, destModes...)
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
-	c := fake.NewSimpleClientset(pvcA, pvcB, podA, podB)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
 

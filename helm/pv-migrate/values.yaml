@@ -31,6 +31,7 @@ sshd:
     type: ClusterIP
     port: 80
   resources: {}
+  nodeName: ""
   nodeSelector: {}
   tolerations:
     - effect: NoExecute
@@ -43,6 +44,7 @@ sshd:
       tolerationSeconds: 300
   affinity: {}
 
+  publicKeyMount: true
   publicKeyMountPath: /root/.ssh/authorized_keys
   publicKey: ""
 
@@ -64,6 +66,7 @@ rsync:
     type: ClusterIP
     port: 80
   resources: {}
+  nodeName: ""
   nodeSelector: {}
   tolerations:
     - effect: NoExecute
@@ -75,7 +78,10 @@ rsync:
       operator: Exists
       tolerationSeconds: 300
   affinity: {}
+  restartPolicy: Never
+  backoffLimit: 0
 
+  privateKeyMount: false
   privateKeyMountPath: /root/.ssh/id_ed25519
   privateKey: ""
 

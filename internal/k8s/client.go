@@ -1,25 +1,33 @@
 package k8s
 
 import (
+	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-func GetClientAndNsInContext(kubeconfigPath string, context string) (kubernetes.Interface, string, error) {
-	config, namespace, err := buildK8sConfig(kubeconfigPath, context)
+type ClusterClient struct {
+	KubeClient       kubernetes.Interface
+	RESTClientGetter genericclioptions.RESTClientGetter
+	NsInContext      string
+}
+
+func GetClusterClient(kubeconfigPath string, context string) (*ClusterClient, error) {
+	config, rcGetter, ns, err := buildK8sConfig(kubeconfigPath, context)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	kubeClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
-	return kubeClient, namespace, err
+	return &ClusterClient{KubeClient: kubeClient, RESTClientGetter: rcGetter, NsInContext: ns}, nil
 }
 
-func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config, string, error) {
+func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config,
+	genericclioptions.RESTClientGetter, string, error) {
 	clientConfigLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	if kubeconfigPath != "" {
 		clientConfigLoadingRules.ExplicitPath = kubeconfigPath
@@ -33,13 +41,14 @@ func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config, string
 
 	namespace, _, err := config.Namespace()
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 
 	clientConfig, err := config.ClientConfig()
 	if err != nil {
-		return nil, "", err
+		return nil, nil, "", err
 	}
 
-	return clientConfig, namespace, nil
+	rcGetter := NewRESTClientGetter(clientConfig, config)
+	return clientConfig, rcGetter, namespace, nil
 }

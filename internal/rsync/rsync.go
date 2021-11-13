@@ -98,7 +98,7 @@ func formatSSHTargetHost(host string) string {
 }
 
 func createRsyncPrivateKeySecret(instanceId string, pvcInfo *pvc.Info, privateKey string) (*corev1.Secret, error) {
-	kubeClient := pvcInfo.KubeClient
+	kubeClient := pvcInfo.ClusterClient.KubeClient
 	namespace := pvcInfo.Claim.Namespace
 	name := "pv-migrate-rsync-" + instanceId
 	secret := corev1.Secret{
@@ -216,8 +216,8 @@ func RunRsyncJobOverSSH(e *task.Execution, serviceType corev1.ServiceType) error
 	t := e.Task
 	s := t.SourceInfo
 	d := t.DestInfo
-	sourceKubeClient := s.KubeClient
-	destKubeClient := d.KubeClient
+	sourceKubeClient := s.ClusterClient.KubeClient
+	destKubeClient := d.ClusterClient.KubeClient
 
 	logger.Info(":key: Generating SSH key pair")
 	publicKey, privateKey, err := CreateSSHKeyPair(t.Migration.Options.KeyAlgorithm)

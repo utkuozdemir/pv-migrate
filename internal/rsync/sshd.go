@@ -16,7 +16,7 @@ import (
 )
 
 func CreateSshdService(instanceId string, sourcePvcInfo *pvc.Info, serviceType corev1.ServiceType) (*corev1.Service, error) {
-	kubeClient := sourcePvcInfo.KubeClient
+	kubeClient := sourcePvcInfo.ClusterClient.KubeClient
 	serviceName := "pv-migrate-sshd-" + instanceId
 	createdService, err := kubeClient.CoreV1().Services(sourcePvcInfo.Claim.Namespace).Create(
 		context.TODO(),
@@ -87,7 +87,7 @@ func CreateSshdPodWaitTillRunning(logger *log.Entry, kubeClient kubernetes.Inter
 }
 
 func createSshdPublicKeySecret(instanceId string, sourcePvcInfo *pvc.Info, publicKey string) (*corev1.Secret, error) {
-	kubeClient := sourcePvcInfo.KubeClient
+	kubeClient := sourcePvcInfo.ClusterClient.KubeClient
 	namespace := sourcePvcInfo.Claim.Namespace
 	name := "pv-migrate-sshd-" + instanceId
 	secret := corev1.Secret{
