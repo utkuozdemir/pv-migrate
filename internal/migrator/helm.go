@@ -14,13 +14,6 @@ type SimpleRESTClientGetter struct {
 	KubeConfig string
 }
 
-func NewRESTClientGetter(namespace, kubeConfig string) *SimpleRESTClientGetter {
-	return &SimpleRESTClientGetter{
-		Namespace:  namespace,
-		KubeConfig: kubeConfig,
-	}
-}
-
 func (c *SimpleRESTClientGetter) ToRESTConfig() (*rest.Config, error) {
 	config, err := clientcmd.RESTConfigFromKubeConfig([]byte(c.KubeConfig))
 	if err != nil {
