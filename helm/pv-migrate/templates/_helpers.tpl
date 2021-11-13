@@ -35,7 +35,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- define "pv-migrate.sshd.serviceAccountName" -}}
 {{- if .Values.sshd.serviceAccount.create }}
-{{- default (include "pv-migrate.fullname" .) .Values.sshd.serviceAccount.name }}
+{{- default (printf "%s-%s" (include "pv-migrate.fullname" .) "sshd") .Values.sshd.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.sshd.serviceAccount.name }}
 {{- end }}
@@ -43,7 +43,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{- define "pv-migrate.rsync.serviceAccountName" -}}
 {{- if .Values.sshd.serviceAccount.create }}
-{{- default (include "pv-migrate.fullname" .) .Values.rsync.serviceAccount.name }}
+{{- default (printf "%s-%s" (include "pv-migrate.fullname" .) "rsync") .Values.rsync.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.rsync.serviceAccount.name }}
 {{- end }}

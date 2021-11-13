@@ -1,6 +1,8 @@
 package migrator
 
 import (
+	"bytes"
+	_ "embed"
 	"errors"
 	"fmt"
 	log "github.com/sirupsen/logrus"
@@ -10,22 +12,27 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"github.com/utkuozdemir/pv-migrate/migration"
-	"k8s.io/client-go/kubernetes"
+	"helm.sh/helm/v3/pkg/chart/loader"
 	"strings"
 )
 
+var (
+	//go:embed pv-migrate-0.1.0.tgz
+	chartBytes []byte
+)
+
 type strategyMapGetter func(names []string) (map[string]strategy.Strategy, error)
-type kubeClientGetter func(kubeconfigPath string, context string) (kubernetes.Interface, string, error)
+type clusterClientGetter func(kubeconfigPath string, context string) (*k8s.ClusterClient, error)
 
 type migrator struct {
-	getKubeClient  kubeClientGetter
+	getKubeClient  clusterClientGetter
 	getStrategyMap strategyMapGetter
 }
 
 // New creates a new migrator
 func New() *migrator {
 	return &migrator{
-		getKubeClient:  k8s.GetClientAndNsInContext,
+		getKubeClient:  k8s.GetClusterClient,
 		getStrategyMap: strategy.GetStrategiesMapForNames,
 	}
 }
@@ -50,9 +57,10 @@ func (m *migrator) Run(mig *migration.Migration) error {
 	for _, name := range mig.Strategies {
 		id := util.RandomHexadecimalString(5)
 		e := task.Execution{
-			ID:     id,
-			Task:   t,
-			Logger: t.Logger.WithField("id", id),
+			ID:              id,
+			HelmReleaseName: "pv-migrate-" + id,
+			Task:            t,
+			Logger:          t.Logger.WithField("id", id),
 		}
 
 		sLogger := e.Logger.WithField("strategy", name)
@@ -79,17 +87,22 @@ func (m *migrator) Run(mig *migration.Migration) error {
 }
 
 func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
-	source := mig.Source
-	dest := mig.Dest
-
-	var sourceClient, sourceNsInContext, err = m.getKubeClient(source.KubeconfigPath, source.Context)
+	chart, err := loader.LoadArchive(bytes.NewReader(chartBytes))
 	if err != nil {
 		return nil, err
 	}
 
-	destClient, destNsInContext := sourceClient, sourceNsInContext
+	source := mig.Source
+	dest := mig.Dest
+
+	sourceClient, err := m.getKubeClient(source.KubeconfigPath, source.Context)
+	if err != nil {
+		return nil, err
+	}
+
+	destClient := sourceClient
 	if source.KubeconfigPath != dest.KubeconfigPath || source.Context != dest.Context {
-		destClient, destNsInContext, err = m.getKubeClient(dest.KubeconfigPath, dest.Context)
+		destClient, err = m.getKubeClient(dest.KubeconfigPath, dest.Context)
 		if err != nil {
 			return nil, err
 		}
@@ -97,12 +110,12 @@ func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
 
 	sourceNs := source.Namespace
 	if sourceNs == "" {
-		sourceNs = sourceNsInContext
+		sourceNs = sourceClient.NsInContext
 	}
 
 	destNs := dest.Namespace
 	if destNs == "" {
-		destNs = destNsInContext
+		destNs = destClient.NsInContext
 	}
 
 	sourcePvcInfo, err := pvc.New(sourceClient, sourceNs, source.Name)
@@ -137,6 +150,7 @@ func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
 	}
 
 	t := task.Task{
+		Chart:      chart,
 		Migration:  mig,
 		Logger:     logger,
 		SourceInfo: sourcePvcInfo,

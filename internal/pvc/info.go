@@ -2,22 +2,25 @@ package pvc
 
 import (
 	"context"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
 
 type Info struct {
-	KubeClient  kubernetes.Interface
-	Claim       *corev1.PersistentVolumeClaim
-	MountedNode string
-	SupportsRWO bool
-	SupportsROX bool
-	SupportsRWX bool
+	ClusterClient *k8s.ClusterClient
+	Claim         *corev1.PersistentVolumeClaim
+	MountedNode   string
+	SupportsRWO   bool
+	SupportsROX   bool
+	SupportsRWX   bool
 }
 
-func New(kubeClient kubernetes.Interface, namespace string, name string) (*Info, error) {
-	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+func New(c *k8s.ClusterClient, namespace string, name string) (*Info, error) {
+	kubeClient := c.KubeClient
+	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).
+		Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -43,12 +46,12 @@ func New(kubeClient kubernetes.Interface, namespace string, name string) (*Info,
 	}
 
 	return &Info{
-		KubeClient:  kubeClient,
-		Claim:       claim,
-		MountedNode: mountedNode,
-		SupportsRWO: supportsRWO,
-		SupportsROX: supportsROX,
-		SupportsRWX: supportsRWX,
+		ClusterClient: c,
+		Claim:         claim,
+		MountedNode:   mountedNode,
+		SupportsRWO:   supportsRWO,
+		SupportsROX:   supportsROX,
+		SupportsRWX:   supportsRWX,
 	}, nil
 }
 

@@ -3,11 +3,14 @@ package strategy
 import (
 	"fmt"
 	"github.com/hashicorp/go-multierror"
-	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	log "github.com/sirupsen/logrus"
+	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"helm.sh/helm/v3/pkg/action"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 const (
@@ -74,17 +77,19 @@ func cleanup(e *task.Execution) {
 	logger.Info(":broom: Cleaning up")
 	var result *multierror.Error
 	s := t.SourceInfo
-	err := k8s.CleanupForID(s.KubeClient, s.Claim.Namespace, e.ID)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-	d := t.DestInfo
-	err = k8s.CleanupForID(d.KubeClient, d.Claim.Namespace, e.ID)
+
+	err := cleanupForPVC(logger, e.HelmReleaseName, s)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
 
-	//goland:noinspection GoNilness
+	d := t.DestInfo
+	err = cleanupForPVC(logger, e.HelmReleaseName, d)
+	if err != nil {
+		result = multierror.Append(result, err)
+
+	}
+
 	err = result.ErrorOrNil()
 	if err != nil {
 		logger.WithError(err).
@@ -93,4 +98,31 @@ func cleanup(e *task.Execution) {
 	}
 
 	logger.Info(":sparkles: Cleanup done")
+}
+
+func cleanupForPVC(logger *log.Entry, helmReleaseName string, pvcInfo *pvc.Info) error {
+	var result *multierror.Error
+	sourceHelmActionConfig, err := initHelmActionConfig(logger, pvcInfo)
+	if err != nil {
+		result = multierror.Append(result, err)
+	}
+
+	uninstall := action.NewUninstall(sourceHelmActionConfig)
+	uninstall.Wait = true
+	uninstall.Timeout = 1 * time.Minute
+	_, err = uninstall.Run(helmReleaseName)
+	if err != nil {
+		result = multierror.Append(result, err)
+	}
+	return result.ErrorOrNil()
+}
+
+func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configuration, error) {
+	actionConfig := new(action.Configuration)
+	err := actionConfig.Init(pvcInfo.ClusterClient.RESTClientGetter,
+		pvcInfo.Claim.Namespace, os.Getenv("HELM_DRIVER"), logger.Debugf)
+	if err != nil {
+		return nil, err
+	}
+	return actionConfig, nil
 }
