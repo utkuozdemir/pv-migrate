@@ -1,12 +1,14 @@
 package strategy
 
 import (
+	"errors"
 	"fmt"
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/storage/driver"
 	"os"
 	"os/signal"
 	"syscall"
@@ -101,20 +103,20 @@ func cleanup(e *task.Execution) {
 }
 
 func cleanupForPVC(logger *log.Entry, helmReleaseName string, pvcInfo *pvc.Info) error {
-	var result *multierror.Error
 	sourceHelmActionConfig, err := initHelmActionConfig(logger, pvcInfo)
 	if err != nil {
-		result = multierror.Append(result, err)
+		return err
 	}
 
 	uninstall := action.NewUninstall(sourceHelmActionConfig)
 	uninstall.Wait = true
 	uninstall.Timeout = 1 * time.Minute
 	_, err = uninstall.Run(helmReleaseName)
-	if err != nil {
-		result = multierror.Append(result, err)
+
+	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+		return err
 	}
-	return result.ErrorOrNil()
+	return nil
 }
 
 func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configuration, error) {
