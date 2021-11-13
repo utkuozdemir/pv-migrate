@@ -108,5 +108,6 @@ spec:
         - name: private-key
           secret:
             secretName: {{ include "pv-migrate.fullname" . }}-rsync
+            defaultMode: 0400
         {{- end }}
 {{- end }}

@@ -29,6 +29,9 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	}
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
+	doneCh := registerCleanupHook(e)
+	defer cleanupAndReleaseHook(e, doneCh)
+
 	err = installOnSource(e, publicKey)
 	if err != nil {
 		return true, err
@@ -47,9 +50,6 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	if err != nil {
 		return true, err
 	}
-
-	doneCh := registerCleanupHook(e)
-	defer cleanupAndReleaseHook(e, doneCh)
 
 	showProgressBar := !e.Task.Migration.Options.NoProgressBar
 	kubeClient := s.ClusterClient.KubeClient

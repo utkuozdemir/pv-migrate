@@ -76,13 +76,13 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 		},
 	}
 
+	doneCh := registerCleanupHook(e)
+	defer cleanupAndReleaseHook(e, doneCh)
+
 	_, err = install.Run(t.Chart, vals)
 	if err != nil {
 		return true, err
 	}
-
-	doneCh := registerCleanupHook(e)
-	defer cleanupAndReleaseHook(e, doneCh)
 
 	showProgressBar := !opts.NoProgressBar
 	kubeClient := t.SourceInfo.ClusterClient.KubeClient
