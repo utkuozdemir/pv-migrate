@@ -17,12 +17,17 @@ const (
 	serviceLbCheckTimeout         = 120 * time.Second
 )
 
-func GetServiceAddress(logger *log.Entry, kubeClient kubernetes.Interface, service *corev1.Service) (string, error) {
-	if service.Spec.Type == corev1.ServiceTypeClusterIP {
-		return service.Name + "." + service.Namespace, nil
+func GetServiceAddress(logger *log.Entry, kubeClient kubernetes.Interface, serviceNs string, serviceName string) (string, error) {
+	svc, err := kubeClient.CoreV1().Services(serviceNs).Get(context.TODO(), serviceName, metav1.GetOptions{})
+	if err != nil {
+		return "", err
 	}
 
-	services := kubeClient.CoreV1().Services(service.Namespace)
+	if svc.Spec.Type == corev1.ServiceTypeClusterIP {
+		return svc.Name + "." + svc.Namespace, nil
+	}
+
+	services := kubeClient.CoreV1().Services(svc.Namespace)
 	getOptions := metav1.GetOptions{}
 	timeout := time.After(serviceLbCheckTimeout)
 	ticker := time.NewTicker(serviceLbCheckInterval)
@@ -30,11 +35,11 @@ func GetServiceAddress(logger *log.Entry, kubeClient kubernetes.Interface, servi
 	for {
 		select {
 		case <-timeout:
-			return "", errors.New("timed out waiting for the LoadBalancer service address")
+			return "", errors.New("timed out waiting for the LoadBalancer svc address")
 
 		case <-ticker.C:
 			elapsedSecs += serviceLbCheckIntervalSeconds
-			lbService, err := services.Get(context.TODO(), service.Name, getOptions)
+			lbService, err := services.Get(context.TODO(), svc.Name, getOptions)
 			if err != nil {
 				return "", err
 			}
@@ -43,7 +48,7 @@ func GetServiceAddress(logger *log.Entry, kubeClient kubernetes.Interface, servi
 				return lbService.Status.LoadBalancer.Ingress[0].IP, nil
 			}
 
-			logger.WithField("service", service.Name).
+			logger.WithField("svc", svc.Name).
 				WithField("elapsedSecs", elapsedSecs).
 				WithField("intervalSecs", serviceLbCheckIntervalSeconds).
 				WithField("timeoutSecs", serviceLbCheckTimeoutSeconds).

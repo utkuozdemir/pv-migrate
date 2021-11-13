@@ -1,4 +1,4 @@
-package rsync
+package ssh
 
 import (
 	crand "crypto/rand"
@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-type SSHKeyAlgorithm string
+type KeyAlgorithm string
 
 const (
 	RSAKeyAlgorithm     = "rsa"
@@ -20,7 +20,7 @@ const (
 )
 
 var (
-	SSHKeyAlgorithms = []string{RSAKeyAlgorithm, Ed25519KeyAlgorithm}
+	KeyAlgorithms = []string{RSAKeyAlgorithm, Ed25519KeyAlgorithm}
 )
 
 func CreateSSHKeyPair(keyAlgorithm string) (string, string, error) {

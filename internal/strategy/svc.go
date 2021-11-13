@@ -24,11 +24,11 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 		return false, nil
 	}
 
-	sourceNs := t.Migration.Source.Namespace
-	destNs := t.Migration.Dest.Namespace
-
 	s := e.Task.SourceInfo
 	d := e.Task.DestInfo
+
+	sourceNs := s.Claim.Namespace
+	destNs := d.Claim.Namespace
 
 	helmActionConfig, err := initHelmActionConfig(e.Logger, e.Task.DestInfo)
 	if err != nil {
@@ -43,11 +43,11 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 
 	t.Logger.Info(":key: Generating SSH key pair")
 	keyAlgorithm := t.Migration.Options.KeyAlgorithm
-	publicKey, privateKey, err := rsync.CreateSSHKeyPair(keyAlgorithm)
-	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
+	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return true, err
 	}
+	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
 	opts := t.Migration.Options
 	vals := map[string]interface{}{

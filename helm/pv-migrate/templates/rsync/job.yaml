@@ -49,7 +49,7 @@ spec:
                   /source/{{ .Values.source.path }} \
                   {{- else }}
                   -e "{{ .Values.rsync.sshRawCommand }}" \
-                  {{ .Values.rsync.sshUser }}@{{ include "pv-migrate.fullname" . }}-sshd.{{ .Values.source.namespace | default .Release.Namespace }}:/source/{{ .Values.source.path }} \
+                  {{ .Values.rsync.sshUser }}@{{ .Values.rsync.sshRemoteHost | default (printf "%s-sshd.%s" (include "pv-migrate.fullname" .) (.Values.source.namespace | default .Release.Namespace)) }}:/source/{{ .Values.source.path }} \
                   {{- end }}
                   /dest/{{ .Values.dest.path }} && \
                   rc=0 && \

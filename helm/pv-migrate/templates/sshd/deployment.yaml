@@ -43,7 +43,7 @@ spec:
             - mountPath: /source
               name: source
               readOnly: {{ .Values.source.pvcMountReadOnly }}
-            {{- if .Values.sshd.publicKeyMount -}}
+            {{- if .Values.sshd.publicKeyMount }}
             - mountPath: {{ .Values.sshd.publicKeyMountPath }}
               name: public-key
               subPath: publicKey
@@ -64,11 +64,11 @@ spec:
       volumes:
       - name: source
         persistentVolumeClaim:
-          claimName: {{ .Values.source.pvcName }}
+          claimName: {{ required "source.pvcName is required!" .Values.source.pvcName }}
           readOnly: {{ .Values.source.pvcMountReadOnly }}
-        {{- if .Values.sshd.publicKeyMount -}}
-        - name: public-key
-          secret:
-            secretName: {{ include "pv-migrate.fullname" . }}-sshd
-        {{- end }}
+      {{- if .Values.sshd.publicKeyMount }}
+      - name: public-key
+        secret:
+          secretName: {{ include "pv-migrate.fullname" . }}-sshd
+      {{- end }}
 {{- end }}

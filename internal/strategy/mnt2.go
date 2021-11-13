@@ -33,10 +33,10 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 		return false, nil
 	}
 
-	ns := t.Migration.Source.Namespace
-
 	s := e.Task.SourceInfo
 	d := e.Task.DestInfo
+
+	ns := s.Claim.Namespace
 
 	helmActionConfig, err := initHelmActionConfig(e.Logger, e.Task.SourceInfo)
 	if err != nil {
