@@ -88,5 +88,6 @@ rsync:
   mountSource: false
   rawCommand: rsync -azv --info=progress2,misc0,flist0 --no-inc-recursive
   deleteExtraneousFiles: false
+  noChown: false
   sshUser: root
   sshRawCommand: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5

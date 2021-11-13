@@ -58,6 +58,7 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 			"nodeName":              node,
 			"mountSource":           true,
 			"deleteExtraneousFiles": opts.DeleteExtraneousFiles,
+			"noChown":               opts.NoChown,
 		},
 		"source": map[string]interface{}{
 			"namespace":        ns,
