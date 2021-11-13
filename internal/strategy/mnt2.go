@@ -51,16 +51,18 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 
 	node := determineTargetNode(t)
 
+	opts := t.Migration.Options
 	vals := map[string]interface{}{
 		"rsync": map[string]interface{}{
-			"enabled":     true,
-			"nodeName":    node,
-			"mountSource": true,
+			"enabled":               true,
+			"nodeName":              node,
+			"mountSource":           true,
+			"deleteExtraneousFiles": opts.DeleteExtraneousFiles,
 		},
 		"source": map[string]interface{}{
 			"namespace":        ns,
 			"pvcName":          s.Claim.Name,
-			"pvcMountReadOnly": t.Migration.Options.SourceMountReadOnly,
+			"pvcMountReadOnly": opts.SourceMountReadOnly,
 			"path":             t.Migration.Source.Path,
 		},
 		"dest": map[string]interface{}{
@@ -78,7 +80,7 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 	doneCh := registerCleanupHook(e)
 	defer cleanupAndReleaseHook(e, doneCh)
 
-	showProgressBar := !t.Migration.Options.NoProgressBar
+	showProgressBar := !opts.NoProgressBar
 	kubeClient := t.SourceInfo.ClusterClient.KubeClient
 	jobName := e.HelmReleaseName + "-rsync"
 	err = k8s.WaitUntilJobIsCompleted(e.Logger, kubeClient, ns, jobName, showProgressBar)

@@ -39,6 +39,9 @@ spec:
               until [ "$n" -ge "$retries" ]
               do
                 {{ .Values.rsync.rawCommand }} \
+                  {{- if .Values.rsync.deleteExtraneousFiles }}
+                  --delete \
+                  {{- end }}
                   {{- if .Values.rsync.mountSource }}
                   /source/{{ .Values.source.path }} \
                   {{- else }}
