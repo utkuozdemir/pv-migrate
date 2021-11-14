@@ -86,7 +86,7 @@ func installOnSource(e *task.Execution, publicKey string) error {
 		"source.path=" + t.Migration.Source.Path,
 	}
 
-	vals, err := getMergedHelmValues(helmValues)
+	vals, err := getMergedHelmValues(helmValues, opts)
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func installOnDest(e *task.Execution, privateKey string, privateKeyMountPath str
 		"dest.path=" + t.Migration.Dest.Path,
 	}
 
-	vals, err := getMergedHelmValues(helmValues)
+	vals, err := getMergedHelmValues(helmValues, opts)
 	if err != nil {
 		return err
 	}

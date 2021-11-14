@@ -42,6 +42,11 @@ const (
 	FlagSshdServiceAccount        = "sshd-service-account"
 	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
 
+	FlagHelmValues    = "helm-values"
+	FlagHelmSet       = "helm-set"
+	FlagHelmSetString = "helm-set-string"
+	FlagHelmSetFile   = "helm-set-file"
+
 	loggerContextKey cliAppContextKey = "logger"
 )
 
@@ -83,6 +88,10 @@ func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 						NoChown:               c.Bool(FlagNoChown),
 						NoProgressBar:         c.Bool(FlagNoProgressBar),
 						KeyAlgorithm:          c.String(FlagSSHKeyAlgorithm),
+						HelmValuesFiles:       c.StringSlice(FlagHelmValues),
+						HelmValues:            c.StringSlice(FlagHelmSet),
+						HelmStringValues:      c.StringSlice(FlagHelmSetString),
+						HelmFileValues:        c.StringSlice(FlagHelmSetFile),
 					}
 
 					strategies := strings.Split(c.String(FlagStrategies), ",")
@@ -226,6 +235,23 @@ func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 						Aliases: []string{"a"},
 						Usage:   fmt.Sprintf("SSH key algorithm to be used. Valid values are %s", sshKeyAlgs),
 						Value:   ssh.Ed25519KeyAlgorithm,
+					},
+					&cli.StringSliceFlag{
+						Name:    FlagHelmValues,
+						Aliases: []string{"f"},
+						Usage:   "Set additional Helm values by a YAML file or a URL (can specify multiple)",
+					},
+					&cli.StringSliceFlag{
+						Name:  FlagHelmSet,
+						Usage: "Set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+					},
+					&cli.StringSliceFlag{
+						Name:  FlagHelmSetString,
+						Usage: "Set additional Helm STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+					},
+					&cli.StringSliceFlag{
+						Name:  FlagHelmSetFile,
+						Usage: "Set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)",
 					},
 				},
 			},
