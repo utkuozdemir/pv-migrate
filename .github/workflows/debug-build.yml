@@ -10,6 +10,7 @@ on:
       - "test/**"
       - ".gitignore"
       - "docker/**"
+      - "helm/**"
       - "renovate.json"
   pull_request:
     branches:
@@ -20,6 +21,7 @@ on:
       - "test/**"
       - ".gitignore"
       - "docker/**"
+      - "helm/**"
       - "renovate.json"
 jobs:
   debug-build:
