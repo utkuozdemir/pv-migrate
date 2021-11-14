@@ -81,6 +81,23 @@ jobs:
           # renovate: goreleaser
           version: v1.0.0
           args: build --snapshot --rm-dist --single-target
+  test:
+    needs: pre_job
+    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.4.0
+      - name: Setup Go
+        uses: actions/setup-go@v2.1.4
+        with:
+          # renovate: go
+          go-version: 1.17
+      - name: Install go-acc
+        # renovate: go-acc
+        run: go install github.com/ory/go-acc@v0.2.6
+      - name: Set nf_conntrack_max for kind
+        run: sudo sysctl net/netfilter/nf_conntrack_max=131072
       - name: Run tests
         run: go-acc --output profile.cov ./... -- -v -timeout 20m -parallel 10
       - name: Send coverage
