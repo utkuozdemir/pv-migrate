@@ -4,6 +4,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"helm.sh/helm/v3/pkg/action"
+	"strconv"
 	"time"
 )
 
@@ -52,25 +53,25 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 	node := determineTargetNode(t)
 
 	opts := t.Migration.Options
-	vals := map[string]interface{}{
-		"rsync": map[string]interface{}{
-			"enabled":               true,
-			"nodeName":              node,
-			"mountSource":           true,
-			"deleteExtraneousFiles": opts.DeleteExtraneousFiles,
-			"noChown":               opts.NoChown,
-		},
-		"source": map[string]interface{}{
-			"namespace":        ns,
-			"pvcName":          s.Claim.Name,
-			"pvcMountReadOnly": opts.SourceMountReadOnly,
-			"path":             t.Migration.Source.Path,
-		},
-		"dest": map[string]interface{}{
-			"namespace": ns,
-			"pvcName":   d.Claim.Name,
-			"path":      t.Migration.Dest.Path,
-		},
+
+	helmValues := []string{
+		"rsync.enabled=true",
+		"rsync.nodeName=" + node,
+		"rsync.mountSource=true",
+		"rsync.deleteExtraneousFiles=" + strconv.FormatBool(opts.DeleteExtraneousFiles),
+		"rsync.noChown=" + strconv.FormatBool(opts.NoChown),
+		"source.namespace=" + ns,
+		"source.pvcName=" + s.Claim.Name,
+		"source.pvcMountReadOnly=" + strconv.FormatBool(opts.NoChown),
+		"source.path=" + t.Migration.Source.Path,
+		"dest.namespace=" + ns,
+		"dest.pvcName=" + d.Claim.Name,
+		"dest.path=" + t.Migration.Dest.Path,
+	}
+
+	vals, err := getMergedHelmValues(helmValues)
+	if err != nil {
+		return true, err
 	}
 
 	doneCh := registerCleanupHook(e)

@@ -5,6 +5,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"helm.sh/helm/v3/pkg/action"
+	"strconv"
 	"time"
 )
 
@@ -50,30 +51,28 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
 	opts := t.Migration.Options
-	vals := map[string]interface{}{
-		"rsync": map[string]interface{}{
-			"enabled":               true,
-			"deleteExtraneousFiles": opts.DeleteExtraneousFiles,
-			"noChown":               opts.NoChown,
-			"privateKeyMount":       true,
-			"privateKey":            privateKey,
-			"privateKeyMountPath":   privateKeyMountPath,
-		},
-		"sshd": map[string]interface{}{
-			"enabled":   true,
-			"publicKey": publicKey,
-		},
-		"source": map[string]interface{}{
-			"namespace":        sourceNs,
-			"pvcName":          s.Claim.Name,
-			"pvcMountReadOnly": opts.SourceMountReadOnly,
-			"path":             t.Migration.Source.Path,
-		},
-		"dest": map[string]interface{}{
-			"namespace": destNs,
-			"pvcName":   d.Claim.Name,
-			"path":      t.Migration.Dest.Path,
-		},
+
+	helmValues := []string{
+		"rsync.enabled=true",
+		"rsync.deleteExtraneousFiles=" + strconv.FormatBool(opts.DeleteExtraneousFiles),
+		"rsync.noChown=true",
+		"rsync.privateKeyMount=true",
+		"rsync.privateKey=" + privateKey,
+		"rsync.privateKeyMountPath=" + privateKeyMountPath,
+		"sshd.enabled=true",
+		"sshd.publicKey=" + publicKey,
+		"source.namespace=" + sourceNs,
+		"source.pvcName=" + s.Claim.Name,
+		"source.pvcMountReadOnly=" + strconv.FormatBool(opts.SourceMountReadOnly),
+		"source.path=" + t.Migration.Source.Path,
+		"dest.namespace=" + destNs,
+		"dest.pvcName=" + d.Claim.Name,
+		"dest.path=" + t.Migration.Dest.Path,
+	}
+
+	vals, err := getMergedHelmValues(helmValues)
+	if err != nil {
+		return true, err
 	}
 
 	doneCh := registerCleanupHook(e)
