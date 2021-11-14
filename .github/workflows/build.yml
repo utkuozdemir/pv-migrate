@@ -82,7 +82,7 @@ jobs:
           version: v1.0.0
           args: build --snapshot --rm-dist --single-target
       - name: Run tests
-        run: go-acc --output profile.cov ./... -- -v -timeout 20m
+        run: go-acc --output profile.cov ./... -- -v -timeout 20m -parallel 10
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.0
         with:
