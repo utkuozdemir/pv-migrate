@@ -146,3 +146,25 @@ func getMergedHelmValues(helmValues []string, opts *migration.Options) (map[stri
 
 	return valsOptions.MergeValues(helmProviders)
 }
+
+func installHelmChart(e *task.Execution, pvcInfo *pvc.Info, values []string) error {
+	helmActionConfig, err := initHelmActionConfig(e.Logger, pvcInfo)
+	if err != nil {
+		return err
+	}
+
+	install := action.NewInstall(helmActionConfig)
+	install.Namespace = pvcInfo.Claim.Namespace
+	install.ReleaseName = e.HelmReleaseName
+	install.Wait = true
+	install.Timeout = 1 * time.Minute
+
+	t := e.Task
+	vals, err := getMergedHelmValues(values, t.Migration.Options)
+	if err != nil {
+		return err
+	}
+
+	_, err = install.Run(t.Chart, vals)
+	return err
+}
