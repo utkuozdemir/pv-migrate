@@ -8,6 +8,9 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"helm.sh/helm/v3/pkg/action"
+	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/cli/values"
+	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	"os"
 	"os/signal"
@@ -29,6 +32,8 @@ var (
 		SvcStrategy:   &Svc{},
 		LbSvcStrategy: &LbSvc{},
 	}
+
+	helmProviders = getter.All(cli.New())
 )
 
 type Strategy interface {
@@ -127,4 +132,12 @@ func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configu
 		return nil, err
 	}
 	return actionConfig, nil
+}
+
+func getMergedHelmValues(helmValues []string) (map[string]interface{}, error) {
+	valsOptions := values.Options{
+		Values: helmValues,
+	}
+
+	return valsOptions.MergeValues(helmProviders)
 }
