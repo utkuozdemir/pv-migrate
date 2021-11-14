@@ -1,38 +1,65 @@
+# -- String to partially override the fullname template with a string (will prepend the release name)
 nameOverride: ""
+# -- String to fully override the fullname template with a string
 fullnameOverride: ""
 
 source:
+  # -- Namespace of the source PVC
   namespace: ""
+  # -- Name of the source PVC
   pvcName: ""
+  # -- Whether to mount the source PVC in readOnly mode
   pvcMountReadOnly: true
+  # -- The path in the source volume to be migrated
   path: ""
 
 dest:
+  # -- Namespace of the destination PVC
   namespace: ""
+  # -- Name of the destination PVC
   pvcName: ""
+  # -- The path in the destination volume to be migrated
   path: ""
 
 
 sshd:
+  # -- Enable SSHD server deployment
   enabled: false
   image:
+    # -- SSHD image repository
     repository: docker.io/utkuozdemir/pv-migrate-sshd
+    # -- SSHD image pull policy
     pullPolicy: IfNotPresent
+    # -- SSHD image tag
     tag: 1.0.0
+  # -- SSHD image pull secrets
   imagePullSecrets: []
   serviceAccount:
+    # -- Create a service account for SSHD
     create: true
+    # -- SSHD service account annotations
     annotations: {}
+    # -- SSHD service account name to use
     name: ""
+  # -- SSHD pod annotations
   podAnnotations: {}
+  # -- SSHD pod security context
   podSecurityContext: {}
+  # -- SSHD deployment security context
   securityContext: {}
   service:
+    # -- SSHD service type
     type: ClusterIP
+    # -- SSHD service port
     port: 22
+  # -- SSHD pod resources
   resources: {}
+  # -- The node name to schedule SSHD pod on
   nodeName: ""
+  # -- SSHD node selector
   nodeSelector: {}
+  # -- SSHD pod tolerations
+  # @default -- see [values.yaml](values.yaml)
   tolerations:
     - effect: NoExecute
       key: node.kubernetes.io/not-ready
@@ -42,32 +69,49 @@ sshd:
       key: node.kubernetes.io/unreachable
       operator: Exists
       tolerationSeconds: 300
+  # -- SSHD pod affinity
   affinity: {}
 
+  # -- Mount a public key into the SSHD pod
   publicKeyMount: true
+  # -- The path to mount the public key
   publicKeyMountPath: /root/.ssh/authorized_keys
+  # -- The public key content
   publicKey: ""
 
 rsync:
+  # -- Enable creation of Rsync job
   enabled: false
   image:
+    # -- Rsync image repository
     repository: docker.io/utkuozdemir/pv-migrate-rsync
+    # -- Rsync image pull policy
     pullPolicy: IfNotPresent
+    # -- Rsync image tag
     tag: 1.0.0
+  # -- Rsync image pull secrets
   imagePullSecrets: []
   serviceAccount:
+    # -- Create a service account for Rsync
     create: true
+    # -- Rsync service account annotations
     annotations: {}
+    # -- Rsync service account name to use
     name: ""
+  # -- Rsync pod annotations
   podAnnotations: {}
+  # -- Rsync pod security context
   podSecurityContext: {}
+  # -- Rsync deployment security context
   securityContext: {}
-  service:
-    type: ClusterIP
-    port: 80
+  # -- Rsync pod resources
   resources: {}
+  # -- The node name to schedule Rsync pod on
   nodeName: ""
+  # -- Rsync node selector
   nodeSelector: {}
+  # -- Rsync pod tolerations
+  # @default -- see [values.yaml](values.yaml)
   tolerations:
     - effect: NoExecute
       key: node.kubernetes.io/not-ready
@@ -77,18 +121,31 @@ rsync:
       key: node.kubernetes.io/unreachable
       operator: Exists
       tolerationSeconds: 300
+  # -- Rsync pod affinity
   affinity: {}
+  # Rsync job restart policy
   restartPolicy: Never
+  # Rsync job backoff limit
   backoffLimit: 0
 
+  # -- Mount a private key into the Rsync pod
   privateKeyMount: false
+  # -- The path to mount the private key
   privateKeyMountPath: /root/.ssh/id_ed25519
+  # -- The private key content
   privateKey: ""
 
+  # -- Mount the source PVC into the Rsync pod as well as destination PVC
   mountSource: false
+  # -- Raw Rsync command and flags
   rawCommand: rsync -azv --info=progress2,misc0,flist0 --no-inc-recursive
+  # -- Whether the Rsync job should delete the extraneous files or not (--delete).
   deleteExtraneousFiles: false
+  # -- Whether Rsync job should skip changing owner and group of file or not (--no-o --no-g).
   noChown: false
+  # -- The user to use for SSH when Rsync is initiated over SSH
   sshUser: root
+  # -- The raw command of SSH for Rsync over SSH
   sshRawCommand: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5
+  # -- The remote host address for the Rsync job over SSH
   sshRemoteHost: ""

@@ -4,3 +4,22 @@ description: The helm chart of pv-migrate
 type: application
 version: 0.1.0
 appVersion: 0.1.0
+home: https://github.com/utkuozdemir/pv-migrate
+keywords:
+  - pv-migrate
+  - pvc
+  - migration
+sources:
+  - https://github.com/utkuozdemir/pv-migrate
+# icon: TBA
+maintainers:
+  - name: Utku Özdemir
+    email: uoz@protonmail.com
+    url: https://utkuozdemir.org
+annotations:
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/images: |
+    - name: utkuozdemir/pv-migrate-sshd
+      image: docker.io/utkuozdemir/pv-migrate-sshd:1.0.0
+    - name: utkuozdemir/pv-migrate-rsync
+      image: docker.io/utkuozdemir/pv-migrate-rsync:1.0.0
