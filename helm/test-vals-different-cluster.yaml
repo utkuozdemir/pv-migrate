@@ -1,0 +1,25 @@
+rsync:
+  enabled: true
+  nodeName: porcupine
+  mountSource: false
+
+  privateKeyMount: true
+  privateKeyMountPath: /root/.ssh/id_ed25519
+  privateKey: asdf
+
+  sshRemoteHost: REMOTE_HOST
+
+sshd:
+  enabled: true
+  publicKey: qwer
+
+source:
+  namespace: pv-migrate-test-1
+  pvcName: pv-migrate-test-source-1
+  pvcMountReadOnly: true
+  path: /
+
+dest:
+  namespace: pv-migrate-test-2
+  pvcName: pv-migrate-test-dest-2
+  path: /
