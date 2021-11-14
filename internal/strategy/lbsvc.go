@@ -6,9 +6,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
-	"helm.sh/helm/v3/pkg/action"
 	"strconv"
-	"time"
 )
 
 type LbSvc struct {
@@ -61,21 +59,10 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 
 func installOnSource(e *task.Execution, publicKey string) error {
 	t := e.Task
-	helmActionConfig, err := initHelmActionConfig(e.Logger, t.SourceInfo)
-	if err != nil {
-		return err
-	}
-
 	s := t.SourceInfo
 	ns := s.Claim.Namespace
-
-	install := action.NewInstall(helmActionConfig)
-	install.Namespace = ns
-	install.ReleaseName = e.HelmReleaseName
-	install.Wait = true
-	install.Timeout = 1 * time.Minute
-
 	opts := t.Migration.Options
+
 	helmValues := []string{
 		"sshd.enabled=true",
 		"sshd.publicKey=" + publicKey,
@@ -86,31 +73,13 @@ func installOnSource(e *task.Execution, publicKey string) error {
 		"source.path=" + t.Migration.Source.Path,
 	}
 
-	vals, err := getMergedHelmValues(helmValues, opts)
-	if err != nil {
-		return err
-	}
-
-	_, err = install.Run(t.Chart, vals)
-	return err
+	return installHelmChart(e, s, helmValues)
 }
 
 func installOnDest(e *task.Execution, privateKey string, privateKeyMountPath string, sshHost string) error {
 	t := e.Task
-	helmActionConfig, err := initHelmActionConfig(e.Logger, t.DestInfo)
-	if err != nil {
-		return err
-	}
-
 	d := t.DestInfo
 	ns := d.Claim.Namespace
-
-	install := action.NewInstall(helmActionConfig)
-	install.Namespace = ns
-	install.ReleaseName = e.HelmReleaseName
-	install.Wait = true
-	install.Timeout = 1 * time.Minute
-
 	opts := t.Migration.Options
 	helmValues := []string{
 		"rsync.enabled=true",
@@ -126,13 +95,7 @@ func installOnDest(e *task.Execution, privateKey string, privateKeyMountPath str
 		"dest.path=" + t.Migration.Dest.Path,
 	}
 
-	vals, err := getMergedHelmValues(helmValues, opts)
-	if err != nil {
-		return err
-	}
-
-	_, err = install.Run(t.Chart, vals)
-	return err
+	return installHelmChart(e, d, helmValues)
 }
 
 func formatSSHTargetHost(host string) string {

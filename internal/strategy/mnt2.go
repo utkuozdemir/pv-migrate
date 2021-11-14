@@ -3,9 +3,7 @@ package strategy
 import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
-	"helm.sh/helm/v3/pkg/action"
 	"strconv"
-	"time"
 )
 
 type Mnt2 struct {
@@ -36,23 +34,10 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 
 	s := e.Task.SourceInfo
 	d := e.Task.DestInfo
-
 	ns := s.Claim.Namespace
-
-	helmActionConfig, err := initHelmActionConfig(e.Logger, e.Task.SourceInfo)
-	if err != nil {
-		return true, err
-	}
-
-	install := action.NewInstall(helmActionConfig)
-	install.Namespace = ns
-	install.ReleaseName = e.HelmReleaseName
-	install.Wait = true
-	install.Timeout = 1 * time.Minute
+	opts := t.Migration.Options
 
 	node := determineTargetNode(t)
-
-	opts := t.Migration.Options
 
 	helmValues := []string{
 		"rsync.enabled=true",
@@ -69,15 +54,10 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 		"dest.path=" + t.Migration.Dest.Path,
 	}
 
-	vals, err := getMergedHelmValues(helmValues, opts)
-	if err != nil {
-		return true, err
-	}
-
 	doneCh := registerCleanupHook(e)
 	defer cleanupAndReleaseHook(e, doneCh)
 
-	_, err = install.Run(t.Chart, vals)
+	err := installHelmChart(e, s, helmValues)
 	if err != nil {
 		return true, err
 	}

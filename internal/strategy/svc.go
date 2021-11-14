@@ -4,9 +4,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
-	"helm.sh/helm/v3/pkg/action"
 	"strconv"
-	"time"
 )
 
 type Svc struct {
@@ -27,20 +25,9 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 
 	s := e.Task.SourceInfo
 	d := e.Task.DestInfo
-
 	sourceNs := s.Claim.Namespace
 	destNs := d.Claim.Namespace
-
-	helmActionConfig, err := initHelmActionConfig(e.Logger, e.Task.DestInfo)
-	if err != nil {
-		return true, err
-	}
-
-	install := action.NewInstall(helmActionConfig)
-	install.Namespace = destNs
-	install.ReleaseName = e.HelmReleaseName
-	install.Wait = true
-	install.Timeout = 1 * time.Minute
+	opts := t.Migration.Options
 
 	t.Logger.Info(":key: Generating SSH key pair")
 	keyAlgorithm := t.Migration.Options.KeyAlgorithm
@@ -49,8 +36,6 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 		return true, err
 	}
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
-
-	opts := t.Migration.Options
 
 	helmValues := []string{
 		"rsync.enabled=true",
@@ -70,15 +55,10 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 		"dest.path=" + t.Migration.Dest.Path,
 	}
 
-	vals, err := getMergedHelmValues(helmValues, opts)
-	if err != nil {
-		return true, err
-	}
-
 	doneCh := registerCleanupHook(e)
 	defer cleanupAndReleaseHook(e, doneCh)
 
-	_, err = install.Run(t.Chart, vals)
+	err = installHelmChart(e, d, helmValues)
 	if err != nil {
 		return true, err
 	}
