@@ -152,6 +152,10 @@ OPTIONS:
    --sshd-image value, -S value         Image to use for running sshd server (default: "docker.io/utkuozdemir/pv-migrate-sshd:1.0.0")
    --sshd-service-account value         Service account for the sshd pod (default: "default")
    --ssh-key-algorithm value, -a value  SSH key algorithm to be used. Valid values are rsa,ed25519 (default: "ed25519")
+   --helm-values value, -f value        Set additional Helm values by a YAML file or a URL (can specify multiple)
+   --helm-set value                     Set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
+   --helm-set-string value              Set additional Helm STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
+   --helm-set-file value                Set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)
    --help, -h                           show help (default: false)
 ```
 
