@@ -7,6 +7,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"github.com/utkuozdemir/pv-migrate/migration"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/cli/values"
@@ -134,9 +135,13 @@ func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configu
 	return actionConfig, nil
 }
 
-func getMergedHelmValues(helmValues []string) (map[string]interface{}, error) {
+func getMergedHelmValues(helmValues []string, opts *migration.Options) (map[string]interface{}, error) {
+	allValues := append(helmValues, opts.HelmValues...)
 	valsOptions := values.Options{
-		Values: helmValues,
+		Values:       allValues,
+		ValueFiles:   opts.HelmValuesFiles,
+		StringValues: opts.HelmStringValues,
+		FileValues:   opts.HelmFileValues,
 	}
 
 	return valsOptions.MergeValues(helmProviders)

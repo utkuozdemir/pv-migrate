@@ -70,7 +70,7 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 		"dest.path=" + t.Migration.Dest.Path,
 	}
 
-	vals, err := getMergedHelmValues(helmValues)
+	vals, err := getMergedHelmValues(helmValues, opts)
 	if err != nil {
 		return true, err
 	}

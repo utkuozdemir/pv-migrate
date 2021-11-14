@@ -42,4 +42,8 @@ type Options struct {
 	NoProgressBar         bool
 	SourceMountReadOnly   bool
 	KeyAlgorithm          string
+	HelmValuesFiles       []string
+	HelmValues            []string
+	HelmFileValues        []string
+	HelmStringValues      []string
 }
