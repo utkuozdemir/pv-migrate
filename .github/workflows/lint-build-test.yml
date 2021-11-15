@@ -23,22 +23,14 @@ on:
       - "docker/**"
       - "helm/**"
       - "renovate.json"
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  pre_job:
-    continue-on-error: true
-    runs-on: ubuntu-20.04
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-      - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v3.4.1
-        with:
-          cancel_others: true
-          concurrent_skipping: same_content
-          skip_after_successful_duplicate: false
   lint:
     needs: pre_job
-    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -61,7 +53,6 @@ jobs:
           args: --timeout=3m0s
   build:
     needs: pre_job
-    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -84,7 +75,6 @@ jobs:
           args: build --snapshot --rm-dist --single-target
   test:
     needs: pre_job
-    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
