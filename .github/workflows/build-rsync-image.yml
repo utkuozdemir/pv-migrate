@@ -1,5 +1,5 @@
 ---
-name: build-rsync-image
+name: Build rsync image
 on:
   push:
     branches:

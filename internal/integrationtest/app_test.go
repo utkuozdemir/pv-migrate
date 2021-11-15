@@ -53,6 +53,7 @@ func TestMain(m *testing.M) {
 }
 
 func TestSameNS(t *testing.T) {
+	t.Parallel()
 	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
 	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
@@ -104,6 +105,7 @@ func TestSameNS(t *testing.T) {
 }
 
 func TestNoChown(t *testing.T) {
+	t.Parallel()
 	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
 	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
@@ -153,6 +155,7 @@ func TestNoChown(t *testing.T) {
 }
 
 func TestSameNSDeleteExtraneousFiles(t *testing.T) {
+	t.Parallel()
 	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
 	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
@@ -195,6 +198,7 @@ func TestSameNSDeleteExtraneousFiles(t *testing.T) {
 }
 
 func TestMountedError(t *testing.T) {
+	t.Parallel()
 	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
 	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
@@ -225,6 +229,7 @@ func TestMountedError(t *testing.T) {
 }
 
 func TestIgnoreMounted(t *testing.T) {
+	t.Parallel()
 	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
 	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
@@ -261,6 +266,7 @@ func TestIgnoreMounted(t *testing.T) {
 }
 
 func TestDifferentNS(t *testing.T) {
+	t.Parallel()
 	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
 	destNs, dest, err := randomTestNamespaceWithRandomBoundPVC()
@@ -295,6 +301,7 @@ func TestDifferentNS(t *testing.T) {
 }
 
 func TestDifferentNSRSA(t *testing.T) {
+	t.Parallel()
 	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
 	destNs, dest, err := randomTestNamespaceWithRandomBoundPVC()
@@ -332,6 +339,7 @@ func TestDifferentNSRSA(t *testing.T) {
 // TestDifferentCluster will trick the application to "think" that source and dest are in 2 different clusters
 // while actually both of them being in the same "kind cluster".
 func TestDifferentCluster(t *testing.T) {
+	t.Parallel()
 	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
 	assert.NoError(t, err)
 	destNs, dest, err := randomTestNamespaceWithRandomBoundPVC()

@@ -1,5 +1,5 @@
 ---
-name: build
+name: Lint, build & test
 on:
   push:
     branches:
@@ -23,21 +23,13 @@ on:
       - "docker/**"
       - "helm/**"
       - "renovate.json"
+
+concurrency:
+  group: build-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  pre_job:
-    continue-on-error: true
-    runs-on: ubuntu-20.04
-    outputs:
-      should_skip: ${{ steps.skip_check.outputs.should_skip }}
-    steps:
-      - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v3.4.1
-        with:
-          cancel_others: true
-          concurrent_skipping: same_content
-  build:
-    needs: pre_job
-    if: ${{ needs.pre_job.outputs.should_skip != 'true' }}
+  lint-and-build:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -47,34 +39,45 @@ jobs:
         with:
           # renovate: go
           go-version: 1.17
-      - name: Ensure gofmt
-        run: test -z "$(gofmt -s -d .)"
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
+      - name: Ensure gofmt
+        if: ${{ always() }}
+        run: test -z "$(gofmt -s -d .)"
       - name: Run linters
+        if: ${{ always() }}
         uses: golangci/golangci-lint-action@v2.5.2
         with:
           # renovate: golangci-lint
           version: v1.43.0
           skip-go-installation: true
           args: --timeout=3m0s
+      - name: Build with Goreleaser
+        if: ${{ always() }}
+        uses: goreleaser/goreleaser-action@v2.8.0
+        with:
+          # renovate: goreleaser
+          version: v1.0.0
+          args: build --snapshot --rm-dist --single-target
+  test:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.4.0
+      - name: Setup Go
+        uses: actions/setup-go@v2.1.4
+        with:
+          # renovate: go
+          go-version: 1.17
       - name: Install go-acc
         # renovate: go-acc
         run: go install github.com/ory/go-acc@v0.2.6
       - name: Set nf_conntrack_max for kind
         run: sudo sysctl net/netfilter/nf_conntrack_max=131072
       - name: Run tests
-        run: go-acc --output profile.cov ./... -- -v -timeout 20m
+        run: go-acc --output profile.cov ./... -- -v -timeout 20m -parallel 10
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.0
         with:
           path-to-profile: profile.cov
           shallow: true
-      - name: Build with Goreleaser
-        uses: goreleaser/goreleaser-action@v2.8.0
-        with:
-          # renovate: goreleaser
-          version: v1.0.0
-          args: release --snapshot --skip-publish --rm-dist
-        env:
-          PRIVATE_ACCESS_TOKEN: placeholder

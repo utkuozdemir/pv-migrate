@@ -1,5 +1,5 @@
 ---
-name: release-sshd-image
+name: Release sshd image
 on:
   push:
     tags:
