@@ -29,7 +29,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
+  lint-and-build:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -42,30 +42,18 @@ jobs:
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
       - name: Ensure gofmt
+        if: ${{ always() }}
         run: test -z "$(gofmt -s -d .)"
       - name: Run linters
+        if: ${{ always() }}
         uses: golangci/golangci-lint-action@v2.5.2
         with:
           # renovate: golangci-lint
           version: v1.43.0
           skip-go-installation: true
           args: --timeout=3m0s
-  build:
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2.4.0
-      - name: Setup Go
-        uses: actions/setup-go@v2.1.4
-        with:
-          # renovate: go
-          go-version: 1.17
-      - name: Install go-acc
-        # renovate: go-acc
-        run: go install github.com/ory/go-acc@v0.2.6
-      - name: Set nf_conntrack_max for kind
-        run: sudo sysctl net/netfilter/nf_conntrack_max=131072
       - name: Build with Goreleaser
+        if: ${{ always() }}
         uses: goreleaser/goreleaser-action@v2.8.0
         with:
           # renovate: goreleaser
