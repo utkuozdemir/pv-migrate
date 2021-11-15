@@ -1,5 +1,5 @@
 ---
-name: build
+name: Lint, build & test
 on:
   push:
     branches:
@@ -35,6 +35,7 @@ jobs:
         with:
           cancel_others: true
           concurrent_skipping: same_content
+          skip_after_successful_duplicate: false
   lint:
     needs: pre_job
     if: ${{ needs.pre_job.outputs.should_skip != 'true' }}

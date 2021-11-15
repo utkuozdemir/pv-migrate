@@ -1,5 +1,5 @@
 ---
-name: release-rsync-image
+name: Release rsync image
 on:
   push:
     tags:
