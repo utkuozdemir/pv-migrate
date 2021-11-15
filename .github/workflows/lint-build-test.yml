@@ -30,7 +30,6 @@ concurrency:
 
 jobs:
   lint:
-    needs: pre_job
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -52,7 +51,6 @@ jobs:
           skip-go-installation: true
           args: --timeout=3m0s
   build:
-    needs: pre_job
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
@@ -74,7 +72,6 @@ jobs:
           version: v1.0.0
           args: build --snapshot --rm-dist --single-target
   test:
-    needs: pre_job
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
