@@ -40,7 +40,7 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 	helmValues := []string{
 		"rsync.enabled=true",
 		"rsync.deleteExtraneousFiles=" + strconv.FormatBool(opts.DeleteExtraneousFiles),
-		"rsync.noChown=true",
+		"rsync.noChown=" + strconv.FormatBool(opts.NoChown),
 		"rsync.privateKeyMount=true",
 		"rsync.privateKey=" + privateKey,
 		"rsync.privateKeyMountPath=" + privateKeyMountPath,
