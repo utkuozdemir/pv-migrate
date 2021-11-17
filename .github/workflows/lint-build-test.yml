@@ -72,10 +72,15 @@ jobs:
       - name: Install go-acc
         # renovate: go-acc
         run: go install github.com/ory/go-acc@v0.2.6
-      - name: Set nf_conntrack_max for kind
-        run: sudo sysctl net/netfilter/nf_conntrack_max=131072
+      - name: Create Kind Cluster
+        uses: helm/kind-action@v1.2.0
+        with:
+          version: v0.11.1
+          node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
+      - name: Deploy MetalLB
+        run: kubectl apply -f test/metallb.yaml
       - name: Run tests
-        run: go-acc --output profile.cov ./... -- -v -timeout 20m -parallel 10
+        run: go-acc --output profile.cov ./... -- -v -timeout 20m
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.0
         with:

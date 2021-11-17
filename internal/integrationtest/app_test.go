@@ -1,410 +1,524 @@
 package integrationtest
 
 import (
+	"bytes"
+	"context"
+	"errors"
 	"fmt"
+	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/app"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"io/ioutil"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/utils/env"
 	"os"
-	"strconv"
+	"os/user"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
-	flagPrefix                = "--"
-	sourceKubeconfigParamKey  = flagPrefix + app.FlagSourceKubeconfig
-	sourceNsParamKey          = flagPrefix + app.FlagSourceNamespace
-	destKubeconfigParamKey    = flagPrefix + app.FlagDestKubeconfig
-	destNsParamKey            = flagPrefix + app.FlagDestNamespace
-	sshKeyAlgorithmParamKey   = flagPrefix + app.FlagSSHKeyAlgorithm
-	ignoreMountedFlag         = flagPrefix + app.FlagIgnoreMounted
-	noChownFlag               = flagPrefix + app.FlagNoChown
-	deleteExtraneousFilesFlag = flagPrefix + app.FlagDestDeleteExtraneousFiles
-	migrateCommand            = app.CommandMigrate
-
 	dataFileUid         = "12345"
 	dataFileGid         = "54321"
 	dataFilePath        = "/volume/file.txt"
 	extraDataFilePath   = "/volume/extra_file.txt"
 	generateDataContent = "DATA"
-
-	noKindEnvVar = "PV_MIGRATE_TEST_NO_KIND"
 )
 
 var (
-	ctx                      *pvMigrateTestContext
-	generateDataShellCommand = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s && chown %s:%s %s",
-		generateDataContent, dataFilePath, dataFileUid, dataFileGid, dataFilePath)}
-	generateExtraDataShellCommand = []string{"sh", "-c", fmt.Sprintf("echo -n %s > %s",
-		generateDataContent, extraDataFilePath)}
-	printDataContentShellCommand       = []string{"cat", dataFilePath}
-	printDataUidGidContentShellCommand = []string{"sh", "-c",
-		fmt.Sprintf("stat -c '%%u' %s && stat -c '%%g' %s && cat %s", dataFilePath, dataFilePath, dataFilePath)}
-	checkExtraDataShellCommand = []string{"ls", extraDataFilePath}
+	ns1 string
+	ns2 string
+
+	clusterClient *k8s.ClusterClient
+
+	generateDataShellCommand = fmt.Sprintf("echo -n %s > %s && chown %s:%s %s",
+		generateDataContent, dataFilePath, dataFileUid, dataFileGid, dataFilePath)
+	generateExtraDataShellCommand = fmt.Sprintf("echo -n %s > %s",
+		generateDataContent, extraDataFilePath)
+	printDataUidGidContentShellCommand = fmt.Sprintf("stat -c '%%u' %s && stat -c '%%g' %s && cat %s",
+		dataFilePath, dataFilePath, dataFilePath)
+	checkExtraDataShellCommand = "ls " + extraDataFilePath
+	clearDataShellCommand      = "find /volume -mindepth 1 -delete"
 )
 
 func TestMain(m *testing.M) {
-	ctx = prepareTestContext()
+	err := setup()
+	if err != nil {
+		log.Fatalf("failed to initialize test context: %v", err)
+	}
 	code := m.Run()
-	finalizeTestContext(ctx)
+	err = teardown()
+	if err != nil {
+		log.Errorf("failed to teardown after tests: %v", err)
+	}
+
 	os.Exit(code)
 }
 
 func TestSameNS(t *testing.T) {
-	t.Parallel()
-	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
-	assert.NoError(t, err)
-	destNs := sourceNs
+	assert.NoError(t, clearDests())
 
-	cliApp := app.New(log.New(), "", "")
-	args := []string{
-		os.Args[0],
-		"--log-level", "debug",
-		"--log-format", "json",
-		migrateCommand,
-		sourceKubeconfigParamKey, ctx.kubeconfig,
-		sourceNsParamKey, sourceNs,
-		destKubeconfigParamKey, ctx.kubeconfig,
-		destNsParamKey, destNs,
-		source, dest,
-	}
-	defer func() {
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
-		assert.NoError(t, err)
-	}()
-
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
+	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	// generate extra file
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	cmd := fmt.Sprintf("-l debug m -i -n %s -N %s source dest", ns1, ns1)
+	assert.NoError(t, runCliApp(cmd))
 
-	err = cliApp.Run(args)
+	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
-
-	stdout, stderr, err := execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, printDataUidGidContentShellCommand)
-	assert.NoError(t, err)
-	assert.Empty(t, stderr)
 
 	parts := strings.Split(stdout, "\n")
-	uid := parts[0]
-	gid := parts[1]
-	content := parts[2]
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
+	}
 
-	assert.Equal(t, dataFileUid, uid)
-	assert.Equal(t, dataFileGid, gid)
-	assert.Equal(t, generateDataContent, content)
+	assert.Equal(t, dataFileUid, parts[0])
+	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
 
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, checkExtraDataShellCommand)
+	_, err = execInPod(ns1, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestNoChown(t *testing.T) {
-	t.Parallel()
-	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
-	assert.NoError(t, err)
-	destNs := sourceNs
+	assert.NoError(t, clearDests())
 
-	cliApp := app.New(log.New(), "", "")
-	args := []string{
-		os.Args[0], migrateCommand,
-		sourceKubeconfigParamKey, ctx.kubeconfig,
-		sourceNsParamKey, sourceNs,
-		destKubeconfigParamKey, ctx.kubeconfig,
-		destNsParamKey, destNs,
-		noChownFlag,
-		source, dest,
-	}
-	defer func() {
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
-		assert.NoError(t, err)
-	}()
-
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
+	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	// generate extra file
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	cmd := fmt.Sprintf("-l debug -f json m -i -o -n %s -N %s source dest", ns1, ns1)
+	assert.NoError(t, runCliApp(cmd))
 
-	err = cliApp.Run(args)
+	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
-
-	stdout, stderr, err := execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, printDataUidGidContentShellCommand)
-	assert.NoError(t, err)
-	assert.Empty(t, stderr)
 
 	parts := strings.Split(stdout, "\n")
-	uid := parts[0]
-	gid := parts[1]
-	content := parts[2]
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
+	}
 
-	assert.Equal(t, "0", uid)
-	assert.Equal(t, "0", gid)
-	assert.Equal(t, generateDataContent, content)
+	assert.Equal(t, "0", parts[0])
+	assert.Equal(t, "0", parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
 
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, checkExtraDataShellCommand)
+	_, err = execInPod(ns1, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
-func TestSameNSDeleteExtraneousFiles(t *testing.T) {
-	t.Parallel()
-	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
-	assert.NoError(t, err)
-	destNs := sourceNs
+func TestDeleteExtraneousFiles(t *testing.T) {
+	assert.NoError(t, clearDests())
 
-	cliApp := app.New(log.New(), "", "")
-	args := []string{
-		os.Args[0], migrateCommand,
-		sourceKubeconfigParamKey, ctx.kubeconfig,
-		sourceNsParamKey, sourceNs,
-		destKubeconfigParamKey, ctx.kubeconfig,
-		destNsParamKey, destNs,
-		deleteExtraneousFilesFlag,
-		source, dest,
+	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
+	cmd := fmt.Sprintf("-l debug -f json m -d -i -n %s -N %s source dest", ns1, ns1)
+	assert.NoError(t, runCliApp(cmd))
+
+	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
+	assert.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
 	}
-	defer func() {
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
-		assert.NoError(t, err)
-	}()
 
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
-	assert.NoError(t, err)
+	assert.Equal(t, dataFileUid, parts[0])
+	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
 
-	// generate extra file
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, generateExtraDataShellCommand)
-	assert.NoError(t, err)
-
-	err = cliApp.Run(args)
-	assert.NoError(t, err)
-
-	stdout, stderr, err := execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, printDataContentShellCommand)
-	assert.NoError(t, err)
-	assert.Empty(t, stderr)
-	assert.Equal(t, generateDataContent, stdout)
-
-	_, stderr, err = execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, checkExtraDataShellCommand)
+	_, err = execInPod(ns1, "dest", checkExtraDataShellCommand)
 	assert.Error(t, err)
-	assert.Contains(t, stderr, "No such file or directory")
+	assert.Contains(t, err.Error(), "No such file or directory")
 }
 
 func TestMountedError(t *testing.T) {
-	t.Parallel()
-	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
-	assert.NoError(t, err)
-	destNs := sourceNs
-	cliApp := app.New(log.New(), "", "")
-	args := []string{
-		os.Args[0], migrateCommand,
-		sourceKubeconfigParamKey, ctx.kubeconfig,
-		sourceNsParamKey, sourceNs,
-		destKubeconfigParamKey, ctx.kubeconfig,
-		destNsParamKey, destNs,
-		source, dest,
-	}
-	defer func() {
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
-		assert.NoError(t, err)
-	}()
+	assert.NoError(t, clearDests())
 
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
+	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	_, err = startPodWithPVCMount(ctx.kubeClient, sourceNs, source)
-	assert.NoError(t, err)
-
-	err = cliApp.Run(args)
+	cmd := fmt.Sprintf("-l debug -f json m -n %s -N %s source dest", ns1, ns1)
+	err = runCliApp(cmd)
 	assert.Error(t, err)
-}
-
-func TestIgnoreMounted(t *testing.T) {
-	t.Parallel()
-	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	dest, err := testNamespaceWithRandomBoundPVC(sourceNs)
-	assert.NoError(t, err)
-	destNs := sourceNs
-	cliApp := app.New(log.New(), "", "")
-	args := []string{
-		os.Args[0], migrateCommand,
-		sourceKubeconfigParamKey, ctx.kubeconfig,
-		sourceNsParamKey, sourceNs,
-		destKubeconfigParamKey, ctx.kubeconfig,
-		destNsParamKey, destNs,
-		ignoreMountedFlag,
-		source, dest,
-	}
-	defer func() {
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
-		assert.NoError(t, err)
-	}()
-
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
-	assert.NoError(t, err)
-
-	_, err = startPodWithPVCMount(ctx.kubeClient, sourceNs, source)
-	assert.NoError(t, err)
-
-	err = cliApp.Run(args)
-	assert.NoError(t, err)
-
-	stdout, stderr, err := execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, printDataContentShellCommand)
-	assert.NoError(t, err)
-	assert.Empty(t, stderr)
-	assert.Equal(t, generateDataContent, stdout)
+	assert.Contains(t, err.Error(), "ignore-mounted is not requested")
 }
 
 func TestDifferentNS(t *testing.T) {
-	t.Parallel()
-	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	destNs, dest, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	cliApp := app.New(log.New(), "", "")
+	assert.NoError(t, clearDests())
 
-	args := []string{
-		os.Args[0], migrateCommand,
-		sourceKubeconfigParamKey, ctx.kubeconfig,
-		sourceNsParamKey, sourceNs,
-		destKubeconfigParamKey, ctx.kubeconfig,
-		destNsParamKey, destNs,
-		source, dest,
+	_, err := execInPod(ns2, "dest", generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
+	cmd := fmt.Sprintf("-l debug -f json m -i -n %s -N %s source dest", ns1, ns2)
+	assert.NoError(t, runCliApp(cmd))
+
+	stdout, err := execInPod(ns2, "dest", printDataUidGidContentShellCommand)
+	assert.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
 	}
-	defer func() {
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
-		assert.NoError(t, err)
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, destNs)
-		assert.NoError(t, err)
-	}()
 
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
-	assert.NoError(t, err)
+	assert.Equal(t, dataFileUid, parts[0])
+	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
 
-	err = cliApp.Run(args)
+	_, err = execInPod(ns2, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
-
-	stdout, stderr, err := execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, printDataContentShellCommand)
-	assert.NoError(t, err)
-	assert.Empty(t, stderr)
-	assert.Equal(t, generateDataContent, stdout)
 }
 
-func TestDifferentNSRSA(t *testing.T) {
-	t.Parallel()
-	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	destNs, dest, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	cliApp := app.New(log.New(), "", "")
+func TestRSA(t *testing.T) {
+	assert.NoError(t, clearDests())
 
-	args := []string{
-		os.Args[0], migrateCommand,
-		sourceKubeconfigParamKey, ctx.kubeconfig,
-		sourceNsParamKey, sourceNs,
-		destKubeconfigParamKey, ctx.kubeconfig,
-		destNsParamKey, destNs,
-		sshKeyAlgorithmParamKey, "rsa",
-		source, dest,
+	_, err := execInPod(ns2, "dest", generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
+	cmd := fmt.Sprintf("-l debug -f json m -a rsa -i -n %s -N %s source dest", ns1, ns2)
+	assert.NoError(t, runCliApp(cmd))
+
+	stdout, err := execInPod(ns2, "dest", printDataUidGidContentShellCommand)
+	assert.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
 	}
-	defer func() {
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
-		assert.NoError(t, err)
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, destNs)
-		assert.NoError(t, err)
-	}()
 
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
-	assert.NoError(t, err)
+	assert.Equal(t, dataFileUid, parts[0])
+	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
 
-	err = cliApp.Run(args)
+	_, err = execInPod(ns2, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
-
-	stdout, stderr, err := execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, printDataContentShellCommand)
-	assert.NoError(t, err)
-	assert.Empty(t, stderr)
-	assert.Equal(t, generateDataContent, stdout)
 }
 
-// TestDifferentCluster will trick the application to "think" that source and dest are in 2 different clusters
-// while actually both of them being in the same "kind cluster".
 func TestDifferentCluster(t *testing.T) {
-	t.Parallel()
-	sourceNs, source, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	destNs, dest, err := randomTestNamespaceWithRandomBoundPVC()
-	assert.NoError(t, err)
-	kubeconfigBytes, _ := ioutil.ReadFile(ctx.kubeconfig)
-	kubeconfigCopyFile, _ := ioutil.TempFile("", "pv-migrate-kind-config-*.yaml")
+	assert.NoError(t, clearDests())
+
+	usr, _ := user.Current()
+	dir := usr.HomeDir
+	kubeconfig := env.GetString("KUBECONFIG", dir+"/.kube/config")
+	kubeconfigBytes, _ := ioutil.ReadFile(kubeconfig)
+	kubeconfigCopyFile, _ := ioutil.TempFile("", "pv-migrate-test-config-*.yaml")
 	kubeconfigCopy := kubeconfigCopyFile.Name()
 	_ = ioutil.WriteFile(kubeconfigCopy, kubeconfigBytes, 0600)
 	defer func() { _ = os.Remove(kubeconfigCopy) }()
 
-	cliApp := app.New(log.New(), "", "")
+	_, err := execInPod(ns2, "dest", generateExtraDataShellCommand)
+	assert.NoError(t, err)
 
-	args := []string{
-		os.Args[0], migrateCommand,
-		sourceKubeconfigParamKey, ctx.kubeconfig,
-		sourceNsParamKey, sourceNs,
-		destKubeconfigParamKey, kubeconfigCopy,
-		destNsParamKey, destNs,
-		source, dest,
+	cmd := fmt.Sprintf("-l debug -f json m -K %s -i -n %s -N %s source dest", kubeconfigCopy, ns1, ns2)
+	assert.NoError(t, runCliApp(cmd))
+
+	stdout, err := execInPod(ns2, "dest", printDataUidGidContentShellCommand)
+	assert.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
 	}
-	defer func() {
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, sourceNs)
-		assert.NoError(t, err)
-		err = ensureNamespaceIsDeleted(ctx.kubeClient, destNs)
-		assert.NoError(t, err)
-	}()
 
-	_, _, err = execInPodWithPVC(ctx.kubeClient, ctx.config, sourceNs, source, generateDataShellCommand)
-	assert.NoError(t, err)
+	assert.Equal(t, dataFileUid, parts[0])
+	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
 
-	err = cliApp.Run(args)
+	_, err = execInPod(ns2, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
-
-	stdout, stderr, err := execInPodWithPVC(ctx.kubeClient, ctx.config, destNs, dest, printDataContentShellCommand)
-	assert.NoError(t, err)
-	assert.Empty(t, stderr)
-	assert.Equal(t, generateDataContent, stdout)
 }
 
-func randomTestNamespaceWithRandomBoundPVC() (string, string, error) {
-	ns := generateTestResourceName()
-	pvc, err := testNamespaceWithRandomBoundPVC(ns)
-	return ns, pvc, err
+func setup() error {
+	client, err := k8s.GetClusterClient("", "")
+	if err != nil {
+		return err
+	}
+
+	clusterClient = client
+
+	ns1 = "pv-migrate-test-1-" + util.RandomHexadecimalString(5)
+	ns2 = "pv-migrate-test-2-" + util.RandomHexadecimalString(5)
+
+	_, err = createNs(ns1)
+	if err != nil {
+		return err
+	}
+
+	_, err = createNs(ns2)
+	if err != nil {
+		return err
+	}
+
+	_, err = createPVC(ns1, "source")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPVC(ns1, "dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPVC(ns2, "dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(ns1, "source", "source")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(ns1, "dest", "dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(ns2, "dest", "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPVCIsBound(ns1, "source")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPVCIsBound(ns1, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPVCIsBound(ns2, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(ns1, "source")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(ns1, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(ns2, "dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = execInPod(ns1, "source", generateDataShellCommand)
+	return err
 }
 
-func testNamespaceWithRandomBoundPVC(namespace string) (string, error) {
-	c := ctx.kubeClient
-	_, err := ensureNamespaceExists(c, namespace)
+func teardown() error {
+	var result *multierror.Error
+	err := deleteNs(ns1)
+	if err != nil {
+		result = multierror.Append(result, err)
+	}
+	err = deleteNs(ns2)
+	if err != nil {
+		result = multierror.Append(result, err)
+	}
+	return result.ErrorOrNil()
+}
+
+func createPod(ns string, name string, pvc string) (*corev1.Pod, error) {
+	terminationGracePeriodSeconds := int64(0)
+	p := corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: corev1.PodSpec{
+			TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+			Volumes: []corev1.Volume{
+				{
+					Name: "volume",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: pvc,
+						},
+					},
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:    "main",
+					Image:   "docker.io/busybox:stable",
+					Command: []string{"tail", "-f", "/dev/null"},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "volume",
+							MountPath: "/volume",
+						},
+					},
+				},
+			},
+		},
+	}
+	return clusterClient.KubeClient.CoreV1().
+		Pods(ns).Create(context.TODO(), &p, metav1.CreateOptions{})
+}
+
+func createPVC(ns string, name string) (*corev1.PersistentVolumeClaim, error) {
+	pvc := corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: ns,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.ResourceRequirements{
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					"storage": resource.MustParse("64Mi"),
+				},
+			},
+		},
+	}
+
+	return clusterClient.KubeClient.CoreV1().PersistentVolumeClaims(ns).
+		Create(context.TODO(), &pvc, metav1.CreateOptions{})
+}
+
+func waitUntilPodIsRunning(ns string, name string) error {
+	watch, err := clusterClient.KubeClient.CoreV1().
+		Pods(ns).Watch(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	timeoutCh := time.After(1 * time.Minute)
+	for {
+		select {
+		case event := <-watch.ResultChan():
+			pod, ok := event.Object.(*corev1.Pod)
+			if !ok {
+				return fmt.Errorf("unexpected type while watcing pvcs in ns %s", ns)
+			}
+
+			if pod.Name == name && pod.Status.Phase == corev1.PodRunning {
+				return nil
+			}
+		case <-timeoutCh:
+			return fmt.Errorf("timed out waiting for pod %s/%s to be running", ns, name)
+		}
+	}
+}
+
+func waitUntilPVCIsBound(ns string, name string) error {
+	watch, err := clusterClient.KubeClient.CoreV1().
+		PersistentVolumeClaims(ns).Watch(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	timeoutCh := time.After(1 * time.Minute)
+	for {
+		select {
+		case event := <-watch.ResultChan():
+			pvc, ok := event.Object.(*corev1.PersistentVolumeClaim)
+			if !ok {
+				return fmt.Errorf("unexpected type while watcing pvcs in ns %s", ns)
+			}
+
+			if pvc.Name == name && pvc.Status.Phase == corev1.ClaimBound {
+				return nil
+			}
+		case <-timeoutCh:
+			return fmt.Errorf("timed out waiting for pvc %s/%s to be bound", ns, name)
+		}
+	}
+}
+
+func execInPod(ns string, name string, cmd string) (string, error) {
+	stdoutBuffer := new(bytes.Buffer)
+	stderrBuffer := new(bytes.Buffer)
+
+	req := clusterClient.KubeClient.CoreV1().RESTClient().Post().Resource("pods").
+		Name(name).Namespace(ns).SubResource("exec")
+	option := &corev1.PodExecOptions{
+		Command: []string{"sh", "-c", cmd},
+		Stdin:   false,
+		Stdout:  true,
+		Stderr:  true,
+		TTY:     false,
+	}
+
+	req.VersionedParams(
+		option,
+		scheme.ParameterCodec,
+	)
+
+	config, err := clusterClient.RESTClientGetter.ToRESTConfig()
 	if err != nil {
 		return "", err
 	}
 
-	pvc, err := ensurePVCExistsAndBound(c, namespace, generateTestResourceName())
+	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
 	if err != nil {
 		return "", err
 	}
 
-	return pvc.Name, nil
-}
-
-func useKind() bool {
-	parsed, err := strconv.ParseBool(os.Getenv(noKindEnvVar))
+	var result *multierror.Error
+	err = exec.Stream(remotecommand.StreamOptions{Stdout: stdoutBuffer, Stderr: stderrBuffer})
 	if err != nil {
-		return true
+		result = multierror.Append(result, err)
 	}
 
-	return !parsed
+	stdout := stdoutBuffer.String()
+	stderr := stderrBuffer.String()
+
+	if stderr != "" {
+		result = multierror.Append(result, errors.New(stderr))
+	}
+
+	return stdout, result.ErrorOrNil()
+}
+
+func clearDests() error {
+	_, err := execInPod(ns1, "dest", clearDataShellCommand)
+	if err != nil {
+		return err
+	}
+	_, err = execInPod(ns2, "dest", clearDataShellCommand)
+	return err
+}
+
+func createNs(name string) (*corev1.Namespace, error) {
+	return clusterClient.KubeClient.CoreV1().
+		Namespaces().Create(context.TODO(), &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}, metav1.CreateOptions{})
+}
+
+func deleteNs(name string) error {
+	namespaces := clusterClient.KubeClient.CoreV1().Namespaces()
+	return namespaces.Delete(context.TODO(), name, metav1.DeleteOptions{})
+}
+
+func runCliApp(cmd string) error {
+	args := []string{os.Args[0]}
+	args = append(args, strings.Fields(cmd)...)
+	return app.New(log.New(), "", "").Run(args)
 }

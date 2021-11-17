@@ -66,9 +66,7 @@ metadata:
 spec:
   allowPrivilegeEscalation: false
   allowedCapabilities:
-    - NET_ADMIN
     - NET_RAW
-    - SYS_ADMIN
   allowedHostPaths: []
   defaultAddCapabilities: []
   defaultAllowPrivilegeEscalation: false
@@ -80,6 +78,8 @@ spec:
   hostPorts:
     - max: 7472
       min: 7472
+    - max: 7946
+      min: 7946
   privileged: true
   readOnlyRootFilesystem: true
   requiredDropCapabilities:
@@ -126,7 +126,6 @@ rules:
       - get
       - list
       - watch
-      - update
   - apiGroups:
       - ''
     resources:
@@ -162,6 +161,13 @@ rules:
       - services
       - endpoints
       - nodes
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups: ["discovery.k8s.io"]
+    resources:
+      - endpointslices
     verbs:
       - get
       - list
@@ -215,6 +221,37 @@ rules:
       - list
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app: metallb
+  name: controller
+  namespace: metallb-system
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - secrets
+    verbs:
+      - create
+  - apiGroups:
+      - ''
+    resources:
+      - secrets
+    resourceNames:
+      - memberlist
+    verbs:
+      - list
+  - apiGroups:
+      - apps
+    resources:
+      - deployments
+    resourceNames:
+      - controller
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   labels:
@@ -275,6 +312,21 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: speaker
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app: metallb
+  name: controller
+  namespace: metallb-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: controller
+subjects:
+  - kind: ServiceAccount
+    name: controller
 ---
 apiVersion: apps/v1
 kind: DaemonSet
@@ -302,6 +354,7 @@ spec:
         - args:
             - --port=7472
             - --config=config
+            - --log-level=info
           env:
             - name: METALLB_NODE_NAME
               valueFrom:
@@ -316,36 +369,32 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
             # needed when another software is also using memberlist / port 7946
+            # when changing this default you also need to update the container ports definition
+            # and the PodSecurityPolicy hostPorts definition
             #- name: METALLB_ML_BIND_PORT
             #  value: "7946"
             - name: METALLB_ML_LABELS
               value: "app=metallb,component=speaker"
-            - name: METALLB_ML_NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
             - name: METALLB_ML_SECRET_KEY
               valueFrom:
                 secretKeyRef:
                   name: memberlist
                   key: secretkey
-          image: metallb/speaker:v0.9.6
-          imagePullPolicy: Always
+          image: quay.io/metallb/speaker:v0.11.0
           name: speaker
           ports:
             - containerPort: 7472
               name: monitoring
-          resources:
-            limits:
-              cpu: 100m
-              memory: 100Mi
+            - containerPort: 7946
+              name: memberlist-tcp
+            - containerPort: 7946
+              name: memberlist-udp
+              protocol: UDP
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
               add:
-                - NET_ADMIN
                 - NET_RAW
-                - SYS_ADMIN
               drop:
                 - ALL
             readOnlyRootFilesystem: true
@@ -357,6 +406,7 @@ spec:
       tolerations:
         - effect: NoSchedule
           key: node-role.kubernetes.io/master
+          operator: Exists
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -385,16 +435,17 @@ spec:
         - args:
             - --port=7472
             - --config=config
-          image: metallb/controller:v0.9.6
-          imagePullPolicy: Always
+            - --log-level=info
+          env:
+            - name: METALLB_ML_SECRET_NAME
+              value: memberlist
+            - name: METALLB_DEPLOYMENT
+              value: controller
+          image: quay.io/metallb/controller:v0.11.0
           name: controller
           ports:
             - containerPort: 7472
               name: monitoring
-          resources:
-            limits:
-              cpu: 100m
-              memory: 100Mi
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -406,5 +457,19 @@ spec:
       securityContext:
         runAsNonRoot: true
         runAsUser: 65534
+        fsGroup: 65534
       serviceAccountName: controller
       terminationGracePeriodSeconds: 0
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: metallb-system
+  name: config
+data:
+  config: |
+    address-pools:
+    - name: default
+      protocol: layer2
+      addresses:
+      - 172.19.255.200-172.19.255.250
