@@ -10,13 +10,13 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/stretchr/testify v1.7.0
 	github.com/urfave/cli/v2 v2.3.0
-	golang.org/x/crypto v0.0.0-20211108221036-ceb1ce70b4fa
+	golang.org/x/crypto v0.0.0-20211115234514-b4de73f9ece8
 	helm.sh/helm/v3 v3.7.1
 	k8s.io/api v0.22.3
 	k8s.io/apimachinery v0.22.3
 	k8s.io/cli-runtime v0.22.3
 	k8s.io/client-go v0.22.3
-	k8s.io/utils v0.0.0-20210819203725-bdf08cb9a70a
+	k8s.io/utils v0.0.0-20211116205334-6203023598ed
 )
 
 require (
