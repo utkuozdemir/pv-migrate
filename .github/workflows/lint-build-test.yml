@@ -80,11 +80,7 @@ jobs:
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.20.7@sha256:cbeaf907fc78ac97ce7b625e4bf0de16e3ea725daf6b04f930bd14c67c671ff9
       - name: Deploy MetalLB
-        uses: WyriHaximus/github-action-helm3@v2.1.3
-        with:
-          exec: |
-            helm repo add metallb https://metallb.github.io/metallb
-            helm install metallb metallb/metallb
+        run: kubectl apply -f test/metallb.yaml
       - name: Run tests
         run: go-acc --output profile.cov ./... -- -v -timeout 20m
       - name: Send coverage
