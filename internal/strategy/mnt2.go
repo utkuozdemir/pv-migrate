@@ -65,7 +65,7 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 	showProgressBar := !opts.NoProgressBar
 	kubeClient := t.SourceInfo.ClusterClient.KubeClient
 	jobName := e.HelmReleaseName + "-rsync"
-	err = k8s.WaitUntilJobIsCompleted(e.Logger, kubeClient, ns, jobName, showProgressBar)
+	err = k8s.WaitForJobCompletion(e.Logger, kubeClient, ns, jobName, showProgressBar)
 	return true, err
 }
 

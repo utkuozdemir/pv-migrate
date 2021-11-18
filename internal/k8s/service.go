@@ -19,18 +19,7 @@ const (
 )
 
 func GetServiceAddress(logger *log.Entry, cli kubernetes.Interface, ns string, name string) (string, error) {
-	svc, err := cli.CoreV1().Services(ns).Get(context.TODO(), name, metav1.GetOptions{})
-	if err != nil {
-		return "", err
-	}
-
-	if svc.Spec.Type == corev1.ServiceTypeClusterIP {
-		return svc.Name + "." + svc.Namespace, nil
-	}
-
-	services := cli.CoreV1().Services(svc.Namespace)
-
-	watch, err := services.Watch(context.TODO(), metav1.ListOptions{
+	watch, err := cli.CoreV1().Services(ns).Watch(context.TODO(), metav1.ListOptions{
 		FieldSelector: fields.OneTermEqualSelector(metav1.ObjectNameField, name).String(),
 	})
 	if err != nil {
@@ -45,17 +34,21 @@ func GetServiceAddress(logger *log.Entry, cli kubernetes.Interface, ns string, n
 		case event := <-watch.ResultChan():
 			svc, ok := event.Object.(*corev1.Service)
 			if !ok {
-				return "", fmt.Errorf("unexpected type while watcing services in ns %s", ns)
+				return "", fmt.Errorf("unexpected type while watcing service %s/%s", ns, name)
+			}
+
+			if svc.Spec.Type == corev1.ServiceTypeClusterIP {
+				return svc.Name + "." + svc.Namespace, nil
 			}
 
 			if len(svc.Status.LoadBalancer.Ingress) > 0 {
 				return svc.Status.LoadBalancer.Ingress[0].IP, nil
 			}
 		case <-timeoutCh:
-			return "", fmt.Errorf("timed out waiting for the "+
-				"LoadBalancer svc address in namespace %s/%s", ns, name)
+			return "", fmt.Errorf(
+				"timed out waiting for LoadBalancer address for svc %s/%s", ns, name)
 		case <-ticker.C:
-			logger.WithField("svc", svc.Name).
+			logger.WithField("ns", ns).WithField("svc", name).
 				WithField("elapsedSecs", elapsedSecs).
 				WithField("intervalSecs", serviceLbCheckIntervalSeconds).
 				WithField("timeoutSecs", serviceLbCheckTimeoutSeconds).
