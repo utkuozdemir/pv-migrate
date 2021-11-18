@@ -15,6 +15,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/utils/env"
@@ -401,7 +402,9 @@ func createPVC(ns string, name string) (*corev1.PersistentVolumeClaim, error) {
 
 func waitUntilPodIsRunning(ns string, name string) error {
 	watch, err := clusterClient.KubeClient.CoreV1().
-		Pods(ns).Watch(context.TODO(), metav1.ListOptions{})
+		Pods(ns).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector(metav1.ObjectNameField, name).String(),
+	})
 	if err != nil {
 		return err
 	}
@@ -426,7 +429,9 @@ func waitUntilPodIsRunning(ns string, name string) error {
 
 func waitUntilPVCIsBound(ns string, name string) error {
 	watch, err := clusterClient.KubeClient.CoreV1().
-		PersistentVolumeClaims(ns).Watch(context.TODO(), metav1.ListOptions{})
+		PersistentVolumeClaims(ns).Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector(metav1.ObjectNameField, name).String(),
+	})
 	if err != nil {
 		return err
 	}

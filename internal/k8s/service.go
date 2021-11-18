@@ -2,10 +2,11 @@ package k8s
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/client-go/kubernetes"
 	"time"
 )
@@ -17,8 +18,8 @@ const (
 	serviceLbCheckTimeout         = 120 * time.Second
 )
 
-func GetServiceAddress(logger *log.Entry, kubeClient kubernetes.Interface, serviceNs string, serviceName string) (string, error) {
-	svc, err := kubeClient.CoreV1().Services(serviceNs).Get(context.TODO(), serviceName, metav1.GetOptions{})
+func GetServiceAddress(logger *log.Entry, cli kubernetes.Interface, ns string, name string) (string, error) {
+	svc, err := cli.CoreV1().Services(ns).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -27,27 +28,33 @@ func GetServiceAddress(logger *log.Entry, kubeClient kubernetes.Interface, servi
 		return svc.Name + "." + svc.Namespace, nil
 	}
 
-	services := kubeClient.CoreV1().Services(svc.Namespace)
-	getOptions := metav1.GetOptions{}
-	timeout := time.After(serviceLbCheckTimeout)
-	ticker := time.NewTicker(serviceLbCheckInterval)
+	services := cli.CoreV1().Services(svc.Namespace)
+
+	watch, err := services.Watch(context.TODO(), metav1.ListOptions{
+		FieldSelector: fields.OneTermEqualSelector(metav1.ObjectNameField, name).String(),
+	})
+	if err != nil {
+		return "", err
+	}
+
 	elapsedSecs := 0
+	ticker := time.NewTicker(serviceLbCheckInterval)
+	timeoutCh := time.After(serviceLbCheckTimeout)
 	for {
 		select {
-		case <-timeout:
-			return "", errors.New("timed out waiting for the LoadBalancer svc address")
+		case event := <-watch.ResultChan():
+			svc, ok := event.Object.(*corev1.Service)
+			if !ok {
+				return "", fmt.Errorf("unexpected type while watcing services in ns %s", ns)
+			}
 
+			if len(svc.Status.LoadBalancer.Ingress) > 0 {
+				return svc.Status.LoadBalancer.Ingress[0].IP, nil
+			}
+		case <-timeoutCh:
+			return "", fmt.Errorf("timed out waiting for the "+
+				"LoadBalancer svc address in namespace %s/%s", ns, name)
 		case <-ticker.C:
-			elapsedSecs += serviceLbCheckIntervalSeconds
-			lbService, err := services.Get(context.TODO(), svc.Name, getOptions)
-			if err != nil {
-				return "", err
-			}
-
-			if len(lbService.Status.LoadBalancer.Ingress) > 0 {
-				return lbService.Status.LoadBalancer.Ingress[0].IP, nil
-			}
-
 			logger.WithField("svc", svc.Name).
 				WithField("elapsedSecs", elapsedSecs).
 				WithField("intervalSecs", serviceLbCheckIntervalSeconds).
