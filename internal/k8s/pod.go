@@ -6,7 +6,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	watchtools "k8s.io/client-go/tools/watch"
 	"time"
 )
 
@@ -15,58 +19,76 @@ const (
 )
 
 func waitForJobPod(cli kubernetes.Interface, ns string, jobName string) (*corev1.Pod, error) {
-	watch, err := cli.CoreV1().Pods(ns).Watch(context.TODO(), metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("job-name=%s", jobName),
-	})
+	var result *corev1.Pod
 
-	if err != nil {
-		return nil, err
+	resCli := cli.CoreV1().Pods(ns)
+	labelSelector := fmt.Sprintf("job-name=%s", jobName)
+	ctx, cancel := context.WithTimeout(context.TODO(), podWatchTimeout)
+	defer cancel()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.LabelSelector = labelSelector
+			return resCli.List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.LabelSelector = labelSelector
+			return resCli.Watch(ctx, options)
+		},
 	}
 
-	timeoutCh := time.After(podWatchTimeout)
-	for {
-		select {
-		case event := <-watch.ResultChan():
-			pod, ok := event.Object.(*corev1.Pod)
+	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil,
+		func(event watch.Event) (bool, error) {
+			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return nil, fmt.Errorf("unexpected type while watcing pods "+
-					"in ns %s with job-name=%s", ns, jobName)
+				return false, fmt.Errorf("unexpected type while watcing pods "+
+					"in ns %s with label selector %s", ns, labelSelector)
 			}
 
-			phase := pod.Status.Phase
+			phase := res.Status.Phase
 			if phase != corev1.PodPending {
-				return pod, nil
+				result = res
+				return true, nil
 			}
-		case <-timeoutCh:
-			return nil, fmt.Errorf("timed out waiting for the job pod %s/%s", ns, jobName)
-		}
-	}
+
+			return false, nil
+		})
+
+	return result, err
 }
 
 func waitForPodTermination(cli kubernetes.Interface, ns string, name string) (*corev1.PodPhase, error) {
-	watch, err := cli.CoreV1().Pods(ns).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector(metav1.ObjectNameField, name).String(),
-	})
-	if err != nil {
-		return nil, err
+	var result *corev1.PodPhase
+
+	resCli := cli.CoreV1().Pods(ns)
+	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+	ctx, cancel := context.WithTimeout(context.TODO(), podWatchTimeout)
+	defer cancel()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.Watch(ctx, options)
+		},
 	}
 
-	timeoutCh := time.After(podWatchTimeout)
-	for {
-		select {
-		case event := <-watch.ResultChan():
-			pod, ok := event.Object.(*corev1.Pod)
+	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil,
+		func(event watch.Event) (bool, error) {
+			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return nil, fmt.Errorf("unexpected type while watcing pod %s/%s", ns, name)
+				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", ns, name)
 			}
 
-			phase := pod.Status.Phase
+			phase := res.Status.Phase
 			if phase != corev1.PodRunning {
-				return &phase, nil
+				result = &phase
+				return true, nil
 			}
-		case <-timeoutCh:
-			return nil, fmt.Errorf(
-				"timed out waiting for termination of pod %s/%s", ns, name)
-		}
-	}
+
+			return false, nil
+		})
+
+	return result, err
 }

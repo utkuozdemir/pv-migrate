@@ -3,56 +3,57 @@ package k8s
 import (
 	"context"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	watchtools "k8s.io/client-go/tools/watch"
 	"time"
 )
 
 const (
-	serviceLbCheckIntervalSeconds = 5
-	serviceLbCheckInterval        = 5 * time.Second
-	serviceLbCheckTimeoutSeconds  = 120
-	serviceLbCheckTimeout         = 120 * time.Second
+	serviceLbCheckTimeout = 120 * time.Second
 )
 
-func GetServiceAddress(logger *log.Entry, cli kubernetes.Interface, ns string, name string) (string, error) {
-	watch, err := cli.CoreV1().Services(ns).Watch(context.TODO(), metav1.ListOptions{
-		FieldSelector: fields.OneTermEqualSelector(metav1.ObjectNameField, name).String(),
-	})
-	if err != nil {
-		return "", err
+func GetServiceAddress(cli kubernetes.Interface, ns string, name string) (string, error) {
+	var result string
+
+	resCli := cli.CoreV1().Services(ns)
+	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+	ctx, cancel := context.WithTimeout(context.TODO(), serviceLbCheckTimeout)
+	defer cancel()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.Watch(ctx, options)
+		},
 	}
 
-	elapsedSecs := 0
-	ticker := time.NewTicker(serviceLbCheckInterval)
-	timeoutCh := time.After(serviceLbCheckTimeout)
-	for {
-		select {
-		case event := <-watch.ResultChan():
-			svc, ok := event.Object.(*corev1.Service)
+	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Service{}, nil,
+		func(event watch.Event) (bool, error) {
+			res, ok := event.Object.(*corev1.Service)
 			if !ok {
-				return "", fmt.Errorf("unexpected type while watcing service %s/%s", ns, name)
+				return false, fmt.Errorf("unexpected type while watcing service %s/%s", ns, name)
 			}
 
-			if svc.Spec.Type == corev1.ServiceTypeClusterIP {
-				return svc.Name + "." + svc.Namespace, nil
+			if res.Spec.Type == corev1.ServiceTypeClusterIP {
+				result = res.Name + "." + res.Namespace
+				return true, nil
 			}
 
-			if len(svc.Status.LoadBalancer.Ingress) > 0 {
-				return svc.Status.LoadBalancer.Ingress[0].IP, nil
+			if len(res.Status.LoadBalancer.Ingress) > 0 {
+				result = res.Status.LoadBalancer.Ingress[0].IP
+				return true, nil
 			}
-		case <-timeoutCh:
-			return "", fmt.Errorf(
-				"timed out waiting for LoadBalancer address for svc %s/%s", ns, name)
-		case <-ticker.C:
-			logger.WithField("ns", ns).WithField("svc", name).
-				WithField("elapsedSecs", elapsedSecs).
-				WithField("intervalSecs", serviceLbCheckIntervalSeconds).
-				WithField("timeoutSecs", serviceLbCheckTimeoutSeconds).
-				Info(":hourglass_not_done: Waiting for LoadBalancer IP")
-		}
-	}
+
+			return false, nil
+		})
+	return result, err
 }

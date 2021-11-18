@@ -38,7 +38,7 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 
 	sourceKubeClient := e.Task.SourceInfo.ClusterClient.KubeClient
 	svcName := fmt.Sprintf("pv-migrate-%s-sshd", e.ID)
-	lbSvcAddress, err := k8s.GetServiceAddress(t.Logger, sourceKubeClient, sourceNs, svcName)
+	lbSvcAddress, err := k8s.GetServiceAddress(sourceKubeClient, sourceNs, svcName)
 	if err != nil {
 		return true, err
 	}
