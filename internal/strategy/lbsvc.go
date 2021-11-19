@@ -38,7 +38,7 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 
 	sourceKubeClient := e.Task.SourceInfo.ClusterClient.KubeClient
 	svcName := fmt.Sprintf("pv-migrate-%s-sshd", e.ID)
-	lbSvcAddress, err := k8s.GetServiceAddress(t.Logger, sourceKubeClient, sourceNs, svcName)
+	lbSvcAddress, err := k8s.GetServiceAddress(sourceKubeClient, sourceNs, svcName)
 	if err != nil {
 		return true, err
 	}
@@ -53,7 +53,7 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	showProgressBar := !e.Task.Migration.Options.NoProgressBar
 	kubeClient := s.ClusterClient.KubeClient
 	jobName := e.HelmReleaseName + "-rsync"
-	err = k8s.WaitUntilJobIsCompleted(e.Logger, kubeClient, destNs, jobName, showProgressBar)
+	err = k8s.WaitForJobCompletion(e.Logger, kubeClient, destNs, jobName, showProgressBar)
 	return true, err
 }
 

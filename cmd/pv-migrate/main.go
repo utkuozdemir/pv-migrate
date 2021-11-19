@@ -6,9 +6,8 @@ import (
 	"math/rand"
 	"os"
 	"time"
-	// needed for k8s oidc and gcp auth
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
+	// load all auth plugins - needed for gcp, azure etc.
+	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
 
 var (

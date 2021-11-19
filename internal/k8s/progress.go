@@ -1,20 +1,17 @@
 package k8s
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"github.com/kyokomi/emoji/v2"
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
-	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 )
 
 var (
@@ -22,142 +19,100 @@ var (
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
 
-func tryLogProgressFromRsyncLogs(wg *sync.WaitGroup, kubeClient kubernetes.Interface, pod *corev1.Pod, successCh chan bool, showProgressBar bool, logger *log.Entry) {
-	defer wg.Done()
-
-	var err error
-	logfmt := logger.Context.Value(applog.FormatContextKey)
-	switch logfmt {
-	case applog.FormatFancy:
-		if showProgressBar {
-			err = drawProgressBarFromRsyncLogs(kubeClient, pod.Namespace, pod.Name, successCh)
-		} else {
-			logger.Info(":open_file_folder: Copying data...")
-		}
-	default:
-		err = tailPodLogs(logger, kubeClient, pod.Namespace, pod.Name, successCh)
-	}
-
-	if err != nil {
-		logger.WithError(err).Warn(":large_orange_diamond: Cannot tail logs to display progress")
+func handlePodLogs(cli kubernetes.Interface, ns string, name string,
+	stopCh <-chan bool, showProgressBar bool, logger *log.Entry) {
+	if showProgressBar {
+		tailPodLogsWithProgressBar(cli, ns, name, stopCh, logger)
+	} else {
+		tailPodLogsNoProgressBar(cli, ns, name, stopCh, logger)
 	}
 }
 
-func tailPodLogs(logger *log.Entry, kubeClient kubernetes.Interface,
-	namespace string, pod string, successCh <-chan bool) error {
-	ticker := time.NewTicker(1 * time.Second)
-	var since metav1.Time
-	for {
-		select {
-		case success := <-successCh:
-			if success {
-				return logPodLogs(logger, kubeClient, &namespace, &pod, &since)
-			}
-			return nil
-		case <-ticker.C:
-			err := logPodLogs(logger, kubeClient, &namespace, &pod, &since)
-			if err != nil {
-				return err
-			}
-			since = metav1.Now()
-		}
-	}
+func tailPodLogsNoProgressBar(cli kubernetes.Interface, ns string, name string,
+	stopCh <-chan bool, logger *log.Entry) {
+	tailPodLogsWithRetry(cli, ns, name, func() {},
+		func(s string) { logger.Debug(s) }, func() {}, stopCh, logger)
 }
 
-func logPodLogs(logger *log.Entry, kubeClient kubernetes.Interface,
-	namespace *string, pod *string, since *metav1.Time) error {
-	logs, err := getLogs(kubeClient, namespace, pod, since)
-	if err != nil {
-		return err
-	}
-	for _, l := range logs {
-		logger.Debug(l)
-	}
-	return nil
-}
-
-func drawProgressBarFromRsyncLogs(kubeClient kubernetes.Interface, namespace string,
-	pod string, successCh <-chan bool) error {
-	// probe logs to see if we can read them at all
-	_, err := getLogs(kubeClient, &namespace, &pod, nil)
-	if err != nil {
-		return err
-	}
-
-	bar := progressbar.NewOptions64(
-		1,
-		progressbar.OptionEnableColorCodes(true),
-		progressbar.OptionShowBytes(true),
-		progressbar.OptionSetRenderBlankState(true),
-		progressbar.OptionFullWidth(),
-		progressbar.OptionOnCompletion(func() { fmt.Println() }),
-		progressbar.OptionSetDescription(emoji.Sprint(":open_file_folder: Copying data...")),
-	)
-
-	ticker := time.NewTicker(1 * time.Second)
-	var since metav1.Time
-	for {
-		select {
-		case success := <-successCh:
-			if success {
-				err := bar.Finish()
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		case <-ticker.C:
-			logs, err := getLogs(kubeClient, &namespace, &pod, &since)
-			if err != nil {
-				return err
-			}
-
-			pr, err := getLatestProgress(logs)
-			if err != nil {
-				return err
-			}
-
-			if pr != nil {
-				bar.ChangeMax64(pr.total)
-				err = bar.Set64(pr.transferred)
-				if err != nil {
-					return err
-				}
-				if pr.percentage == 100 {
-					return nil
-				}
-			}
-
-			since = metav1.Now()
-		}
-	}
-}
-
-func getLatestProgress(logs []string) (*progress, error) {
-	for i := len(logs) - 1; i >= 0; i-- {
-		l := logs[i]
-		pr, err := parseLogLine(&l)
-		if err != nil {
-			return nil, err
+func tailPodLogsWithProgressBar(cli kubernetes.Interface, ns string, name string,
+	stopCh <-chan bool, logger *log.Entry) {
+	completed := false
+	var bar *progressbar.ProgressBar
+	tailPodLogsWithRetry(cli, ns, name, func() {
+		bar = progressbar.NewOptions64(
+			1,
+			progressbar.OptionEnableColorCodes(true),
+			progressbar.OptionShowBytes(true),
+			progressbar.OptionSetRenderBlankState(true),
+			progressbar.OptionFullWidth(),
+			progressbar.OptionOnCompletion(func() { fmt.Println() }),
+			progressbar.OptionSetDescription(emoji.Sprint(":open_file_folder: Copying data...")),
+		)
+	}, func(s string) {
+		if completed || bar == nil {
+			return
 		}
 
+		pr, _ := parseLogLine(&s)
 		if pr != nil {
-			return pr, nil
+			bar.ChangeMax64(pr.total)
+			_ = bar.Set64(pr.transferred)
+			completed = pr.percentage == 100
 		}
-	}
-	return nil, nil
+	}, func() {
+		if bar == nil {
+			return
+		}
+
+		_ = bar.Finish()
+	}, stopCh, logger)
 }
 
-func getLogs(kubeClient kubernetes.Interface, namespace *string,
-	pod *string, since *metav1.Time) ([]string, error) {
-	podLogOptions := corev1.PodLogOptions{SinceTime: since}
+// tailPodLogsWithRetry will restart the log tailing if it times out
+func tailPodLogsWithRetry(cli kubernetes.Interface, ns string, name string,
+	beforeFunc func(), logFunc func(string), successFunc func(),
+	stopCh <-chan bool, logger *log.Entry) {
+	failedOnce := false
+	for {
+		done, err := tailPodLogs(cli, ns, name, beforeFunc, logFunc, successFunc, stopCh)
+		if err != nil && !failedOnce {
+			logger.WithError(err).
+				Debug(":large_orange_diamond: Cannot tail logs to display progress")
+			failedOnce = true
+		}
 
-	podLogRequest := kubeClient.CoreV1().Pods(*namespace).GetLogs(*pod, &podLogOptions)
-	bytes, err := podLogRequest.DoRaw(context.TODO())
-	if err != nil {
-		return nil, err
+		if done {
+			return
+		}
 	}
-	return strings.Split(string(bytes), "\n"), nil
+}
+
+func tailPodLogs(cli kubernetes.Interface, ns string, name string, beforeFunc func(),
+	logFunc func(string), successFunc func(), stopCh <-chan bool) (bool, error) {
+	s, err := cli.CoreV1().Pods(ns).
+		GetLogs(name, &corev1.PodLogOptions{Follow: true}).Stream(context.TODO())
+	if err != nil {
+		return false, err
+	}
+
+	defer func() { _ = s.Close() }()
+
+	beforeFunc()
+	sc := bufio.NewScanner(s)
+	for {
+		select {
+		case success := <-stopCh:
+			if success {
+				successFunc()
+			}
+			return true, nil
+		default:
+			if !sc.Scan() {
+				return false, nil
+			}
+			logFunc(sc.Text())
+		}
+	}
 }
 
 type progress struct {

@@ -5,58 +5,90 @@ import (
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
+	watchtools "k8s.io/client-go/tools/watch"
 	"time"
 )
 
 const (
-	podPollInterval = 2 * time.Second
-	podPollTimeout  = 2 * time.Minute
-	podRunTimeout   = 24 * time.Hour
+	podWatchTimeout = 2 * time.Minute
 )
 
-func waitUntilPodIsScheduled(kubeClient kubernetes.Interface, namespace string, pod string) error {
-	return wait.PollImmediate(podPollInterval, podPollTimeout, func() (done bool, err error) {
-		p, err := getPodPhase(kubeClient, namespace, pod)
-		if err != nil {
-			return false, err
-		}
+func waitForJobPod(cli kubernetes.Interface, ns string, jobName string) (*corev1.Pod, error) {
+	var result *corev1.Pod
 
-		phase := *p
-		if phase == corev1.PodPending {
-			return false, nil
-		}
-
-		if phase == corev1.PodRunning || phase == corev1.PodFailed || phase == corev1.PodSucceeded {
-			return true, nil
-		}
-
-		return false, fmt.Errorf("pod in unexpected phase: %v", phase)
-	})
-}
-
-func waitUntilPodIsNotRunning(kubeClient kubernetes.Interface, namespace string, pod string) (*corev1.PodPhase, error) {
-	var p *corev1.PodPhase
-	err := wait.PollImmediate(podPollInterval, podRunTimeout, func() (done bool, err error) {
-		p, err = getPodPhase(kubeClient, namespace, pod)
-		if err != nil {
-			return false, err
-		}
-
-		if *p == corev1.PodRunning {
-			return false, nil
-		}
-
-		return true, nil
-	})
-	return p, err
-}
-
-func getPodPhase(kubeClient kubernetes.Interface, namespace string, pod string) (*corev1.PodPhase, error) {
-	p, err := kubeClient.CoreV1().Pods(namespace).Get(context.TODO(), pod, metav1.GetOptions{})
-	if err != nil {
-		return nil, err
+	resCli := cli.CoreV1().Pods(ns)
+	labelSelector := fmt.Sprintf("job-name=%s", jobName)
+	ctx, cancel := context.WithTimeout(context.TODO(), podWatchTimeout)
+	defer cancel()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.LabelSelector = labelSelector
+			return resCli.List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.LabelSelector = labelSelector
+			return resCli.Watch(ctx, options)
+		},
 	}
-	return &p.Status.Phase, nil
+
+	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil,
+		func(event watch.Event) (bool, error) {
+			res, ok := event.Object.(*corev1.Pod)
+			if !ok {
+				return false, fmt.Errorf("unexpected type while watcing pods "+
+					"in ns %s with label selector %s", ns, labelSelector)
+			}
+
+			phase := res.Status.Phase
+			if phase != corev1.PodPending {
+				result = res
+				return true, nil
+			}
+
+			return false, nil
+		})
+
+	return result, err
+}
+
+func waitForPodTermination(cli kubernetes.Interface, ns string, name string) (*corev1.PodPhase, error) {
+	var result *corev1.PodPhase
+
+	resCli := cli.CoreV1().Pods(ns)
+	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+	ctx, cancel := context.WithTimeout(context.TODO(), podWatchTimeout)
+	defer cancel()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.Watch(ctx, options)
+		},
+	}
+
+	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil,
+		func(event watch.Event) (bool, error) {
+			res, ok := event.Object.(*corev1.Pod)
+			if !ok {
+				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", ns, name)
+			}
+
+			phase := res.Status.Phase
+			if phase != corev1.PodRunning {
+				result = &phase
+				return true, nil
+			}
+
+			return false, nil
+		})
+
+	return result, err
 }

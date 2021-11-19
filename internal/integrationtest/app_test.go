@@ -15,8 +15,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/remotecommand"
+	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/utils/env"
 	"os"
 	"os/user"
@@ -400,53 +405,61 @@ func createPVC(ns string, name string) (*corev1.PersistentVolumeClaim, error) {
 }
 
 func waitUntilPodIsRunning(ns string, name string) error {
-	watch, err := clusterClient.KubeClient.CoreV1().
-		Pods(ns).Watch(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return err
+	resCli := clusterClient.KubeClient.CoreV1().Pods(ns)
+	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.Watch(ctx, options)
+		},
 	}
 
-	timeoutCh := time.After(1 * time.Minute)
-	for {
-		select {
-		case event := <-watch.ResultChan():
-			pod, ok := event.Object.(*corev1.Pod)
+	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil,
+		func(event watch.Event) (bool, error) {
+			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return fmt.Errorf("unexpected type while watcing pvcs in ns %s", ns)
+				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", ns, name)
 			}
 
-			if pod.Name == name && pod.Status.Phase == corev1.PodRunning {
-				return nil
-			}
-		case <-timeoutCh:
-			return fmt.Errorf("timed out waiting for pod %s/%s to be running", ns, name)
-		}
-	}
+			return res.Status.Phase == corev1.PodRunning, nil
+		})
+
+	return err
 }
 
 func waitUntilPVCIsBound(ns string, name string) error {
-	watch, err := clusterClient.KubeClient.CoreV1().
-		PersistentVolumeClaims(ns).Watch(context.TODO(), metav1.ListOptions{})
-	if err != nil {
-		return err
+	resCli := clusterClient.KubeClient.CoreV1().PersistentVolumeClaims(ns)
+	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+	lw := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.List(ctx, options)
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.FieldSelector = fieldSelector
+			return resCli.Watch(ctx, options)
+		},
 	}
 
-	timeoutCh := time.After(1 * time.Minute)
-	for {
-		select {
-		case event := <-watch.ResultChan():
-			pvc, ok := event.Object.(*corev1.PersistentVolumeClaim)
+	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.PersistentVolumeClaim{}, nil,
+		func(event watch.Event) (bool, error) {
+			res, ok := event.Object.(*corev1.PersistentVolumeClaim)
 			if !ok {
-				return fmt.Errorf("unexpected type while watcing pvcs in ns %s", ns)
+				return false, fmt.Errorf("unexpected type while watcing pvc %s/%s", ns, name)
 			}
 
-			if pvc.Name == name && pvc.Status.Phase == corev1.ClaimBound {
-				return nil
-			}
-		case <-timeoutCh:
-			return fmt.Errorf("timed out waiting for pvc %s/%s to be bound", ns, name)
-		}
-	}
+			return res.Status.Phase == corev1.ClaimBound, nil
+		})
+
+	return err
 }
 
 func execInPod(ns string, name string, cmd string) (string, error) {
