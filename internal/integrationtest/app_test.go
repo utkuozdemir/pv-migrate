@@ -94,13 +94,39 @@ func TestSameNS(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestSameNSLbSvc(t *testing.T) {
+	assert.NoError(t, clearDests())
+
+	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
+	cmd := fmt.Sprintf("-l debug m -i -n %s -N %s source dest", ns1, ns1)
+	assert.NoError(t, runCliApp(cmd))
+
+	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
+	assert.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUid, parts[0])
+	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ns1, "dest", checkExtraDataShellCommand)
+	assert.NoError(t, err)
+}
+
 func TestNoChown(t *testing.T) {
 	assert.NoError(t, clearDests())
 
 	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -i -o -n %s -N %s source dest", ns1, ns1)
+	cmd := fmt.Sprintf("-l debug -f json m -s lbsvc -i -o -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
