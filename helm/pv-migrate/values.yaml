@@ -3,25 +3,6 @@ nameOverride: ""
 # -- String to fully override the fullname template with a string
 fullnameOverride: ""
 
-source:
-  # -- Namespace of the source PVC
-  namespace: ""
-  # -- Name of the source PVC
-  pvcName: ""
-  # -- Whether to mount the source PVC in readOnly mode
-  pvcMountReadOnly: true
-  # -- The path in the source volume to be migrated
-  path: ""
-
-dest:
-  # -- Namespace of the destination PVC
-  namespace: ""
-  # -- Name of the destination PVC
-  pvcName: ""
-  # -- The path in the destination volume to be migrated
-  path: ""
-
-
 sshd:
   # -- Enable SSHD server deployment
   enabled: false
@@ -86,6 +67,15 @@ sshd:
   # -- The private key content
   privateKey: ""
 
+  namespace: ""
+  pvcMounts: []
+    #- name: pvc-1
+    #  readOnly: false
+    #  mountPath: /source
+    #- name: pvc-2
+    #  readOnly: true
+    #  mountPath: /dest
+
 rsync:
   # -- Enable creation of Rsync job
   enabled: false
@@ -141,18 +131,29 @@ rsync:
   privateKeyMountPath: /root/.ssh/id_ed25519
   # -- The private key content
   privateKey: ""
-
-  # -- Mount the source PVC into the Rsync pod as well as destination PVC
-  mountSource: false
   # -- Raw Rsync command and flags
   rawCommand: rsync -azv --info=progress2,misc0,flist0 --no-inc-recursive
   # -- Whether the Rsync job should delete the extraneous files or not (--delete).
   deleteExtraneousFiles: false
   # -- Whether Rsync job should skip changing owner and group of file or not (--no-o --no-g).
   noChown: false
+  # -- Whether to use SSH for Rsync or not
+  useSsh: false
   # -- The user to use for SSH when Rsync is initiated over SSH
   sshUser: root
   # -- The raw command of SSH for Rsync over SSH
   sshRawCommand: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5
   # -- The remote host address for the Rsync job over SSH
   sshRemoteHost: ""
+
+  namespace: ""
+  pvcMounts: []
+    #- name: pvc-1
+    #  readOnly: false
+    #  mountPath: /source
+    #- name: pvc-2
+    #  readOnly: true
+    #  mountPath: /source
+
+  sourcePath: /source/
+  destPath: /dest/

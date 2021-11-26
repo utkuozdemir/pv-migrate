@@ -37,26 +37,34 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 	}
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
+	releaseName := e.HelmReleaseNamePrefix
+	releaseNames := []string{releaseName}
+
+	sshRemoteHost := releaseName + "-sshd." + sourceNs
+
+	srcMountPath := "/source"
+	destMountPath := "/dest"
 	helmValues := []string{
 		"rsync.enabled=true",
+		"rsync.namespace=" + destNs,
 		"rsync.deleteExtraneousFiles=" + strconv.FormatBool(opts.DeleteExtraneousFiles),
 		"rsync.noChown=" + strconv.FormatBool(opts.NoChown),
 		"rsync.privateKeyMount=true",
 		"rsync.privateKey=" + privateKey,
 		"rsync.privateKeyMountPath=" + privateKeyMountPath,
+		"rsync.pvcMounts[0].name=" + d.Claim.Name,
+		"rsync.pvcMounts[0].mountPath=" + destMountPath,
+		"rsync.sourcePath=" + srcMountPath + "/" + t.Migration.Source.Path,
+		"rsync.destPath=" + destMountPath + "/" + t.Migration.Dest.Path,
+		"rsync.useSsh=true",
+		"rsync.sshRemoteHost=" + sshRemoteHost,
 		"sshd.enabled=true",
+		"sshd.namespace=" + sourceNs,
 		"sshd.publicKey=" + publicKey,
-		"source.namespace=" + sourceNs,
-		"source.pvcName=" + s.Claim.Name,
-		"source.pvcMountReadOnly=" + strconv.FormatBool(opts.SourceMountReadOnly),
-		"source.path=" + t.Migration.Source.Path,
-		"dest.namespace=" + destNs,
-		"dest.pvcName=" + d.Claim.Name,
-		"dest.path=" + t.Migration.Dest.Path,
+		"sshd.pvcMounts[0].name=" + s.Claim.Name,
+		"sshd.pvcMounts[0].mountPath=" + srcMountPath,
+		"sshd.pvcMounts[0].readOnly=" + strconv.FormatBool(opts.SourceMountReadOnly),
 	}
-
-	releaseName := e.HelmReleaseNamePrefix
-	releaseNames := []string{releaseName}
 
 	doneCh := registerCleanupHook(e, releaseNames)
 	defer cleanupAndReleaseHook(e, releaseNames, doneCh)

@@ -35,7 +35,10 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	doneCh := registerCleanupHook(e, releaseNames)
 	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
 
-	err = installOnSource(e, srcReleaseName, publicKey)
+	srcMountPath := "/source"
+	destMountPath := "/dest"
+
+	err = installOnSource(e, srcReleaseName, publicKey, srcMountPath, destMountPath)
 	if err != nil {
 		return true, err
 	}
@@ -49,7 +52,8 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 
 	sshTargetHost := formatSSHTargetHost(lbSvcAddress)
 
-	err = installOnDest(e, destReleaseName, privateKey, privateKeyMountPath, sshTargetHost)
+	err = installOnDest(e, destReleaseName, privateKey, privateKeyMountPath,
+		sshTargetHost, srcMountPath, destMountPath)
 	if err != nil {
 		return true, err
 	}
@@ -61,7 +65,7 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	return true, err
 }
 
-func installOnSource(e *task.Execution, releaseName string, publicKey string) error {
+func installOnSource(e *task.Execution, releaseName, publicKey, srcMountPath, destMountPath string) error {
 	t := e.Task
 	s := t.SourceInfo
 	ns := s.Claim.Namespace
@@ -69,40 +73,44 @@ func installOnSource(e *task.Execution, releaseName string, publicKey string) er
 
 	helmValues := []string{
 		"sshd.enabled=true",
+		"sshd.namespace=" + ns,
 		"sshd.publicKey=" + publicKey,
 		"sshd.service.type=LoadBalancer",
-		"source.namespace=" + ns,
-		"source.pvcName=" + s.Claim.Name,
-		"source.pvcMountReadOnly=" + strconv.FormatBool(opts.SourceMountReadOnly),
-		"source.path=" + t.Migration.Source.Path,
+		"sshd.pvcMounts[0].name=" + s.Claim.Name,
+		"sshd.pvcMounts[0].readOnly=" + strconv.FormatBool(opts.SourceMountReadOnly),
+		"sshd.pvcMounts[0].mountPath=" + srcMountPath,
 	}
 
 	return installHelmChart(e, s, releaseName, helmValues)
 }
 
-func installOnDest(e *task.Execution, releaseName string, privateKey string,
-	privateKeyMountPath string, sshHost string) error {
+func installOnDest(e *task.Execution, releaseName, privateKey,
+	privateKeyMountPath, sshHost, srcMountPath, destMountPath string) error {
 	t := e.Task
 	d := t.DestInfo
 	ns := d.Claim.Namespace
 	opts := t.Migration.Options
+
 	helmValues := []string{
 		"rsync.enabled=true",
+		"rsync.namespace=" + ns,
 		"rsync.deleteExtraneousFiles=" + strconv.FormatBool(opts.DeleteExtraneousFiles),
 		"rsync.noChown=" + strconv.FormatBool(opts.NoChown),
 		"rsync.privateKeyMount=true",
 		"rsync.privateKey=" + privateKey,
 		"rsync.privateKeyMountPath=" + privateKeyMountPath,
 		"rsync.sshRemoteHost=" + sshHost,
-		"source.path=" + t.Migration.Source.Path,
-		"dest.namespace=" + ns,
-		"dest.pvcName=" + d.Claim.Name,
-		"dest.path=" + t.Migration.Dest.Path,
+		"rsync.pvcMounts[0].name=" + d.Claim.Name,
+		"rsync.pvcMounts[0].mountPath=" + destMountPath,
+		"rsync.sourcePath=" + srcMountPath + "/" + t.Migration.Source.Path,
+		"rsync.destPath=" + destMountPath + "/" + t.Migration.Dest.Path,
+		"rsync.useSsh=true",
 	}
 
 	return installHelmChart(e, d, releaseName, helmValues)
 }
 
+// TODO move to a common place if needed
 func formatSSHTargetHost(host string) string {
 	if util.IsIPv6(host) {
 		return fmt.Sprintf("[%s]", host)

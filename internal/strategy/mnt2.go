@@ -39,19 +39,21 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 
 	node := determineTargetNode(t)
 
+	srcMountPath := "/source"
+	destMountPath := "/dest"
 	helmValues := []string{
 		"rsync.enabled=true",
+		"rsync.namespace=" + ns,
 		"rsync.nodeName=" + node,
-		"rsync.mountSource=true",
 		"rsync.deleteExtraneousFiles=" + strconv.FormatBool(opts.DeleteExtraneousFiles),
 		"rsync.noChown=" + strconv.FormatBool(opts.NoChown),
-		"source.namespace=" + ns,
-		"source.pvcName=" + s.Claim.Name,
-		"source.pvcMountReadOnly=" + strconv.FormatBool(opts.NoChown),
-		"source.path=" + t.Migration.Source.Path,
-		"dest.namespace=" + ns,
-		"dest.pvcName=" + d.Claim.Name,
-		"dest.path=" + t.Migration.Dest.Path,
+		"rsync.pvcMounts[0].name=" + s.Claim.Name,
+		"rsync.pvcMounts[0].mountPath=" + srcMountPath,
+		"rsync.pvcMounts[0].readOnly=" + strconv.FormatBool(opts.SourceMountReadOnly),
+		"rsync.pvcMounts[1].name=" + d.Claim.Name,
+		"rsync.pvcMounts[1].mountPath=" + destMountPath,
+		"rsync.sourcePath=" + srcMountPath + "/" + t.Migration.Source.Path,
+		"rsync.destPath=" + destMountPath + "/" + t.Migration.Dest.Path,
 	}
 
 	releaseName := e.HelmReleaseNamePrefix

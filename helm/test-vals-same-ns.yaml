@@ -3,13 +3,13 @@ rsync:
   nodeName: porcupine
   mountSource: true
 
-source:
   namespace: pv-migrate-test-1
-  pvcName: pv-migrate-test-source-1
-  pvcMountReadOnly: true
-  path: /
+  pvcMounts:
+    - name: pv-migrate-test-source-1
+      readOnly: true
+      mountPath: /source
+    - name: pv-migrate-test-dest-2
+      mountPath: /dest
 
-dest:
-  namespace: pv-migrate-test-1
-  pvcName: pv-migrate-test-dest-1
-  path: /
+  sourcePath: /source/
+  destPath: /dest/
