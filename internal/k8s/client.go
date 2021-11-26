@@ -8,6 +8,7 @@ import (
 )
 
 type ClusterClient struct {
+	RestConfig       *rest.Config
 	KubeClient       kubernetes.Interface
 	RESTClientGetter genericclioptions.RESTClientGetter
 	NsInContext      string
@@ -23,7 +24,12 @@ func GetClusterClient(kubeconfigPath string, context string) (*ClusterClient, er
 		return nil, err
 	}
 
-	return &ClusterClient{KubeClient: kubeClient, RESTClientGetter: rcGetter, NsInContext: ns}, nil
+	return &ClusterClient{
+		RestConfig:       config,
+		KubeClient:       kubeClient,
+		RESTClientGetter: rcGetter,
+		NsInContext:      ns,
+	}, nil
 }
 
 func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config,

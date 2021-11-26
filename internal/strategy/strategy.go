@@ -23,15 +23,17 @@ const (
 	Mnt2Strategy  = "mnt2"
 	SvcStrategy   = "svc"
 	LbSvcStrategy = "lbsvc"
+	LocalStrategy = "local"
 )
 
 var (
-	DefaultStrategies = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy}
+	DefaultStrategies = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy, LocalStrategy}
 
 	nameToStrategy = map[string]Strategy{
 		Mnt2Strategy:  &Mnt2{},
 		SvcStrategy:   &Svc{},
 		LbSvcStrategy: &LbSvc{},
+		LocalStrategy: &Local{},
 	}
 
 	helmProviders = getter.All(cli.New())
@@ -84,12 +86,13 @@ func cleanup(e *task.Execution, releaseNames []string) {
 	logger := e.Logger
 	logger.Info(":broom: Cleaning up")
 	var result *multierror.Error
-	s := t.SourceInfo
 
-	for _, name := range releaseNames {
-		err := cleanupForPVC(logger, name, s)
-		if err != nil {
-			result = multierror.Append(result, err)
+	for _, info := range []*pvc.Info{t.SourceInfo, t.DestInfo} {
+		for _, name := range releaseNames {
+			err := cleanupForPVC(logger, name, info)
+			if err != nil {
+				result = multierror.Append(result, err)
+			}
 		}
 	}
 
@@ -104,12 +107,12 @@ func cleanup(e *task.Execution, releaseNames []string) {
 }
 
 func cleanupForPVC(logger *log.Entry, helmReleaseName string, pvcInfo *pvc.Info) error {
-	sourceHelmActionConfig, err := initHelmActionConfig(logger, pvcInfo)
+	ac, err := initHelmActionConfig(logger, pvcInfo)
 	if err != nil {
 		return err
 	}
 
-	uninstall := action.NewUninstall(sourceHelmActionConfig)
+	uninstall := action.NewUninstall(ac)
 	uninstall.Wait = true
 	uninstall.Timeout = 1 * time.Minute
 	_, err = uninstall.Run(helmReleaseName)

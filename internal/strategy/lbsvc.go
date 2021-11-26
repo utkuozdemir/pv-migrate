@@ -38,7 +38,7 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	srcMountPath := "/source"
 	destMountPath := "/dest"
 
-	err = installOnSource(e, srcReleaseName, publicKey, srcMountPath, destMountPath)
+	err = installOnSource(e, srcReleaseName, publicKey, srcMountPath)
 	if err != nil {
 		return true, err
 	}
@@ -65,7 +65,7 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	return true, err
 }
 
-func installOnSource(e *task.Execution, releaseName, publicKey, srcMountPath, destMountPath string) error {
+func installOnSource(e *task.Execution, releaseName, publicKey, srcMountPath string) error {
 	t := e.Task
 	s := t.SourceInfo
 	ns := s.Claim.Namespace

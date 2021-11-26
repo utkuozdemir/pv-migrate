@@ -10,7 +10,8 @@ import (
 
 func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 	ns string, name string, progressBarRequested bool) error {
-	pod, err := waitForJobPod(cli, ns, name)
+	s := fmt.Sprintf("job-name=%s", name)
+	pod, err := WaitForPod(cli, ns, s)
 	if err != nil {
 		return err
 	}

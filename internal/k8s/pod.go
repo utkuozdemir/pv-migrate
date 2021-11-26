@@ -18,11 +18,10 @@ const (
 	podWatchTimeout = 2 * time.Minute
 )
 
-func waitForJobPod(cli kubernetes.Interface, ns string, jobName string) (*corev1.Pod, error) {
+func WaitForPod(cli kubernetes.Interface, ns, labelSelector string) (*corev1.Pod, error) {
 	var result *corev1.Pod
 
 	resCli := cli.CoreV1().Pods(ns)
-	labelSelector := fmt.Sprintf("job-name=%s", jobName)
 	ctx, cancel := context.WithTimeout(context.TODO(), podWatchTimeout)
 	defer cancel()
 	lw := &cache.ListWatch{

@@ -272,6 +272,32 @@ func TestDifferentCluster(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestLocal(t *testing.T) {
+	assert.NoError(t, clearDests())
+
+	_, err := execInPod(ns2, "dest", generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
+	cmd := fmt.Sprintf("-l debug -f json m -s local -i -n %s -N %s source dest", ns1, ns2)
+	assert.NoError(t, runCliApp(cmd))
+
+	stdout, err := execInPod(ns2, "dest", printDataUidGidContentShellCommand)
+	assert.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUid, parts[0])
+	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ns2, "dest", checkExtraDataShellCommand)
+	assert.NoError(t, err)
+}
+
 func setup() error {
 	client, err := k8s.GetClusterClient("", "")
 	if err != nil {
