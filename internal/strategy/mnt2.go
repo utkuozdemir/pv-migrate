@@ -54,17 +54,20 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 		"dest.path=" + t.Migration.Dest.Path,
 	}
 
-	doneCh := registerCleanupHook(e)
-	defer cleanupAndReleaseHook(e, doneCh)
+	releaseName := e.HelmReleaseNamePrefix
+	releaseNames := []string{releaseName}
 
-	err := installHelmChart(e, s, helmValues)
+	doneCh := registerCleanupHook(e, releaseNames)
+	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
+
+	err := installHelmChart(e, s, "", helmValues)
 	if err != nil {
 		return true, err
 	}
 
 	showProgressBar := !opts.NoProgressBar
 	kubeClient := t.SourceInfo.ClusterClient.KubeClient
-	jobName := e.HelmReleaseName + "-rsync"
+	jobName := e.HelmReleaseNamePrefix + "-rsync"
 	err = k8s.WaitForJobCompletion(e.Logger, kubeClient, ns, jobName, showProgressBar)
 	return true, err
 }

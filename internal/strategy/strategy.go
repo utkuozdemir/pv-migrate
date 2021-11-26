@@ -57,7 +57,7 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func registerCleanupHook(e *task.Execution) chan<- bool {
+func registerCleanupHook(e *task.Execution, releaseNames []string) chan<- bool {
 	doneCh := make(chan bool)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
@@ -65,7 +65,7 @@ func registerCleanupHook(e *task.Execution) chan<- bool {
 		select {
 		case <-signalCh:
 			e.Logger.Warn(":large_orange_diamond: Received termination signal")
-			cleanup(e)
+			cleanup(e, releaseNames)
 			os.Exit(1)
 		case <-doneCh:
 			return
@@ -74,31 +74,26 @@ func registerCleanupHook(e *task.Execution) chan<- bool {
 	return doneCh
 }
 
-func cleanupAndReleaseHook(e *task.Execution, doneCh chan<- bool) {
-	cleanup(e)
+func cleanupAndReleaseHook(e *task.Execution, releaseNames []string, doneCh chan<- bool) {
+	cleanup(e, releaseNames)
 	doneCh <- true
 }
 
-func cleanup(e *task.Execution) {
+func cleanup(e *task.Execution, releaseNames []string) {
 	t := e.Task
 	logger := e.Logger
 	logger.Info(":broom: Cleaning up")
 	var result *multierror.Error
 	s := t.SourceInfo
 
-	err := cleanupForPVC(logger, e.HelmReleaseName, s)
-	if err != nil {
-		result = multierror.Append(result, err)
+	for _, name := range releaseNames {
+		err := cleanupForPVC(logger, name, s)
+		if err != nil {
+			result = multierror.Append(result, err)
+		}
 	}
 
-	d := t.DestInfo
-	err = cleanupForPVC(logger, e.HelmReleaseName, d)
-	if err != nil {
-		result = multierror.Append(result, err)
-
-	}
-
-	err = result.ErrorOrNil()
+	err := result.ErrorOrNil()
 	if err != nil {
 		logger.WithError(err).
 			Warn(":large_orange_diamond: Cleanup failed, you might want to clean up manually")
@@ -147,7 +142,7 @@ func getMergedHelmValues(helmValues []string, opts *migration.Options) (map[stri
 	return valsOptions.MergeValues(helmProviders)
 }
 
-func installHelmChart(e *task.Execution, pvcInfo *pvc.Info, values []string) error {
+func installHelmChart(e *task.Execution, pvcInfo *pvc.Info, name string, values []string) error {
 	helmActionConfig, err := initHelmActionConfig(e.Logger, pvcInfo)
 	if err != nil {
 		return err
@@ -155,7 +150,7 @@ func installHelmChart(e *task.Execution, pvcInfo *pvc.Info, values []string) err
 
 	install := action.NewInstall(helmActionConfig)
 	install.Namespace = pvcInfo.Claim.Namespace
-	install.ReleaseName = e.HelmReleaseName
+	install.ReleaseName = name
 	install.Wait = true
 	install.Timeout = 1 * time.Minute
 

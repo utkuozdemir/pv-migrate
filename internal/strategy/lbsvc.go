@@ -28,16 +28,20 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	}
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	doneCh := registerCleanupHook(e)
-	defer cleanupAndReleaseHook(e, doneCh)
+	srcReleaseName := e.HelmReleaseNamePrefix + "-src"
+	destReleaseName := e.HelmReleaseNamePrefix + "-dest"
+	releaseNames := []string{srcReleaseName, destReleaseName}
 
-	err = installOnSource(e, publicKey)
+	doneCh := registerCleanupHook(e, releaseNames)
+	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
+
+	err = installOnSource(e, srcReleaseName, publicKey)
 	if err != nil {
 		return true, err
 	}
 
 	sourceKubeClient := e.Task.SourceInfo.ClusterClient.KubeClient
-	svcName := fmt.Sprintf("pv-migrate-%s-sshd", e.ID)
+	svcName := srcReleaseName + "-sshd"
 	lbSvcAddress, err := k8s.GetServiceAddress(sourceKubeClient, sourceNs, svcName)
 	if err != nil {
 		return true, err
@@ -45,19 +49,19 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 
 	sshTargetHost := formatSSHTargetHost(lbSvcAddress)
 
-	err = installOnDest(e, privateKey, privateKeyMountPath, sshTargetHost)
+	err = installOnDest(e, destReleaseName, privateKey, privateKeyMountPath, sshTargetHost)
 	if err != nil {
 		return true, err
 	}
 
 	showProgressBar := !e.Task.Migration.Options.NoProgressBar
 	kubeClient := s.ClusterClient.KubeClient
-	jobName := e.HelmReleaseName + "-rsync"
+	jobName := destReleaseName + "-rsync"
 	err = k8s.WaitForJobCompletion(e.Logger, kubeClient, destNs, jobName, showProgressBar)
 	return true, err
 }
 
-func installOnSource(e *task.Execution, publicKey string) error {
+func installOnSource(e *task.Execution, releaseName string, publicKey string) error {
 	t := e.Task
 	s := t.SourceInfo
 	ns := s.Claim.Namespace
@@ -73,10 +77,11 @@ func installOnSource(e *task.Execution, publicKey string) error {
 		"source.path=" + t.Migration.Source.Path,
 	}
 
-	return installHelmChart(e, s, helmValues)
+	return installHelmChart(e, s, releaseName, helmValues)
 }
 
-func installOnDest(e *task.Execution, privateKey string, privateKeyMountPath string, sshHost string) error {
+func installOnDest(e *task.Execution, releaseName string, privateKey string,
+	privateKeyMountPath string, sshHost string) error {
 	t := e.Task
 	d := t.DestInfo
 	ns := d.Claim.Namespace
@@ -95,7 +100,7 @@ func installOnDest(e *task.Execution, privateKey string, privateKeyMountPath str
 		"dest.path=" + t.Migration.Dest.Path,
 	}
 
-	return installHelmChart(e, d, helmValues)
+	return installHelmChart(e, d, releaseName, helmValues)
 }
 
 func formatSSHTargetHost(host string) string {

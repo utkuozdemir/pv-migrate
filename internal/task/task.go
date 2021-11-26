@@ -16,8 +16,8 @@ type Task struct {
 }
 
 type Execution struct {
-	ID              string
-	HelmReleaseName string
-	Task            *Task
-	Logger          *log.Entry
+	ID                    string
+	HelmReleaseNamePrefix string
+	Task                  *Task
+	Logger                *log.Entry
 }
