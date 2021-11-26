@@ -45,8 +45,13 @@ spec:
               readOnly: {{ .Values.source.pvcMountReadOnly }}
             {{- if .Values.sshd.publicKeyMount }}
             - mountPath: {{ .Values.sshd.publicKeyMountPath }}
-              name: public-key
+              name: keys
               subPath: publicKey
+            {{- end }}
+            {{- if .Values.sshd.privateKeyMount }}
+            - mountPath: {{ .Values.sshd.privateKeyMountPath }}
+              name: keys
+              subPath: privateKey
             {{- end }}
       nodeName: {{ .Values.sshd.nodeName }}
       {{- with .Values.sshd.nodeSelector }}
@@ -66,9 +71,10 @@ spec:
         persistentVolumeClaim:
           claimName: {{ required "source.pvcName is required!" .Values.source.pvcName }}
           readOnly: {{ .Values.source.pvcMountReadOnly }}
-      {{- if .Values.sshd.publicKeyMount }}
-      - name: public-key
+      {{- if or .Values.sshd.publicKeyMount .Values.sshd.privateKeyMount }}
+      - name: keys
         secret:
           secretName: {{ include "pv-migrate.fullname" . }}-sshd
+          defaultMode: 0400
       {{- end }}
 {{- end }}

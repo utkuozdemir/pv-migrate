@@ -79,6 +79,13 @@ sshd:
   # -- The public key content
   publicKey: ""
 
+  # -- Mount a private key into the SSHD pod
+  privateKeyMount: false
+  # -- The path to mount the private key
+  privateKeyMountPath: /root/.ssh/id_ed25519
+  # -- The private key content
+  privateKey: ""
+
 rsync:
   # -- Enable creation of Rsync job
   enabled: false
