@@ -57,10 +57,10 @@ func (m *migrator) Run(mig *migration.Migration) error {
 	for _, name := range mig.Strategies {
 		id := util.RandomHexadecimalString(5)
 		e := task.Execution{
-			ID:              id,
-			HelmReleaseName: "pv-migrate-" + id,
-			Task:            t,
-			Logger:          t.Logger.WithField("id", id),
+			ID:                    id,
+			HelmReleaseNamePrefix: "pv-migrate-" + id,
+			Task:                  t,
+			Logger:                t.Logger.WithField("id", id),
 		}
 
 		sLogger := e.Logger.WithField("strategy", name)

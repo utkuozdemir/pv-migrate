@@ -55,17 +55,20 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 		"dest.path=" + t.Migration.Dest.Path,
 	}
 
-	doneCh := registerCleanupHook(e)
-	defer cleanupAndReleaseHook(e, doneCh)
+	releaseName := e.HelmReleaseNamePrefix
+	releaseNames := []string{releaseName}
 
-	err = installHelmChart(e, d, helmValues)
+	doneCh := registerCleanupHook(e, releaseNames)
+	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
+
+	err = installHelmChart(e, d, releaseName, helmValues)
 	if err != nil {
 		return true, err
 	}
 
 	showProgressBar := !opts.NoProgressBar
 	kubeClient := t.SourceInfo.ClusterClient.KubeClient
-	jobName := e.HelmReleaseName + "-rsync"
+	jobName := releaseName + "-rsync"
 	err = k8s.WaitForJobCompletion(e.Logger, kubeClient, destNs, jobName, showProgressBar)
 	return true, err
 }
