@@ -100,7 +100,7 @@ func TestSameNSLbSvc(t *testing.T) {
 	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug m -i -n %s -N %s source dest", ns1, ns1)
+	cmd := fmt.Sprintf("-l debug m -s lbsvc -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
@@ -126,7 +126,7 @@ func TestNoChown(t *testing.T) {
 	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -s lbsvc -i -o -n %s -N %s source dest", ns1, ns1)
+	cmd := fmt.Sprintf("-l debug -f json m -i -o -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
