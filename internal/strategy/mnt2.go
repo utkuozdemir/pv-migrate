@@ -60,7 +60,7 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 	doneCh := registerCleanupHook(e, releaseNames)
 	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
 
-	err := installHelmChart(e, s, "", helmValues)
+	err := installHelmChart(e, s, releaseName, helmValues)
 	if err != nil {
 		return true, err
 	}
