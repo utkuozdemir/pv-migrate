@@ -62,7 +62,7 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 
 	srcReadyChan := make(chan struct{})
 	srcStopChan := make(chan struct{})
-	defer close(srcStopChan)
+	defer func() { srcStopChan <- struct{}{} }()
 
 	// todo: use custom ports
 
@@ -78,7 +78,7 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 			ReadyCh:    srcReadyChan,
 		})
 		if err != nil {
-			// todo: handle error
+			t.Logger.WithError(err).Error(":cross_mark: Error on src port-forward")
 		}
 	}()
 
@@ -89,7 +89,7 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 
 	destReadyChan := make(chan struct{})
 	destStopChan := make(chan struct{})
-	defer close(destStopChan)
+	defer func() { destStopChan <- struct{}{} }()
 
 	go func() {
 		err := k8s.PortForward(&k8s.PortForwardRequest{
@@ -103,7 +103,7 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 			ReadyCh:    destReadyChan,
 		})
 		if err != nil {
-			// todo: handle error
+			t.Logger.WithError(err).Error(":cross_mark: Error on dest port-forward")
 		}
 	}()
 
@@ -114,24 +114,22 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 		return true, err
 	}
 
-	<-srcReadyChan
-	<-destReadyChan
-
 	srcPath := srcMountPath + "/" + t.Migration.Source.Path
 	destPath := destMountPath + "/" + t.Migration.Dest.Path
-
 	cmd := exec.Command("ssh", "-i", privateKeyFile,
 		"-p", "50022", "-R", "50001:localhost:60022",
 		"-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "root@localhost",
 		"rsync -e 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 50001' -vuar "+srcPath+" root@localhost:"+destPath,
 	)
-
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// todo: progress bar
+	<-srcReadyChan
+	<-destReadyChan
 
 	err = cmd.Run()
+
+	// todo: progress bar
 	return true, err
 }
 
