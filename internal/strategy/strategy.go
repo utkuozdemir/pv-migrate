@@ -13,6 +13,7 @@ import (
 	"helm.sh/helm/v3/pkg/cli/values"
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/storage/driver"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"os"
 	"os/signal"
 	"syscall"
@@ -98,6 +99,7 @@ func cleanup(e *task.Execution, releaseNames []string) {
 
 	err := result.ErrorOrNil()
 	if err != nil {
+		fmt.Println(err.Error())
 		logger.WithError(err).
 			Warn(":large_orange_diamond: Cleanup failed, you might want to clean up manually")
 		return
@@ -117,7 +119,7 @@ func cleanupForPVC(logger *log.Entry, helmReleaseName string, pvcInfo *pvc.Info)
 	uninstall.Timeout = 1 * time.Minute
 	_, err = uninstall.Run(helmReleaseName)
 
-	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
+	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) && !apierrors.IsNotFound(err) {
 		return err
 	}
 	return nil

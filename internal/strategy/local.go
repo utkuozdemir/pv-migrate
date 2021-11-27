@@ -1,16 +1,26 @@
 package strategy
 
 import (
+	"errors"
 	"fmt"
+	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/rest"
+	"net"
 	"os"
 	"os/exec"
 	"strconv"
+	"time"
+)
+
+const (
+	portForwardTimeout   = 30 * time.Second
+	sshReverseTunnelPort = 50000
 )
 
 type Local struct {
@@ -60,52 +70,25 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 		return true, err
 	}
 
-	srcReadyChan := make(chan struct{})
-	srcStopChan := make(chan struct{})
+	srcFwdPort, srcStopChan, err := portForwardForPod(t.Logger, s.ClusterClient.RestConfig,
+		sourceSshdPod.Namespace, sourceSshdPod.Name)
+	if err != nil {
+		return true, err
+	}
 	defer func() { srcStopChan <- struct{}{} }()
-
-	// todo: use custom ports
-
-	go func() {
-		err := k8s.PortForward(&k8s.PortForwardRequest{
-			RestConfig: s.ClusterClient.RestConfig,
-			Logger:     t.Logger,
-			PodNs:      sourceSshdPod.Namespace,
-			PodName:    sourceSshdPod.Name,
-			LocalPort:  50022,
-			PodPort:    22,
-			StopCh:     srcStopChan,
-			ReadyCh:    srcReadyChan,
-		})
-		if err != nil {
-			t.Logger.WithError(err).Error(":cross_mark: Error on src port-forward")
-		}
-	}()
 
 	destSshdPod, err := getSshdPodForHelmRelease(d, destReleaseName)
 	if err != nil {
 		return true, err
 	}
 
-	destReadyChan := make(chan struct{})
-	destStopChan := make(chan struct{})
-	defer func() { destStopChan <- struct{}{} }()
+	destFwdPort, destStopChan, err := portForwardForPod(t.Logger, d.ClusterClient.RestConfig,
+		destSshdPod.Namespace, destSshdPod.Name)
+	if err != nil {
+		return true, err
+	}
 
-	go func() {
-		err := k8s.PortForward(&k8s.PortForwardRequest{
-			RestConfig: d.ClusterClient.RestConfig,
-			Logger:     t.Logger,
-			PodNs:      destSshdPod.Namespace,
-			PodName:    destSshdPod.Name,
-			LocalPort:  60022,
-			PodPort:    22,
-			StopCh:     destStopChan,
-			ReadyCh:    destReadyChan,
-		})
-		if err != nil {
-			t.Logger.WithError(err).Error(":cross_mark: Error on dest port-forward")
-		}
-	}()
+	defer func() { destStopChan <- struct{}{} }()
 
 	privateKeyFile, err := writePrivateKeyToTempFile(privateKey)
 	defer func() { _ = os.Remove(privateKeyFile) }()
@@ -116,16 +99,21 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 
 	srcPath := srcMountPath + "/" + t.Migration.Source.Path
 	destPath := destMountPath + "/" + t.Migration.Dest.Path
+
+	rsyncCmd := fmt.Sprintf("rsync -e 'ssh -o StrictHostKeyChecking=no "+
+		"-o UserKnownHostsFile=/dev/null -p %d' -vuar %s root@localhost:%s",
+		sshReverseTunnelPort, srcPath, destPath)
+
 	cmd := exec.Command("ssh", "-i", privateKeyFile,
-		"-p", "50022", "-R", "50001:localhost:60022",
+		"-p", strconv.Itoa(srcFwdPort),
+		"-R", fmt.Sprintf("%d:localhost:%d", sshReverseTunnelPort, destFwdPort),
 		"-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "root@localhost",
-		"rsync -e 'ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 50001' -vuar "+srcPath+" root@localhost:"+destPath,
+		rsyncCmd,
 	)
+
+	// todo handle outputs
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
-	<-srcReadyChan
-	<-destReadyChan
 
 	err = cmd.Run()
 
@@ -194,4 +182,54 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 
 	defer func() { _ = file.Close() }()
 	return name, nil
+}
+
+func portForwardForPod(logger *log.Entry, restConfig *rest.Config,
+	ns, name string) (int, chan<- struct{}, error) {
+	port, err := getFreePort()
+	if err != nil {
+		return 0, nil, err
+	}
+
+	readyChan := make(chan struct{})
+	stopChan := make(chan struct{})
+
+	go func() {
+		err := k8s.PortForward(&k8s.PortForwardRequest{
+			RestConfig: restConfig,
+			Logger:     logger,
+			PodNs:      ns,
+			PodName:    name,
+			LocalPort:  port,
+			PodPort:    22,
+			StopCh:     stopChan,
+			ReadyCh:    readyChan,
+		})
+		if err != nil {
+			logger.WithError(err).WithField("ns", ns).WithField("name", name).
+				WithField("port", port).Error(":cross_mark: Error on port-forward")
+		}
+	}()
+
+	select {
+	case <-readyChan:
+		return port, stopChan, nil
+	case <-time.After(portForwardTimeout):
+		return 0, nil, errors.New("timed out waiting for port-forward to be ready")
+	}
+}
+
+// getFreePort asks the kernel for a free open port that is ready to use.
+func getFreePort() (int, error) {
+	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+	if err != nil {
+		return 0, err
+	}
+
+	l, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = l.Close() }()
+	return l.Addr().(*net.TCPAddr).Port, nil
 }

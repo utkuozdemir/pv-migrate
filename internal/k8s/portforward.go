@@ -40,10 +40,10 @@ func PortForward(req *PortForwardRequest) error {
 	}
 
 	logger := req.Logger
-	outWriter := logger.WriterLevel(log.InfoLevel)
+	outWriter := logger.WriterLevel(log.DebugLevel)
 	defer tryClose(logger, outWriter)
 
-	errWriter := logger.WriterLevel(log.WarnLevel)
+	errWriter := logger.WriterLevel(log.DebugLevel)
 	defer tryClose(logger, outWriter)
 
 	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, targetURL)
