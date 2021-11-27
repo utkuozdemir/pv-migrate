@@ -1,9 +1,12 @@
 package k8s
 
 import (
+	"context"
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	applog "github.com/utkuozdemir/pv-migrate/internal/log"
+	"github.com/utkuozdemir/pv-migrate/internal/rsynclog"
+	"io"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )
@@ -20,7 +23,18 @@ func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 
 	showProgressBar := progressBarRequested &&
 		logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
-	go handlePodLogs(cli, ns, pod.Name, successCh, showProgressBar, logger)
+
+	tailConfig := rsynclog.TailConfig{
+		LogReaderFunc: func() (io.ReadCloser, error) {
+			return cli.CoreV1().Pods(ns).GetLogs(pod.Name,
+				&corev1.PodLogOptions{Follow: true}).Stream(context.TODO())
+		},
+		SuccessCh:       successCh,
+		ShowProgressBar: showProgressBar,
+		Logger:          logger,
+	}
+
+	go rsynclog.Tail(&tailConfig)
 
 	p, err := waitForPodTermination(cli, pod.Namespace, pod.Name)
 	if err != nil {

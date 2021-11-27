@@ -110,7 +110,6 @@ func installOnDest(e *task.Execution, releaseName, privateKey,
 	return installHelmChart(e, d, releaseName, helmValues)
 }
 
-// TODO move to a common place if needed
 func formatSSHTargetHost(host string) string {
 	if util.IsIPv6(host) {
 		return fmt.Sprintf("[%s]", host)

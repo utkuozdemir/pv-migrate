@@ -5,9 +5,12 @@ import (
 	"fmt"
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
+	"github.com/utkuozdemir/pv-migrate/internal/rsynclog"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"io"
 	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
@@ -15,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -35,6 +39,7 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 	t := e.Task
 	s := t.SourceInfo
 	d := t.DestInfo
+	opts := t.Migration.Options
 
 	t.Logger.Info(":key: Generating SSH key pair")
 	keyAlgorithm := t.Migration.Options.KeyAlgorithm
@@ -100,9 +105,19 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 	srcPath := srcMountPath + "/" + t.Migration.Source.Path
 	destPath := destMountPath + "/" + t.Migration.Dest.Path
 
-	rsyncCmd := fmt.Sprintf("rsync -e 'ssh -o StrictHostKeyChecking=no "+
-		"-o UserKnownHostsFile=/dev/null -p %d' -vuar %s root@localhost:%s",
-		sshReverseTunnelPort, srcPath, destPath)
+	rsyncSshArgs := fmt.Sprintf("\"ssh -p %d -o StrictHostKeyChecking=no "+
+		"-o UserKnownHostsFile=/dev/null -o ConnectTimeout=5\"", sshReverseTunnelPort)
+	rsyncArgs := []string{"-azv", "--info=progress2,misc0,flist0",
+		"--no-inc-recursive", "-e", rsyncSshArgs}
+	if opts.NoChown {
+		rsyncArgs = append(rsyncArgs, "--no-o", "--no-g")
+	}
+	if opts.DeleteExtraneousFiles {
+		rsyncArgs = append(rsyncArgs, "--delete")
+	}
+
+	rsyncCmd := fmt.Sprintf("rsync %s %s root@localhost:%s",
+		strings.Join(rsyncArgs, " "), srcPath, destPath)
 
 	cmd := exec.Command("ssh", "-i", privateKeyFile,
 		"-p", strconv.Itoa(srcFwdPort),
@@ -111,13 +126,28 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 		rsyncCmd,
 	)
 
-	// todo handle outputs
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	reader, writer := io.Pipe()
+	cmd.Stdout = writer
+	cmd.Stderr = writer
 
-	err = cmd.Run()
+	errorCh := make(chan error)
+	go func() { errorCh <- cmd.Run() }()
 
-	// todo: progress bar
+	showProgressBar := !e.Task.Migration.Options.NoProgressBar &&
+		t.Logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
+	successCh := make(chan bool, 1)
+
+	tailConfig := rsynclog.TailConfig{
+		LogReaderFunc:   func() (io.ReadCloser, error) { return reader, nil },
+		SuccessCh:       successCh,
+		ShowProgressBar: showProgressBar,
+		Logger:          t.Logger,
+	}
+
+	go rsynclog.Tail(&tailConfig)
+
+	err = <-errorCh
+	successCh <- err == nil
 	return true, err
 }
 
