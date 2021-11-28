@@ -110,11 +110,13 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 		Delete:      opts.DeleteExtraneousFiles,
 		SrcPath:     srcPath,
 		DestPath:    destPath,
-		UseSshDest:  true,
-		SshDestUser: "root",
-		SshDestHost: "localhost",
+		DestUseSsh:  true,
+		DestSshHost: "localhost",
 	}
-	rsyncCmdStr := rsyncCmd.Build()
+	rsyncCmdStr, err := rsyncCmd.Build()
+	if err != nil {
+		return true, err
+	}
 
 	cmd := exec.Command("ssh", "-i", privateKeyFile,
 		"-p", strconv.Itoa(srcFwdPort),
@@ -160,34 +162,53 @@ func installLocalOnSource(e *task.Execution, releaseName,
 	ns := s.Claim.Namespace
 	opts := t.Migration.Options
 
-	helmValues := []string{
-		"sshd.enabled=true",
-		"sshd.namespace=" + ns,
-		"sshd.publicKey=" + publicKey,
-		"sshd.privateKeyMount=true",
-		"sshd.privateKey=" + privateKey,
-		"sshd.privateKeyMountPath=" + privateKeyMountPath,
-		"sshd.pvcMounts[0].name=" + s.Claim.Name,
-		"sshd.pvcMounts[0].readOnly=" + strconv.FormatBool(opts.SourceMountReadOnly),
-		"sshd.pvcMounts[0].mountPath=" + srcMountPath,
+	vals := map[string]interface{}{
+		"sshd": map[string]interface{}{
+			"enabled":             true,
+			"namespace":           ns,
+			"publicKey":           publicKey,
+			"privateKeyMount":     true,
+			"privateKey":          privateKey,
+			"privateKeyMountPath": privateKeyMountPath,
+			"pvcMounts": []map[string]interface{}{
+				{
+					"name":      s.Claim.Name,
+					"readOnly":  opts.SourceMountReadOnly,
+					"mountPath": srcMountPath,
+				},
+			},
+		},
 	}
 
-	return installHelmChart(e, s, releaseName, helmValues)
+	return installHelmChart(e, s, releaseName, vals)
 }
 
 func installLocalOnDest(e *task.Execution, releaseName, publicKey, destMountPath string) error {
 	t := e.Task
 	d := t.DestInfo
 	ns := d.Claim.Namespace
-	helmValues := []string{
-		"sshd.enabled=true",
-		"sshd.namespace=" + ns,
-		"sshd.publicKey=" + publicKey,
-		"sshd.pvcMounts[0].name=" + d.Claim.Name,
-		"sshd.pvcMounts[0].mountPath=" + destMountPath,
+
+	vals := map[string]interface{}{
+		"sshd": map[string]interface{}{
+			"enabled":   true,
+			"namespace": ns,
+			"publicKey": publicKey,
+			"pvcMounts": []map[string]interface{}{
+				{
+					"name":      d.Claim.Name,
+					"mountPath": destMountPath,
+				},
+			},
+		},
 	}
 
-	return installHelmChart(e, d, releaseName, helmValues)
+	valsFile, err := writeHelmValuesToTempFile("", vals)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(valsFile) }()
+
+	return installHelmChart(e, d, releaseName, vals)
 }
 
 func writePrivateKeyToTempFile(privateKey string) (string, error) {

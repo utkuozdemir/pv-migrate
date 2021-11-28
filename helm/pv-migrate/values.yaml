@@ -67,7 +67,9 @@ sshd:
   # -- The private key content
   privateKey: ""
 
+  # -- Namespace to run SSHD pod in
   namespace: ""
+  # -- PVC mounts into the SSHD pod. For examples, see see [values.yaml](values.yaml)
   pvcMounts: []
     #- name: pvc-1
     #  readOnly: false
@@ -131,29 +133,16 @@ rsync:
   privateKeyMountPath: /root/.ssh/id_ed25519
   # -- The private key content
   privateKey: ""
-  # -- Raw Rsync command and flags
-  rawCommand: rsync -azv --info=progress2,misc0,flist0 --no-inc-recursive
-  # -- Whether the Rsync job should delete the extraneous files or not (--delete).
-  deleteExtraneousFiles: false
-  # -- Whether Rsync job should skip changing owner and group of file or not (--no-o --no-g).
-  noChown: false
-  # -- Whether to use SSH for Rsync or not
-  useSsh: false
-  # -- The user to use for SSH when Rsync is initiated over SSH
-  sshUser: root
-  # -- The raw command of SSH for Rsync over SSH
-  sshRawCommand: ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5
-  # -- The remote host address for the Rsync job over SSH
-  sshRemoteHost: ""
+  # -- Full Rsync command and flags
+  command: ""
 
+  # -- Namespace to run Rsync pod in
   namespace: ""
+  # -- PVC mounts into the Rsync pod. For examples, see see [values.yaml](values.yaml)
   pvcMounts: []
     #- name: pvc-1
     #  readOnly: false
     #  mountPath: /source
     #- name: pvc-2
     #  readOnly: true
-    #  mountPath: /source
-
-  sourcePath: /source/
-  destPath: /dest/
+    #  mountPath: /dest

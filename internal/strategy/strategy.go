@@ -8,11 +8,13 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/migration"
+	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/cli/values"
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/storage/driver"
+	"io/ioutil"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"os"
 	"os/signal"
@@ -135,11 +137,11 @@ func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configu
 	return actionConfig, nil
 }
 
-func getMergedHelmValues(helmValues []string, opts *migration.Options) (map[string]interface{}, error) {
-	allValues := append(helmValues, opts.HelmValues...)
+func getMergedHelmValues(helmValuesFile string, opts *migration.Options) (map[string]interface{}, error) {
+	allValuesFiles := append([]string{helmValuesFile}, opts.HelmValuesFiles...)
 	valsOptions := values.Options{
-		Values:       allValues,
-		ValueFiles:   opts.HelmValuesFiles,
+		Values:       opts.HelmValues,
+		ValueFiles:   allValuesFiles,
 		StringValues: opts.HelmStringValues,
 		FileValues:   opts.HelmFileValues,
 	}
@@ -147,7 +149,14 @@ func getMergedHelmValues(helmValues []string, opts *migration.Options) (map[stri
 	return valsOptions.MergeValues(helmProviders)
 }
 
-func installHelmChart(e *task.Execution, pvcInfo *pvc.Info, name string, values []string) error {
+func installHelmChart(e *task.Execution, pvcInfo *pvc.Info, name string,
+	values map[string]interface{}) error {
+	helmValuesFile, err := writeHelmValuesToTempFile(e.ID, values)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(helmValuesFile) }()
+
 	helmActionConfig, err := initHelmActionConfig(e.Logger, pvcInfo)
 	if err != nil {
 		return err
@@ -160,11 +169,28 @@ func installHelmChart(e *task.Execution, pvcInfo *pvc.Info, name string, values 
 	install.Timeout = 1 * time.Minute
 
 	t := e.Task
-	vals, err := getMergedHelmValues(values, t.Migration.Options)
+	vals, err := getMergedHelmValues(helmValuesFile, t.Migration.Options)
 	if err != nil {
 		return err
 	}
 
 	_, err = install.Run(t.Chart, vals)
 	return err
+}
+
+func writeHelmValuesToTempFile(id string, vals map[string]interface{}) (string, error) {
+	f, err := ioutil.TempFile("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = f.Close() }()
+
+	encoder := yaml.NewEncoder(f)
+	encoder.SetIndent(2)
+	err = encoder.Encode(vals)
+	if err != nil {
+		return "", err
+	}
+
+	return f.Name(), nil
 }
