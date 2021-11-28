@@ -18,7 +18,6 @@ import (
 	"os"
 	"os/exec"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -105,25 +104,23 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 	srcPath := srcMountPath + "/" + t.Migration.Source.Path
 	destPath := destMountPath + "/" + t.Migration.Dest.Path
 
-	rsyncSshArgs := fmt.Sprintf("\"ssh -p %d -o StrictHostKeyChecking=no "+
-		"-o UserKnownHostsFile=/dev/null -o ConnectTimeout=5\"", sshReverseTunnelPort)
-	rsyncArgs := []string{"-azv", "--info=progress2,misc0,flist0",
-		"--no-inc-recursive", "-e", rsyncSshArgs}
-	if opts.NoChown {
-		rsyncArgs = append(rsyncArgs, "--no-o", "--no-g")
+	rsyncCmd := rsync.Cmd{
+		Port:        sshReverseTunnelPort,
+		NoChown:     opts.NoChown,
+		Delete:      opts.DeleteExtraneousFiles,
+		SrcPath:     srcPath,
+		DestPath:    destPath,
+		UseSshDest:  true,
+		SshDestUser: "root",
+		SshDestHost: "localhost",
 	}
-	if opts.DeleteExtraneousFiles {
-		rsyncArgs = append(rsyncArgs, "--delete")
-	}
-
-	rsyncCmd := fmt.Sprintf("rsync %s %s root@localhost:%s",
-		strings.Join(rsyncArgs, " "), srcPath, destPath)
+	rsyncCmdStr := rsyncCmd.Build()
 
 	cmd := exec.Command("ssh", "-i", privateKeyFile,
 		"-p", strconv.Itoa(srcFwdPort),
 		"-R", fmt.Sprintf("%d:localhost:%d", sshReverseTunnelPort, destFwdPort),
 		"-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "root@localhost",
-		rsyncCmd,
+		rsyncCmdStr,
 	)
 
 	reader, writer := io.Pipe()
