@@ -7,7 +7,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
-	"github.com/utkuozdemir/pv-migrate/internal/rsynclog"
+	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"io"
@@ -137,14 +137,14 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 		t.Logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
 	successCh := make(chan bool, 1)
 
-	tailConfig := rsynclog.TailConfig{
+	logTail := rsync.LogTail{
 		LogReaderFunc:   func() (io.ReadCloser, error) { return reader, nil },
 		SuccessCh:       successCh,
 		ShowProgressBar: showProgressBar,
 		Logger:          t.Logger,
 	}
 
-	go rsynclog.Tail(&tailConfig)
+	go logTail.Start()
 
 	err = <-errorCh
 	successCh <- err == nil

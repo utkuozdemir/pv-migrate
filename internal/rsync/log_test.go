@@ -1,4 +1,4 @@
-package rsynclog
+package rsync
 
 import (
 	"github.com/stretchr/testify/assert"

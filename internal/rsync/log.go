@@ -1,4 +1,4 @@
-package rsynclog
+package rsync
 
 import (
 	"bufio"
@@ -17,7 +17,7 @@ var (
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
 
-type TailConfig struct {
+type LogTail struct {
 	LogReaderFunc   func() (io.ReadCloser, error)
 	SuccessCh       <-chan bool
 	ShowProgressBar bool
@@ -30,22 +30,22 @@ type progress struct {
 	total       int64
 }
 
-func Tail(config *TailConfig) {
-	if config.ShowProgressBar {
-		tailWithProgressBar(config)
-	} else {
-		tailNoProgressBar(config)
+func (l *LogTail) Start() {
+	if l.ShowProgressBar {
+		l.tailWithProgressBar()
+		return
 	}
+	l.tailNoProgressBar()
 }
 
-func tailNoProgressBar(config *TailConfig) {
-	tailWithRetry(config, func() {}, func(s string) { config.Logger.Debug(s) }, func() {})
+func (l *LogTail) tailNoProgressBar() {
+	l.tailWithRetry(func() {}, func(s string) { l.Logger.Debug(s) }, func() {})
 }
 
-func tailWithProgressBar(config *TailConfig) {
+func (l *LogTail) tailWithProgressBar() {
 	completed := false
 	var bar *progressbar.ProgressBar
-	tailWithRetry(config, func() {
+	l.tailWithRetry(func() {
 		bar = progressbar.NewOptions64(
 			1,
 			progressbar.OptionEnableColorCodes(true),
@@ -76,12 +76,12 @@ func tailWithProgressBar(config *TailConfig) {
 }
 
 // tailWithRetry will restart the log tailing if it times out
-func tailWithRetry(config *TailConfig, beforeFunc func(), logFunc func(string), successFunc func()) {
+func (l *LogTail) tailWithRetry(beforeFunc func(), logFunc func(string), successFunc func()) {
 	failedOnce := false
 	for {
-		done, err := tail(config, beforeFunc, logFunc, successFunc)
+		done, err := l.tail(beforeFunc, logFunc, successFunc)
 		if err != nil && !failedOnce {
-			config.Logger.WithError(err).
+			l.Logger.WithError(err).
 				Debug(":large_orange_diamond: Cannot tail logs to display progress")
 			failedOnce = true
 		}
@@ -92,9 +92,9 @@ func tailWithRetry(config *TailConfig, beforeFunc func(), logFunc func(string), 
 	}
 }
 
-func tail(config *TailConfig, beforeFunc func(),
+func (l *LogTail) tail(beforeFunc func(),
 	logFunc func(string), successFunc func()) (bool, error) {
-	s, err := config.LogReaderFunc()
+	s, err := l.LogReaderFunc()
 	if err != nil {
 		return false, err
 	}
@@ -105,7 +105,7 @@ func tail(config *TailConfig, beforeFunc func(),
 	sc := bufio.NewScanner(s)
 	for {
 		select {
-		case success := <-config.SuccessCh:
+		case success := <-l.SuccessCh:
 			if success {
 				successFunc()
 			}
