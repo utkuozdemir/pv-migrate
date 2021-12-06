@@ -42,7 +42,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{- define "pv-migrate.rsync.serviceAccountName" -}}
-{{- if .Values.sshd.serviceAccount.create }}
+{{- if .Values.rsync.serviceAccount.create }}
 {{- default (printf "%s-%s" (include "pv-migrate.fullname" .) "rsync") .Values.rsync.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.rsync.serviceAccount.name }}
