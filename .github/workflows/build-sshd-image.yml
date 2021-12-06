@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master
+      - renovate/**
     paths:
       - docker/sshd/**
   pull_request:
