@@ -79,7 +79,7 @@ func (m *migrator) Run(mig *migration.Migration) error {
 		}
 
 		sLogger.WithError(runErr).
-			Warn(":large_orange_diamond: Migration failed with this strategy, " +
+			Error(":large_orange_diamond: Migration failed with this strategy, " +
 				"will try with the remaining strategies")
 	}
 

@@ -84,7 +84,28 @@ type fancyFormatter struct {
 }
 
 func (f *fancyFormatter) Format(e *log.Entry) ([]byte, error) {
-	msg := emoji.Sprintf("%s\n", e.Message)
+	logErr := extractLogError(e)
+
+	errStr := ""
+	if logErr != nil {
+		errStr = fmt.Sprintf(" - Error: %s", logErr)
+	}
+
+	msg := emoji.Sprintf("%s%s\n", e.Message, errStr)
 	bytes := []byte(msg)
 	return bytes, nil
+}
+
+func extractLogError(e *log.Entry) error {
+	logErr, exists := e.Data[log.ErrorKey]
+	if !exists {
+		return nil
+	}
+
+	err, ok := logErr.(error)
+	if !ok {
+		return nil
+	}
+
+	return err
 }
