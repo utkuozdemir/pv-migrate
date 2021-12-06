@@ -1,16 +1,14 @@
 {
   "extends": [
     "config:base",
+    ":automergeBranch",
     ":automergeMinor",
+    ":automergeDigest",
     ":disableDependencyDashboard"
   ],
   "postUpdateOptions": [
     "gomodTidy"
   ],
-  "digest": {
-    "automerge": true,
-    "automergeType": "branch"
-  },
   "packageRules": [
     {
       "matchDatasources": [
@@ -25,12 +23,13 @@
       "groupName": "docker images"
     },
     {
+      "extends": [
+        ":automergeMajor"
+      ],
       "matchPaths": [
         ".github/workflows/**"
       ],
-      "groupName": "github actions",
-      "automerge": true,
-      "automergeType": "branch"
+      "groupName": "github actions"
     }
   ],
   "regexManagers": [
