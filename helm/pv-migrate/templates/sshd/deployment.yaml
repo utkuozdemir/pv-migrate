@@ -3,7 +3,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ include "pv-migrate.fullname" . }}-sshd
-  namespace: {{ .Values.source.namespace }}
+  namespace: {{ .Values.sshd.namespace }}
   labels:
     app.kubernetes.io/component: sshd
     {{- include "pv-migrate.labels" . | nindent 4 }}
@@ -40,13 +40,20 @@ spec:
           resources:
             {{- toYaml .Values.sshd.resources | nindent 12 }}
           volumeMounts:
-            - mountPath: /source
-              name: source
-              readOnly: {{ .Values.source.pvcMountReadOnly }}
+            {{- range .Values.sshd.pvcMounts }}
+            - mountPath: {{ .mountPath }}
+              name: {{ .name }}
+              readOnly: {{ default false .readOnly }}
+            {{- end }}
             {{- if .Values.sshd.publicKeyMount }}
             - mountPath: {{ .Values.sshd.publicKeyMountPath }}
-              name: public-key
+              name: keys
               subPath: publicKey
+            {{- end }}
+            {{- if .Values.sshd.privateKeyMount }}
+            - mountPath: {{ .Values.sshd.privateKeyMountPath }}
+              name: keys
+              subPath: privateKey
             {{- end }}
       nodeName: {{ .Values.sshd.nodeName }}
       {{- with .Values.sshd.nodeSelector }}
@@ -62,13 +69,16 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
-      - name: source
+      {{- range .Values.sshd.pvcMounts }}
+      - name: {{ .name }}
         persistentVolumeClaim:
-          claimName: {{ required "source.pvcName is required!" .Values.source.pvcName }}
-          readOnly: {{ .Values.source.pvcMountReadOnly }}
-      {{- if .Values.sshd.publicKeyMount }}
-      - name: public-key
+          claimName: {{ required ".Values.sshd.pvcMounts[*].pvcName is required!" .name }}
+          readOnly: {{ default false .readOnly }}
+      {{- end }}
+      {{- if or .Values.sshd.publicKeyMount .Values.sshd.privateKeyMount }}
+      - name: keys
         secret:
           secretName: {{ include "pv-migrate.fullname" . }}-sshd
+          defaultMode: 0400
       {{- end }}
 {{- end }}

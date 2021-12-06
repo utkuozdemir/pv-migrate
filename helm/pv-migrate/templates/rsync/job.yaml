@@ -3,7 +3,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ include "pv-migrate.fullname" . }}-rsync
-  namespace: {{ .Values.dest.namespace }}
+  namespace: {{ .Values.rsync.namespace }}
   labels:
     app.kubernetes.io/component: rsync
     {{- include "pv-migrate.labels" . | nindent 4 }}
@@ -38,22 +38,7 @@ spec:
               retries=10
               until [ "$n" -ge "$retries" ]
               do
-                {{ .Values.rsync.rawCommand }} \
-                  {{- if .Values.rsync.deleteExtraneousFiles }}
-                  --delete \
-                  {{- end }}
-                  {{- if .Values.rsync.noChown }}
-                  --no-o --no-g \
-                  {{- end }}
-                  {{- if .Values.rsync.mountSource }}
-                  /source/{{ .Values.source.path }} \
-                  {{- else }}
-                  -e "{{ .Values.rsync.sshRawCommand }}" \
-                  {{ .Values.rsync.sshUser }}@{{ .Values.rsync.sshRemoteHost | default (printf "%s-sshd.%s" (include "pv-migrate.fullname" .) (.Values.source.namespace | default .Release.Namespace)) }}:/source/{{ .Values.source.path }} \
-                  {{- end }}
-                  /dest/{{ .Values.dest.path }} && \
-                  rc=0 && \
-                  break
+                {{ required ".Values.rsync.command is required!" .Values.rsync.command }} && rc=0 && break
                 n=$((n+1))
                 echo "rsync attempt $n/10 failed, waiting 5 seconds before trying again"
                 sleep 5
@@ -70,13 +55,11 @@ spec:
           resources:
             {{- toYaml .Values.rsync.resources | nindent 12 }}
           volumeMounts:
-            {{- if .Values.rsync.mountSource }}
-            - mountPath: /source
-              name: source
-              readOnly: {{ .Values.source.pvcMountReadOnly }}
+            {{- range .Values.rsync.pvcMounts }}
+            - mountPath: {{ .mountPath }}
+              name: {{ .name }}
+              readOnly: {{ default false .readOnly }}
             {{- end }}
-            - mountPath: /dest
-              name: dest
             {{- if .Values.rsync.privateKeyMount }}
             - mountPath: {{ .Values.rsync.privateKeyMountPath }}
               name: private-key
@@ -96,14 +79,12 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
-        {{- if .Values.rsync.mountSource }}
-        - name: source
+        {{- range .Values.rsync.pvcMounts }}
+        - name: {{ .name }}
           persistentVolumeClaim:
-            claimName: {{ .Values.source.pvcName }}
+            claimName: {{ required ".Values.rsync.pvcMounts[*].pvcName is required!" .name }}
+            readOnly: {{ default false .readOnly }}
         {{- end }}
-        - name: dest
-          persistentVolumeClaim:
-            claimName: {{ .Values.dest.pvcName }}
         {{- if .Values.rsync.privateKeyMount }}
         - name: private-key
           secret:

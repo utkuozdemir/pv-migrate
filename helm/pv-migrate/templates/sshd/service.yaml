@@ -3,7 +3,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ include "pv-migrate.fullname" . }}-sshd
-  namespace: {{ .Values.source.namespace }}
+  namespace: {{ .Values.sshd.namespace }}
   labels:
     app.kubernetes.io/component: sshd
     {{- include "pv-migrate.labels" . | nindent 4 }}

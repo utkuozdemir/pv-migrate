@@ -2,8 +2,8 @@ package strategy
 
 import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
-	"strconv"
 )
 
 type Mnt2 struct {
@@ -39,19 +39,41 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 
 	node := determineTargetNode(t)
 
-	helmValues := []string{
-		"rsync.enabled=true",
-		"rsync.nodeName=" + node,
-		"rsync.mountSource=true",
-		"rsync.deleteExtraneousFiles=" + strconv.FormatBool(opts.DeleteExtraneousFiles),
-		"rsync.noChown=" + strconv.FormatBool(opts.NoChown),
-		"source.namespace=" + ns,
-		"source.pvcName=" + s.Claim.Name,
-		"source.pvcMountReadOnly=" + strconv.FormatBool(opts.NoChown),
-		"source.path=" + t.Migration.Source.Path,
-		"dest.namespace=" + ns,
-		"dest.pvcName=" + d.Claim.Name,
-		"dest.path=" + t.Migration.Dest.Path,
+	srcMountPath := "/source"
+	destMountPath := "/dest"
+
+	srcPath := srcMountPath + "/" + t.Migration.Source.Path
+	destPath := destMountPath + "/" + t.Migration.Dest.Path
+
+	rsyncCmd := rsync.Cmd{
+		NoChown:  opts.NoChown,
+		Delete:   opts.DeleteExtraneousFiles,
+		SrcPath:  srcPath,
+		DestPath: destPath,
+	}
+	rsyncCmdStr, err := rsyncCmd.Build()
+	if err != nil {
+		return true, err
+	}
+
+	vals := map[string]interface{}{
+		"rsync": map[string]interface{}{
+			"enabled":   true,
+			"namespace": ns,
+			"nodeName":  node,
+			"pvcMounts": []map[string]interface{}{
+				{
+					"name":      s.Claim.Name,
+					"mountPath": srcMountPath,
+					"readOnly":  opts.SourceMountReadOnly,
+				},
+				{
+					"name":      d.Claim.Name,
+					"mountPath": destMountPath,
+				},
+			},
+			"command": rsyncCmdStr,
+		},
 	}
 
 	releaseName := e.HelmReleaseNamePrefix
@@ -60,7 +82,7 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 	doneCh := registerCleanupHook(e, releaseNames)
 	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
 
-	err := installHelmChart(e, s, releaseName, helmValues)
+	err = installHelmChart(e, s, releaseName, vals)
 	if err != nil {
 		return true, err
 	}

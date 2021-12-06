@@ -2,9 +2,9 @@ package strategy
 
 import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
-	"strconv"
 )
 
 type Svc struct {
@@ -37,31 +37,62 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 	}
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	helmValues := []string{
-		"rsync.enabled=true",
-		"rsync.deleteExtraneousFiles=" + strconv.FormatBool(opts.DeleteExtraneousFiles),
-		"rsync.noChown=" + strconv.FormatBool(opts.NoChown),
-		"rsync.privateKeyMount=true",
-		"rsync.privateKey=" + privateKey,
-		"rsync.privateKeyMountPath=" + privateKeyMountPath,
-		"sshd.enabled=true",
-		"sshd.publicKey=" + publicKey,
-		"source.namespace=" + sourceNs,
-		"source.pvcName=" + s.Claim.Name,
-		"source.pvcMountReadOnly=" + strconv.FormatBool(opts.SourceMountReadOnly),
-		"source.path=" + t.Migration.Source.Path,
-		"dest.namespace=" + destNs,
-		"dest.pvcName=" + d.Claim.Name,
-		"dest.path=" + t.Migration.Dest.Path,
-	}
-
 	releaseName := e.HelmReleaseNamePrefix
 	releaseNames := []string{releaseName}
+
+	sshRemoteHost := releaseName + "-sshd." + sourceNs
+
+	srcMountPath := "/source"
+	destMountPath := "/dest"
+
+	srcPath := srcMountPath + "/" + t.Migration.Source.Path
+	destPath := destMountPath + "/" + t.Migration.Dest.Path
+	rsyncCmd := rsync.Cmd{
+		NoChown:    opts.NoChown,
+		Delete:     opts.DeleteExtraneousFiles,
+		SrcPath:    srcPath,
+		DestPath:   destPath,
+		SrcUseSsh:  true,
+		SrcSshHost: sshRemoteHost,
+	}
+	rsyncCmdStr, err := rsyncCmd.Build()
+	if err != nil {
+		return true, err
+	}
+
+	vals := map[string]interface{}{
+		"rsync": map[string]interface{}{
+			"enabled":             true,
+			"namespace":           destNs,
+			"privateKeyMount":     true,
+			"privateKey":          privateKey,
+			"privateKeyMountPath": privateKeyMountPath,
+			"pvcMounts": []map[string]interface{}{
+				{
+					"name":      d.Claim.Name,
+					"mountPath": destMountPath,
+				},
+			},
+			"command": rsyncCmdStr,
+		},
+		"sshd": map[string]interface{}{
+			"enabled":   true,
+			"namespace": sourceNs,
+			"publicKey": publicKey,
+			"pvcMounts": []map[string]interface{}{
+				{
+					"name":      s.Claim.Name,
+					"mountPath": srcMountPath,
+					"readOnly":  opts.SourceMountReadOnly,
+				},
+			},
+		},
+	}
 
 	doneCh := registerCleanupHook(e, releaseNames)
 	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
 
-	err = installHelmChart(e, d, releaseName, helmValues)
+	err = installHelmChart(e, d, releaseName, vals)
 	if err != nil {
 		return true, err
 	}

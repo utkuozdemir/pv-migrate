@@ -13,17 +13,20 @@ rsync:
     ZLD75G8U84NTE5uNix9l7UgUDwV0Hxt/BhJ0COjeITPdAAAAAAECAwQF
     -----END OPENSSH PRIVATE KEY-----
 
+  namespace: pv-migrate-test-2
+  pvcMounts:
+    - name: pv-migrate-test-dest-2
+      mountPath: /dest
+
+  sourcePath: /source/
+  destPath: /dest/
+
 sshd:
   enabled: true
   publicKey: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILD75G8U84NTE5uNix9l7UgUDwV0Hxt/BhJ0COjeITPd
 
-source:
   namespace: pv-migrate-test-1
-  pvcName: pv-migrate-test-source-1
-  pvcMountReadOnly: true
-  path: /
-
-dest:
-  namespace: pv-migrate-test-2
-  pvcName: pv-migrate-test-dest-2
-  path: /
+  pvcMounts:
+    - name: pv-migrate-test-source-1
+      readOnly: true
+      mountPath: /source

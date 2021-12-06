@@ -3,10 +3,10 @@ package strategy
 import (
 	"fmt"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
-	"strconv"
 )
 
 type LbSvc struct {
@@ -35,7 +35,10 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	doneCh := registerCleanupHook(e, releaseNames)
 	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
 
-	err = installOnSource(e, srcReleaseName, publicKey)
+	srcMountPath := "/source"
+	destMountPath := "/dest"
+
+	err = installOnSource(e, srcReleaseName, publicKey, srcMountPath)
 	if err != nil {
 		return true, err
 	}
@@ -49,7 +52,8 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 
 	sshTargetHost := formatSSHTargetHost(lbSvcAddress)
 
-	err = installOnDest(e, destReleaseName, privateKey, privateKeyMountPath, sshTargetHost)
+	err = installOnDest(e, destReleaseName, privateKey, privateKeyMountPath,
+		sshTargetHost, srcMountPath, destMountPath)
 	if err != nil {
 		return true, err
 	}
@@ -61,46 +65,74 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	return true, err
 }
 
-func installOnSource(e *task.Execution, releaseName string, publicKey string) error {
+func installOnSource(e *task.Execution, releaseName, publicKey, srcMountPath string) error {
 	t := e.Task
 	s := t.SourceInfo
 	ns := s.Claim.Namespace
 	opts := t.Migration.Options
 
-	helmValues := []string{
-		"sshd.enabled=true",
-		"sshd.publicKey=" + publicKey,
-		"sshd.service.type=LoadBalancer",
-		"source.namespace=" + ns,
-		"source.pvcName=" + s.Claim.Name,
-		"source.pvcMountReadOnly=" + strconv.FormatBool(opts.SourceMountReadOnly),
-		"source.path=" + t.Migration.Source.Path,
+	vals := map[string]interface{}{
+		"sshd": map[string]interface{}{
+			"enabled":   true,
+			"namespace": ns,
+			"publicKey": publicKey,
+			"service": map[string]interface{}{
+				"type": "LoadBalancer",
+			},
+			"pvcMounts": []map[string]interface{}{
+				{
+					"name":      s.Claim.Name,
+					"readOnly":  opts.SourceMountReadOnly,
+					"mountPath": srcMountPath,
+				},
+			},
+		},
 	}
 
-	return installHelmChart(e, s, releaseName, helmValues)
+	return installHelmChart(e, s, releaseName, vals)
 }
 
-func installOnDest(e *task.Execution, releaseName string, privateKey string,
-	privateKeyMountPath string, sshHost string) error {
+func installOnDest(e *task.Execution, releaseName, privateKey,
+	privateKeyMountPath, sshHost, srcMountPath, destMountPath string) error {
 	t := e.Task
 	d := t.DestInfo
 	ns := d.Claim.Namespace
 	opts := t.Migration.Options
-	helmValues := []string{
-		"rsync.enabled=true",
-		"rsync.deleteExtraneousFiles=" + strconv.FormatBool(opts.DeleteExtraneousFiles),
-		"rsync.noChown=" + strconv.FormatBool(opts.NoChown),
-		"rsync.privateKeyMount=true",
-		"rsync.privateKey=" + privateKey,
-		"rsync.privateKeyMountPath=" + privateKeyMountPath,
-		"rsync.sshRemoteHost=" + sshHost,
-		"source.path=" + t.Migration.Source.Path,
-		"dest.namespace=" + ns,
-		"dest.pvcName=" + d.Claim.Name,
-		"dest.path=" + t.Migration.Dest.Path,
+
+	srcPath := srcMountPath + "/" + t.Migration.Source.Path
+	destPath := destMountPath + "/" + t.Migration.Dest.Path
+	rsyncCmd := rsync.Cmd{
+		NoChown:    opts.NoChown,
+		Delete:     opts.DeleteExtraneousFiles,
+		SrcPath:    srcPath,
+		DestPath:   destPath,
+		SrcUseSsh:  true,
+		SrcSshHost: sshHost,
+	}
+	rsyncCmdStr, err := rsyncCmd.Build()
+	if err != nil {
+		return err
 	}
 
-	return installHelmChart(e, d, releaseName, helmValues)
+	vals := map[string]interface{}{
+		"rsync": map[string]interface{}{
+			"enabled":             true,
+			"namespace":           ns,
+			"privateKeyMount":     true,
+			"privateKey":          privateKey,
+			"privateKeyMountPath": privateKeyMountPath,
+			"sshRemoteHost":       sshHost,
+			"pvcMounts": []map[string]interface{}{
+				{
+					"name":      d.Claim.Name,
+					"mountPath": destMountPath,
+				},
+			},
+			"command": rsyncCmdStr,
+		},
+	}
+
+	return installHelmChart(e, d, releaseName, vals)
 }
 
 func formatSSHTargetHost(host string) string {

@@ -1,14 +1,12 @@
-package k8s
+package rsync
 
 import (
 	"bufio"
-	"context"
 	"fmt"
 	"github.com/kyokomi/emoji/v2"
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,26 +17,35 @@ var (
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
 
-func handlePodLogs(cli kubernetes.Interface, ns string, name string,
-	stopCh <-chan bool, showProgressBar bool, logger *log.Entry) {
-	if showProgressBar {
-		tailPodLogsWithProgressBar(cli, ns, name, stopCh, logger)
-	} else {
-		tailPodLogsNoProgressBar(cli, ns, name, stopCh, logger)
+type LogTail struct {
+	LogReaderFunc   func() (io.ReadCloser, error)
+	SuccessCh       <-chan bool
+	ShowProgressBar bool
+	Logger          *log.Entry
+}
+
+type progress struct {
+	percentage  int
+	transferred int64
+	total       int64
+}
+
+func (l *LogTail) Start() {
+	if l.ShowProgressBar {
+		l.tailWithProgressBar()
+		return
 	}
+	l.tailNoProgressBar()
 }
 
-func tailPodLogsNoProgressBar(cli kubernetes.Interface, ns string, name string,
-	stopCh <-chan bool, logger *log.Entry) {
-	tailPodLogsWithRetry(cli, ns, name, func() {},
-		func(s string) { logger.Debug(s) }, func() {}, stopCh, logger)
+func (l *LogTail) tailNoProgressBar() {
+	l.tailWithRetry(func() {}, func(s string) { l.Logger.Debug(s) }, func() {})
 }
 
-func tailPodLogsWithProgressBar(cli kubernetes.Interface, ns string, name string,
-	stopCh <-chan bool, logger *log.Entry) {
+func (l *LogTail) tailWithProgressBar() {
 	completed := false
 	var bar *progressbar.ProgressBar
-	tailPodLogsWithRetry(cli, ns, name, func() {
+	l.tailWithRetry(func() {
 		bar = progressbar.NewOptions64(
 			1,
 			progressbar.OptionEnableColorCodes(true),
@@ -53,7 +60,7 @@ func tailPodLogsWithProgressBar(cli kubernetes.Interface, ns string, name string
 			return
 		}
 
-		pr, _ := parseLogLine(&s)
+		pr, _ := parseLine(&s)
 		if pr != nil {
 			bar.ChangeMax64(pr.total)
 			_ = bar.Set64(pr.transferred)
@@ -65,18 +72,16 @@ func tailPodLogsWithProgressBar(cli kubernetes.Interface, ns string, name string
 		}
 
 		_ = bar.Finish()
-	}, stopCh, logger)
+	})
 }
 
-// tailPodLogsWithRetry will restart the log tailing if it times out
-func tailPodLogsWithRetry(cli kubernetes.Interface, ns string, name string,
-	beforeFunc func(), logFunc func(string), successFunc func(),
-	stopCh <-chan bool, logger *log.Entry) {
+// tailWithRetry will restart the log tailing if it times out
+func (l *LogTail) tailWithRetry(beforeFunc func(), logFunc func(string), successFunc func()) {
 	failedOnce := false
 	for {
-		done, err := tailPodLogs(cli, ns, name, beforeFunc, logFunc, successFunc, stopCh)
+		done, err := l.tail(beforeFunc, logFunc, successFunc)
 		if err != nil && !failedOnce {
-			logger.WithError(err).
+			l.Logger.WithError(err).
 				Debug(":large_orange_diamond: Cannot tail logs to display progress")
 			failedOnce = true
 		}
@@ -87,10 +92,9 @@ func tailPodLogsWithRetry(cli kubernetes.Interface, ns string, name string,
 	}
 }
 
-func tailPodLogs(cli kubernetes.Interface, ns string, name string, beforeFunc func(),
-	logFunc func(string), successFunc func(), stopCh <-chan bool) (bool, error) {
-	s, err := cli.CoreV1().Pods(ns).
-		GetLogs(name, &corev1.PodLogOptions{Follow: true}).Stream(context.TODO())
+func (l *LogTail) tail(beforeFunc func(),
+	logFunc func(string), successFunc func()) (bool, error) {
+	s, err := l.LogReaderFunc()
 	if err != nil {
 		return false, err
 	}
@@ -101,7 +105,7 @@ func tailPodLogs(cli kubernetes.Interface, ns string, name string, beforeFunc fu
 	sc := bufio.NewScanner(s)
 	for {
 		select {
-		case success := <-stopCh:
+		case success := <-l.SuccessCh:
 			if success {
 				successFunc()
 			}
@@ -115,13 +119,7 @@ func tailPodLogs(cli kubernetes.Interface, ns string, name string, beforeFunc fu
 	}
 }
 
-type progress struct {
-	percentage  int
-	transferred int64
-	total       int64
-}
-
-func parseLogLine(l *string) (*progress, error) {
+func parseLine(l *string) (*progress, error) {
 	endMatches := findNamedMatches(rsyncEndRegex, l)
 	if len(endMatches) > 0 {
 		total, err := parseNumBytes(endMatches["bytes"])

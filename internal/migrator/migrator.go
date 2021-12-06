@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	//go:embed pv-migrate-0.1.0.tgz
+	//go:embed pv-migrate-0.2.0.tgz
 	chartBytes []byte
 )
 
