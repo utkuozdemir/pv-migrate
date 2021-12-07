@@ -60,8 +60,7 @@ func waitForPodTermination(cli kubernetes.Interface, ns string, name string) (*c
 
 	resCli := cli.CoreV1().Pods(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
-	ctx, cancel := context.WithTimeout(context.TODO(), podWatchTimeout)
-	defer cancel()
+	ctx := context.Background()
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
