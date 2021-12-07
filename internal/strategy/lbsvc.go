@@ -59,7 +59,7 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	}
 
 	showProgressBar := !e.Task.Migration.Options.NoProgressBar
-	kubeClient := s.ClusterClient.KubeClient
+	kubeClient := d.ClusterClient.KubeClient
 	jobName := destReleaseName + "-rsync"
 	err = k8s.WaitForJobCompletion(e.Logger, kubeClient, destNs, jobName, showProgressBar)
 	return true, err
