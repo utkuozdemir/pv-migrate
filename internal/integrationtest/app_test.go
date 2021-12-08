@@ -41,8 +41,10 @@ const (
 var (
 	ns1 string
 	ns2 string
+	ns3 string
 
-	clusterClient *k8s.ClusterClient
+	clusterClient1 *k8s.ClusterClient
+	clusterClient2 *k8s.ClusterClient
 
 	generateDataShellCommand = fmt.Sprintf("echo -n %s > %s && chown %s:%s %s",
 		generateDataContent, dataFilePath, dataFileUid, dataFileGid, dataFilePath)
@@ -71,13 +73,13 @@ func TestMain(m *testing.M) {
 func TestSameNS(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug m -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(clusterClient1, ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -90,20 +92,20 @@ func TestSameNS(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(clusterClient1, ns1, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestSameNSLbSvc(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug m -s lbsvc -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(clusterClient1, ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -116,20 +118,20 @@ func TestSameNSLbSvc(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(clusterClient1, ns1, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestNoChown(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -i -o -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(clusterClient1, ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -142,20 +144,20 @@ func TestNoChown(t *testing.T) {
 	assert.Equal(t, "0", parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(clusterClient1, ns1, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestDeleteExtraneousFiles(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -d -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(clusterClient1, ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -168,7 +170,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(clusterClient1, ns1, "dest", checkExtraDataShellCommand)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "No such file or directory")
 }
@@ -176,7 +178,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 func TestMountedError(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -n %s -N %s source dest", ns1, ns1)
@@ -188,13 +190,13 @@ func TestMountedError(t *testing.T) {
 func TestDifferentNS(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient1, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -i -n %s -N %s source dest", ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(clusterClient1, ns2, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -207,20 +209,20 @@ func TestDifferentNS(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(clusterClient1, ns2, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestRSA(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient1, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -a rsa -i -n %s -N %s source dest", ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(clusterClient1, ns2, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -233,7 +235,7 @@ func TestRSA(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(clusterClient1, ns2, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
@@ -246,16 +248,19 @@ func TestDifferentCluster(t *testing.T) {
 	kubeconfigBytes, _ := ioutil.ReadFile(kubeconfig)
 	kubeconfigCopyFile, _ := ioutil.TempFile("", "pv-migrate-test-config-*.yaml")
 	kubeconfigCopy := kubeconfigCopyFile.Name()
+
+	// TODO DO MULTI CLUSTER
+
 	_ = ioutil.WriteFile(kubeconfigCopy, kubeconfigBytes, 0600)
 	defer func() { _ = os.Remove(kubeconfigCopy) }()
 
-	_, err := execInPod(ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient1, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -K %s -i -n %s -N %s source dest", kubeconfigCopy, ns1, ns2)
+	cmd := fmt.Sprintf("-l debug -f json m -K %s -i -n %s -N %s source dest", kubeconfigCopy, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(clusterClient2, ns3, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -268,20 +273,20 @@ func TestDifferentCluster(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(clusterClient2, ns3, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestLocal(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient2, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -s local -i -n %s -N %s source dest", ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(clusterClient2, ns3, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -294,109 +299,151 @@ func TestLocal(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(clusterClient2, ns3, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func setup() error {
-	client, err := k8s.GetClusterClient("", "")
+	kubeconfig1 := os.Getenv("PV_MIGRATE_KUBECONFIG_1")
+	kubeconfig2 := os.Getenv("PV_MIGRATE_KUBECONFIG_2")
+
+	if kubeconfig1 == kubeconfig2 {
+		log.Warnf("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
+	}
+
+	srcClient, err := k8s.GetClusterClient(kubeconfig1, "")
 	if err != nil {
 		return err
 	}
+	clusterClient1 = srcClient
 
-	clusterClient = client
+	destClient, err := k8s.GetClusterClient(kubeconfig2, "")
+	if err != nil {
+		return err
+	}
+	clusterClient2 = destClient
 
 	ns1 = "pv-migrate-test-1-" + util.RandomHexadecimalString(5)
 	ns2 = "pv-migrate-test-2-" + util.RandomHexadecimalString(5)
+	ns3 = "pv-migrate-test-3-" + util.RandomHexadecimalString(5)
 
-	_, err = createNs(ns1)
+	_, err = createNs(clusterClient1, ns1)
 	if err != nil {
 		return err
 	}
 
-	_, err = createNs(ns2)
+	_, err = createNs(clusterClient1, ns2)
 	if err != nil {
 		return err
 	}
 
-	_, err = createPVC(ns1, "source")
+	_, err = createNs(clusterClient2, ns3)
 	if err != nil {
 		return err
 	}
 
-	_, err = createPVC(ns1, "dest")
+	_, err = createPVC(clusterClient1, ns1, "source")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPVC(ns2, "dest")
+	_, err = createPVC(clusterClient1, ns1, "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPod(ns1, "source", "source")
+	_, err = createPVC(clusterClient1, ns2, "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPod(ns1, "dest", "dest")
+	_, err = createPVC(clusterClient2, ns3, "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPod(ns2, "dest", "dest")
+	_, err = createPod(clusterClient1, ns1, "source", "source")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPVCIsBound(ns1, "source")
+	_, err = createPod(clusterClient1, ns1, "dest", "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPVCIsBound(ns1, "dest")
+	_, err = createPod(clusterClient1, ns2, "dest", "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPVCIsBound(ns2, "dest")
+	_, err = createPod(clusterClient2, ns3, "dest", "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPodIsRunning(ns1, "source")
+	err = waitUntilPVCIsBound(clusterClient1, ns1, "source")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPodIsRunning(ns1, "dest")
+	err = waitUntilPVCIsBound(clusterClient1, ns1, "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPodIsRunning(ns2, "dest")
+	err = waitUntilPVCIsBound(clusterClient1, ns2, "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = execInPod(ns1, "source", generateDataShellCommand)
+	err = waitUntilPVCIsBound(clusterClient2, ns3, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(clusterClient1, ns1, "source")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(clusterClient1, ns1, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(clusterClient1, ns2, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(clusterClient2, ns3, "dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = execInPod(clusterClient1, ns1, "source", generateDataShellCommand)
 	return err
 }
 
 func teardown() error {
 	var result *multierror.Error
-	err := deleteNs(ns1)
+	err := deleteNs(clusterClient1, ns1)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
-	err = deleteNs(ns2)
+	err = deleteNs(clusterClient1, ns2)
+	if err != nil {
+		result = multierror.Append(result, err)
+	}
+	err = deleteNs(clusterClient2, ns3)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
 }
 
-func createPod(ns string, name string, pvc string) (*corev1.Pod, error) {
+func createPod(cli *k8s.ClusterClient, ns string, name string, pvc string) (*corev1.Pod, error) {
 	terminationGracePeriodSeconds := int64(0)
 	p := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -430,11 +477,11 @@ func createPod(ns string, name string, pvc string) (*corev1.Pod, error) {
 			},
 		},
 	}
-	return clusterClient.KubeClient.CoreV1().
+	return cli.KubeClient.CoreV1().
 		Pods(ns).Create(context.TODO(), &p, metav1.CreateOptions{})
 }
 
-func createPVC(ns string, name string) (*corev1.PersistentVolumeClaim, error) {
+func createPVC(cli *k8s.ClusterClient, ns string, name string) (*corev1.PersistentVolumeClaim, error) {
 	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -452,12 +499,12 @@ func createPVC(ns string, name string) (*corev1.PersistentVolumeClaim, error) {
 		},
 	}
 
-	return clusterClient.KubeClient.CoreV1().PersistentVolumeClaims(ns).
+	return cli.KubeClient.CoreV1().PersistentVolumeClaims(ns).
 		Create(context.TODO(), &pvc, metav1.CreateOptions{})
 }
 
-func waitUntilPodIsRunning(ns string, name string) error {
-	resCli := clusterClient.KubeClient.CoreV1().Pods(ns)
+func waitUntilPodIsRunning(cli *k8s.ClusterClient, ns string, name string) error {
+	resCli := cli.KubeClient.CoreV1().Pods(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
@@ -485,8 +532,8 @@ func waitUntilPodIsRunning(ns string, name string) error {
 	return err
 }
 
-func waitUntilPVCIsBound(ns string, name string) error {
-	resCli := clusterClient.KubeClient.CoreV1().PersistentVolumeClaims(ns)
+func waitUntilPVCIsBound(cli *k8s.ClusterClient, ns string, name string) error {
+	resCli := cli.KubeClient.CoreV1().PersistentVolumeClaims(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
@@ -514,11 +561,11 @@ func waitUntilPVCIsBound(ns string, name string) error {
 	return err
 }
 
-func execInPod(ns string, name string, cmd string) (string, error) {
+func execInPod(cli *k8s.ClusterClient, ns string, name string, cmd string) (string, error) {
 	stdoutBuffer := new(bytes.Buffer)
 	stderrBuffer := new(bytes.Buffer)
 
-	req := clusterClient.KubeClient.CoreV1().RESTClient().Post().Resource("pods").
+	req := cli.KubeClient.CoreV1().RESTClient().Post().Resource("pods").
 		Name(name).Namespace(ns).SubResource("exec")
 	option := &corev1.PodExecOptions{
 		Command: []string{"sh", "-c", cmd},
@@ -533,7 +580,7 @@ func execInPod(ns string, name string, cmd string) (string, error) {
 		scheme.ParameterCodec,
 	)
 
-	config, err := clusterClient.RESTClientGetter.ToRESTConfig()
+	config, err := cli.RESTClientGetter.ToRESTConfig()
 	if err != nil {
 		return "", err
 	}
@@ -560,16 +607,16 @@ func execInPod(ns string, name string, cmd string) (string, error) {
 }
 
 func clearDests() error {
-	_, err := execInPod(ns1, "dest", clearDataShellCommand)
+	_, err := execInPod(clusterClient1, ns1, "dest", clearDataShellCommand)
 	if err != nil {
 		return err
 	}
-	_, err = execInPod(ns2, "dest", clearDataShellCommand)
+	_, err = execInPod(clusterClient2, ns2, "dest", clearDataShellCommand)
 	return err
 }
 
-func createNs(name string) (*corev1.Namespace, error) {
-	return clusterClient.KubeClient.CoreV1().
+func createNs(cli *k8s.ClusterClient, name string) (*corev1.Namespace, error) {
+	return cli.KubeClient.CoreV1().
 		Namespaces().Create(context.TODO(), &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: name,
@@ -577,8 +624,8 @@ func createNs(name string) (*corev1.Namespace, error) {
 	}, metav1.CreateOptions{})
 }
 
-func deleteNs(name string) error {
-	namespaces := clusterClient.KubeClient.CoreV1().Namespaces()
+func deleteNs(cli *k8s.ClusterClient, name string) error {
+	namespaces := cli.KubeClient.CoreV1().Namespaces()
 	return namespaces.Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
