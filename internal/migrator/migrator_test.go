@@ -112,8 +112,6 @@ func buildMigrationWithStrategies(strategies []string, options *migration.Option
 		},
 		Options:    options,
 		Strategies: strategies,
-		RsyncImage: migration.DefaultRsyncImage,
-		SshdImage:  migration.DefaultSshdImage,
 		Logger:     log.NewEntry(log.New()),
 	}
 }
