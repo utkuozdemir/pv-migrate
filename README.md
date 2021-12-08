@@ -86,7 +86,7 @@ scoop install pv-migrate/pv-migrate
 
 Sample steps for MacOS:
 ```bash
-$ VERSION=0.6.0
+$ VERSION=<VERSION_TAG>
 $ wget https://github.com/utkuozdemir/pv-migrate/releases/download/v${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ tar -xvzf pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ mv pv-migrate /usr/local/bin
@@ -99,7 +99,7 @@ Alternatively, you can use the
 [official Docker images](https://hub.docker.com/repository/docker/utkuozdemir/pv-migrate) 
 that come with the `pv-migrate` binary pre-installed:
 ```bash
-docker run --rm -it utkuozdemir/pv-migrate:0.6.0 pv-migrate migrate ...
+docker run --rm -it utkuozdemir/pv-migrate:<IMAGE_TAG> pv-migrate migrate ...
 ```
 
 ## Usage
@@ -147,10 +147,6 @@ OPTIONS:
    --no-chown, -o                       Omit chown on rsync (default: false)
    --no-progress-bar, -b                Do not display a progress bar (default: false)
    --strategies value, -s value         The strategies to be used in the given order (default: "mnt2", "svc", "lbsvc")
-   --rsync-image value, -r value        Image to use for running rsync (default: "docker.io/utkuozdemir/pv-migrate-rsync:1.0.0")
-   --rsync-service-account value        Service account for the rsync pod (default: "default")
-   --sshd-image value, -S value         Image to use for running sshd server (default: "docker.io/utkuozdemir/pv-migrate-sshd:1.0.0")
-   --sshd-service-account value         Service account for the sshd pod (default: "default")
    --ssh-key-algorithm value, -a value  SSH key algorithm to be used. Valid values are rsa,ed25519 (default: "ed25519")
    --helm-values value, -f value        Set additional Helm values by a YAML file or a URL (can specify multiple)
    --helm-set value                     Set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
@@ -158,6 +154,12 @@ OPTIONS:
    --helm-set-file value                Set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)
    --help, -h                           show help (default: false)
 ```
+
+The Kubernetes resources created by pv-migrate are sourced from a [Helm chart](helm/pv-migrate).
+
+You can pass raw values to the backing Helm chart 
+using the `--helm-*` flags for further customization: container images, 
+resources, serviceacccounts, additional annotations etc.
 
 ## Strategies
 
@@ -174,14 +176,21 @@ OPTIONS:
 
 To migrate contents of PersistentVolumeClaim `small-pvc` in namespace `source-ns`
 to the PersistentVolumeClaim `big-pvc` in namespace `dest-ns`, use the following command:
+
+Minimal example, source and destination are in the currently selected namespace in the context:
+```bash
+$ pv-migrate migrate old-pvc new-pvc
+```
+
+Example with different namespaces:
 ```bash
 $ pv-migrate migrate \
   --source-namespace source-ns \
   --dest-namespace dest-ns \
-  small-pvc big-pvc
+  old-pvc new-pvc
 ```
 
-Full example between different clusters:
+Between different clusters:
 ```bash
 pv-migrate migrate \
   --source-kubeconfig /path/to/source/kubeconfig \
@@ -191,6 +200,16 @@ pv-migrate migrate \
   --dest-context some-other-context \
   --dest-namespace dest-ns \
   --dest-delete-extraneous-files \
+  old-pvc new-pvc
+```
+
+With custom rsync container image & sshd service account:
+```bash
+$ pv-migrate migrate \
+  --helm-set rsync.image.repository=mycustomrepo/rsync \
+  --helm-set rsync.image.tag=v42.0.0 \
+  --helm-set sshd.serviceAccount.create=false \
+  --helm-set sshd.serviceAccount.name=my-custom-sa \
   old-pvc new-pvc
 ```
 
