@@ -23,7 +23,6 @@ import (
 	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/utils/env"
 	"os"
-	"os/user"
 	"strings"
 	"testing"
 	"time"
@@ -42,8 +41,8 @@ var (
 	ns2 string
 	ns3 string
 
-	kubeconfig1 string
-	kubeconfig2 string
+	kubeconfig1 = env.GetString("PV_MIGRATE_KUBECONFIG_1", "~/.kube/config")
+	kubeconfig2 = env.GetString("PV_MIGRATE_KUBECONFIG_2", "~/.kube/config")
 
 	clusterClient1 *k8s.ClusterClient
 	clusterClient2 *k8s.ClusterClient
@@ -296,14 +295,6 @@ func TestLocal(t *testing.T) {
 }
 
 func setup() error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
-	}
-
-	kubeconfig1 = env.GetString("PV_MIGRATE_KUBECONFIG_1", homeDir+"/.kube/config")
-	kubeconfig2 = env.GetString("PV_MIGRATE_KUBECONFIG_2", homeDir+"/.kube/config")
-
 	if kubeconfig1 == kubeconfig2 {
 		log.Warnf("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
 	}
@@ -438,14 +429,6 @@ func teardown() error {
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
-}
-
-func userHomeDir() (string, error) {
-	usr, err := user.Current()
-	if err != nil {
-		return "", err
-	}
-	return usr.HomeDir, nil
 }
 
 func createPod(cli *k8s.ClusterClient, ns string, name string, pvc string) (*corev1.Pod, error) {
