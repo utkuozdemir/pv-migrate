@@ -104,7 +104,7 @@ jobs:
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
       - name: Run tests
         run: |
-          export PV_MIGRATE_KUBECONFIG_2=/home/runner/.kube/kind-2.yaml
+          export PVMIG_TEST_EXTRA_KUBECONFIG=/home/runner/.kube/kind-2.yaml
           go-acc --output profile.cov ./... -- -v -timeout 20m
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.0

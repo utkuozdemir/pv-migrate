@@ -42,11 +42,10 @@ var (
 	ns2 string
 	ns3 string
 
-	kubeconfig1 string
-	kubeconfig2 string
+	extraClusterKubeconfig string
 
-	clusterClient1 *k8s.ClusterClient
-	clusterClient2 *k8s.ClusterClient
+	mainClusterCli  *k8s.ClusterClient
+	extraClusterCli *k8s.ClusterClient
 
 	generateDataShellCommand = fmt.Sprintf("echo -n %s > %s && chown %s:%s %s",
 		generateDataContent, dataFilePath, dataFileUid, dataFileGid, dataFilePath)
@@ -75,13 +74,13 @@ func TestMain(m *testing.M) {
 func TestSameNS(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug m -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(clusterClient1, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -94,20 +93,20 @@ func TestSameNS(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(clusterClient1, ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestSameNSLbSvc(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug m -s lbsvc -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(clusterClient1, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -120,20 +119,20 @@ func TestSameNSLbSvc(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(clusterClient1, ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestNoChown(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -i -o -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(clusterClient1, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -146,20 +145,20 @@ func TestNoChown(t *testing.T) {
 	assert.Equal(t, "0", parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(clusterClient1, ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestDeleteExtraneousFiles(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -d -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(clusterClient1, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -172,7 +171,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(clusterClient1, ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "No such file or directory")
 }
@@ -180,7 +179,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 func TestMountedError(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient1, ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -n %s -N %s source dest", ns1, ns1)
@@ -192,13 +191,13 @@ func TestMountedError(t *testing.T) {
 func TestDifferentNS(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient1, ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -i -n %s -N %s source dest", ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(clusterClient1, ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -211,20 +210,20 @@ func TestDifferentNS(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(clusterClient1, ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestRSA(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient1, ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -a rsa -i -n %s -N %s source dest", ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(clusterClient1, ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -237,21 +236,21 @@ func TestRSA(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(clusterClient1, ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestDifferentCluster(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient2, ns3, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -k %s -K %s -i -n %s -N %s source dest",
-		kubeconfig1, kubeconfig2, ns1, ns3)
+	cmd := fmt.Sprintf("-l debug -f json m -K %s -i -n %s -N %s source dest",
+		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(clusterClient2, ns3, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -264,21 +263,21 @@ func TestDifferentCluster(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(clusterClient2, ns3, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
 func TestLocal(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient2, ns3, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -k %s -K %s -s local -i -n %s -N %s source dest",
-		kubeconfig1, kubeconfig2, ns1, ns3)
+	cmd := fmt.Sprintf("-l debug -f json m -K %s -s local -i -n %s -N %s source dest",
+		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(clusterClient2, ns3, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUidGidContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -291,7 +290,7 @@ func TestLocal(t *testing.T) {
 	assert.Equal(t, dataFileGid, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(clusterClient2, ns3, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
 }
 
@@ -301,139 +300,138 @@ func setup() error {
 		return err
 	}
 
-	kubeconfig1 = env.GetString("PV_MIGRATE_KUBECONFIG_1", homeDir+"/.kube/config")
-	kubeconfig2 = env.GetString("PV_MIGRATE_KUBECONFIG_2", homeDir+"/.kube/config")
+	extraClusterKubeconfig = env.GetString("PVMIG_TEST_EXTRA_KUBECONFIG", homeDir+"/.kube/config")
 
-	if kubeconfig1 == kubeconfig2 {
+	mainCli, err := k8s.GetClusterClient("", "")
+	if err != nil {
+		return err
+	}
+	mainClusterCli = mainCli
+
+	extraCli, err := k8s.GetClusterClient(extraClusterKubeconfig, "")
+	if err != nil {
+		return err
+	}
+	extraClusterCli = extraCli
+
+	if mainCli.RestConfig.Host == extraCli.RestConfig.Host {
 		log.Warnf("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
 	}
-
-	cli1, err := k8s.GetClusterClient(kubeconfig1, "")
-	if err != nil {
-		return err
-	}
-	clusterClient1 = cli1
-
-	cli2, err := k8s.GetClusterClient(kubeconfig2, "")
-	if err != nil {
-		return err
-	}
-	clusterClient2 = cli2
 
 	ns1 = "pv-migrate-test-1-" + util.RandomHexadecimalString(5)
 	ns2 = "pv-migrate-test-2-" + util.RandomHexadecimalString(5)
 	ns3 = "pv-migrate-test-3-" + util.RandomHexadecimalString(5)
 
-	_, err = createNs(clusterClient1, ns1)
+	_, err = createNs(mainClusterCli, ns1)
 	if err != nil {
 		return err
 	}
 
-	_, err = createNs(clusterClient1, ns2)
+	_, err = createNs(mainClusterCli, ns2)
 	if err != nil {
 		return err
 	}
 
-	_, err = createNs(clusterClient2, ns3)
+	_, err = createNs(extraClusterCli, ns3)
 	if err != nil {
 		return err
 	}
 
-	_, err = createPVC(clusterClient1, ns1, "source")
+	_, err = createPVC(mainClusterCli, ns1, "source")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPVC(clusterClient1, ns1, "dest")
+	_, err = createPVC(mainClusterCli, ns1, "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPVC(clusterClient1, ns2, "dest")
+	_, err = createPVC(mainClusterCli, ns2, "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPVC(clusterClient2, ns3, "dest")
+	_, err = createPVC(extraClusterCli, ns3, "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPod(clusterClient1, ns1, "source", "source")
+	_, err = createPod(mainClusterCli, ns1, "source", "source")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPod(clusterClient1, ns1, "dest", "dest")
+	_, err = createPod(mainClusterCli, ns1, "dest", "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPod(clusterClient1, ns2, "dest", "dest")
+	_, err = createPod(mainClusterCli, ns2, "dest", "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = createPod(clusterClient2, ns3, "dest", "dest")
+	_, err = createPod(extraClusterCli, ns3, "dest", "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPVCIsBound(clusterClient1, ns1, "source")
+	err = waitUntilPVCIsBound(mainClusterCli, ns1, "source")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPVCIsBound(clusterClient1, ns1, "dest")
+	err = waitUntilPVCIsBound(mainClusterCli, ns1, "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPVCIsBound(clusterClient1, ns2, "dest")
+	err = waitUntilPVCIsBound(mainClusterCli, ns2, "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPVCIsBound(clusterClient2, ns3, "dest")
+	err = waitUntilPVCIsBound(extraClusterCli, ns3, "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPodIsRunning(clusterClient1, ns1, "source")
+	err = waitUntilPodIsRunning(mainClusterCli, ns1, "source")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPodIsRunning(clusterClient1, ns1, "dest")
+	err = waitUntilPodIsRunning(mainClusterCli, ns1, "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPodIsRunning(clusterClient1, ns2, "dest")
+	err = waitUntilPodIsRunning(mainClusterCli, ns2, "dest")
 	if err != nil {
 		return err
 	}
 
-	err = waitUntilPodIsRunning(clusterClient2, ns3, "dest")
+	err = waitUntilPodIsRunning(extraClusterCli, ns3, "dest")
 	if err != nil {
 		return err
 	}
 
-	_, err = execInPod(clusterClient1, ns1, "source", generateDataShellCommand)
+	_, err = execInPod(mainClusterCli, ns1, "source", generateDataShellCommand)
 	return err
 }
 
 func teardown() error {
 	var result *multierror.Error
-	err := deleteNs(clusterClient1, ns1)
+	err := deleteNs(mainClusterCli, ns1)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
-	err = deleteNs(clusterClient1, ns2)
+	err = deleteNs(mainClusterCli, ns2)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
-	err = deleteNs(clusterClient2, ns3)
+	err = deleteNs(extraClusterCli, ns3)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
@@ -612,16 +610,16 @@ func execInPod(cli *k8s.ClusterClient, ns string, name string, cmd string) (stri
 }
 
 func clearDests() error {
-	_, err := execInPod(clusterClient1, ns1, "dest", clearDataShellCommand)
+	_, err := execInPod(mainClusterCli, ns1, "dest", clearDataShellCommand)
 	if err != nil {
 		return err
 	}
-	_, err = execInPod(clusterClient1, ns2, "dest", clearDataShellCommand)
+	_, err = execInPod(mainClusterCli, ns2, "dest", clearDataShellCommand)
 	if err != nil {
 		return err
 	}
 
-	_, err = execInPod(clusterClient2, ns3, "dest", clearDataShellCommand)
+	_, err = execInPod(extraClusterCli, ns3, "dest", clearDataShellCommand)
 	return err
 }
 
