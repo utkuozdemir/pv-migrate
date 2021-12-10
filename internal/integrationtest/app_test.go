@@ -11,7 +11,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/app"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
-	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,6 +41,9 @@ var (
 	ns1 string
 	ns2 string
 	ns3 string
+
+	kubeconfig1 string
+	kubeconfig2 string
 
 	clusterClient1 *k8s.ClusterClient
 	clusterClient2 *k8s.ClusterClient
@@ -242,22 +244,10 @@ func TestRSA(t *testing.T) {
 func TestDifferentCluster(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	usr, _ := user.Current()
-	dir := usr.HomeDir
-	kubeconfig := env.GetString("KUBECONFIG", dir+"/.kube/config")
-	kubeconfigBytes, _ := ioutil.ReadFile(kubeconfig)
-	kubeconfigCopyFile, _ := ioutil.TempFile("", "pv-migrate-test-config-*.yaml")
-	kubeconfigCopy := kubeconfigCopyFile.Name()
-
-	// TODO DO MULTI CLUSTER
-
-	_ = ioutil.WriteFile(kubeconfigCopy, kubeconfigBytes, 0600)
-	defer func() { _ = os.Remove(kubeconfigCopy) }()
-
 	_, err := execInPod(clusterClient1, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -K %s -i -n %s -N %s source dest", kubeconfigCopy, ns1, ns3)
+	cmd := fmt.Sprintf("-l debug -f json m -k %s -K %s -i -n %s -N %s source dest", kubeconfig1, kubeconfig2, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(clusterClient2, ns3, "dest", printDataUidGidContentShellCommand)
@@ -304,24 +294,29 @@ func TestLocal(t *testing.T) {
 }
 
 func setup() error {
-	kubeconfig1 := os.Getenv("PV_MIGRATE_KUBECONFIG_1")
-	kubeconfig2 := os.Getenv("PV_MIGRATE_KUBECONFIG_2")
+	homeDir, err := userHomeDir()
+	if err != nil {
+		return err
+	}
+
+	kubeconfig1 = env.GetString("PV_MIGRATE_KUBECONFIG_1", homeDir+"/.kube/config")
+	kubeconfig2 = env.GetString("PV_MIGRATE_KUBECONFIG_2", homeDir+"/.kube/config")
 
 	if kubeconfig1 == kubeconfig2 {
 		log.Warnf("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
 	}
 
-	srcClient, err := k8s.GetClusterClient(kubeconfig1, "")
+	cli1, err := k8s.GetClusterClient(kubeconfig1, "")
 	if err != nil {
 		return err
 	}
-	clusterClient1 = srcClient
+	clusterClient1 = cli1
 
-	destClient, err := k8s.GetClusterClient(kubeconfig2, "")
+	cli2, err := k8s.GetClusterClient(kubeconfig2, "")
 	if err != nil {
 		return err
 	}
-	clusterClient2 = destClient
+	clusterClient2 = cli2
 
 	ns1 = "pv-migrate-test-1-" + util.RandomHexadecimalString(5)
 	ns2 = "pv-migrate-test-2-" + util.RandomHexadecimalString(5)
@@ -441,6 +436,14 @@ func teardown() error {
 		result = multierror.Append(result, err)
 	}
 	return result.ErrorOrNil()
+}
+
+func userHomeDir() (string, error) {
+	usr, err := user.Current()
+	if err != nil {
+		return "", err
+	}
+	return usr.HomeDir, nil
 }
 
 func createPod(cli *k8s.ClusterClient, ns string, name string, pvc string) (*corev1.Pod, error) {
