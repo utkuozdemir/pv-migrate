@@ -247,7 +247,8 @@ func TestDifferentCluster(t *testing.T) {
 	_, err := execInPod(clusterClient2, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -k %s -K %s -i -n %s -N %s source dest", kubeconfig1, kubeconfig2, ns1, ns3)
+	cmd := fmt.Sprintf("-l debug -f json m -k %s -K %s -i -n %s -N %s source dest",
+		kubeconfig1, kubeconfig2, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(clusterClient2, ns3, "dest", printDataUidGidContentShellCommand)
@@ -273,7 +274,8 @@ func TestLocal(t *testing.T) {
 	_, err := execInPod(clusterClient2, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -s local -i -n %s -N %s source dest", ns1, ns2)
+	cmd := fmt.Sprintf("-l debug -f json m -k %s -K %s -s local -i -n %s -N %s source dest",
+		kubeconfig1, kubeconfig2, ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(clusterClient2, ns3, "dest", printDataUidGidContentShellCommand)
