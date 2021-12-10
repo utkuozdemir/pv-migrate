@@ -81,6 +81,8 @@ jobs:
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
       - name: Extract docker kind network
         run: |  
+          docker network inspect -f kind
+          echo "-----------------------------"
           echo KIND_NETWORK=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind) >> $GITHUB_ENV
           echo "KIND is using Subnet $KIND_NETWORK"
       - name: Install Helm
