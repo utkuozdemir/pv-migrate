@@ -12,7 +12,7 @@ type Mnt2 struct {
 func (r *Mnt2) canDo(t *task.Task) bool {
 	s := t.SourceInfo
 	d := t.DestInfo
-	sameCluster := s.ClusterClient == d.ClusterClient
+	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
 	if !sameCluster {
 		return false
 	}

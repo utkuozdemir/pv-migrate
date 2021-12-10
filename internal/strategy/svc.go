@@ -13,7 +13,7 @@ type Svc struct {
 func (r *Svc) canDo(t *task.Task) bool {
 	s := t.SourceInfo
 	d := t.DestInfo
-	sameCluster := s.ClusterClient == d.ClusterClient
+	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
 	return sameCluster
 }
 

@@ -8,6 +8,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 	"testing"
 )
 
@@ -153,7 +154,7 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c1 := buildTestClient(pvcA, pvcB, podA, podB)
-	c2 := buildTestClient(pvcA, pvcB, podA, podB)
+	c2 := buildTestClientWithApiServerHost("https://127.0.0.2:6443", pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c1, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c2, destNS, destPvc)
 
@@ -228,9 +229,17 @@ func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 }
 
 func buildTestClient(objects ...runtime.Object) *k8s.ClusterClient {
+	return buildTestClientWithApiServerHost("https://127.0.0.1:6443", objects...)
+}
+
+func buildTestClientWithApiServerHost(apiServerHost string,
+	objects ...runtime.Object) *k8s.ClusterClient {
 	return &k8s.ClusterClient{
 		KubeClient:       fake.NewSimpleClientset(objects...),
 		RESTClientGetter: nil,
 		NsInContext:      "",
+		RestConfig: &rest.Config{
+			Host: apiServerHost,
+		},
 	}
 }
