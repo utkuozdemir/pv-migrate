@@ -86,7 +86,7 @@ jobs:
       - name: Extract docker kind network
         run: |  
           echo KIND_NETWORK=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind) >> $GITHUB_ENV
-          echo "KIND is using Subnet $KIND_NETWORK
+          echo "KIND is using Subnet $KIND_NETWORK"
       - name: Deploy MetalLB
         run: |
           helmv3 repo add bitnami https://charts.bitnami.com/bitnami
