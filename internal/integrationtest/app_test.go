@@ -244,7 +244,7 @@ func TestRSA(t *testing.T) {
 func TestDifferentCluster(t *testing.T) {
 	assert.NoError(t, clearDests())
 
-	_, err := execInPod(clusterClient1, ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(clusterClient2, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("-l debug -f json m -k %s -K %s -i -n %s -N %s source dest", kubeconfig1, kubeconfig2, ns1, ns3)
@@ -614,7 +614,12 @@ func clearDests() error {
 	if err != nil {
 		return err
 	}
-	_, err = execInPod(clusterClient2, ns2, "dest", clearDataShellCommand)
+	_, err = execInPod(clusterClient1, ns2, "dest", clearDataShellCommand)
+	if err != nil {
+		return err
+	}
+
+	_, err = execInPod(clusterClient2, ns3, "dest", clearDataShellCommand)
 	return err
 }
 
