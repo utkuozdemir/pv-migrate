@@ -92,6 +92,7 @@ jobs:
           --wait \
           --values test/metallb-values.yaml \
           --set configInline.address-pools[0].addresses[0]=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind)
+          helm -n metallb-system get values metallb
       - name: Create Kind Cluster 2
         uses: helm/kind-action@v1.2.0
         env:
