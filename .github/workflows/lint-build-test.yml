@@ -83,6 +83,7 @@ jobs:
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install MetalLB
         run: |
+          IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm upgrade metallb \
           --install bitnami/metallb \
@@ -91,7 +92,7 @@ jobs:
           --create-namespace \
           --wait \
           --values test/metallb-values.yaml \
-          --set configInline.address-pools[0].addresses[0]=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind)
+          --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
           helm -n metallb-system get values metallb
       - name: Create Kind Cluster 2
         uses: helm/kind-action@v1.2.0
