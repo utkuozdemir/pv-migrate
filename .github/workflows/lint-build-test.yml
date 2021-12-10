@@ -89,10 +89,6 @@ jobs:
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
       - name: Deploy MetalLB to kind-1
         run: kubectl apply -f test/metallb.yaml
-      - name: Deploy MetalLB to kind-2
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: kubectl apply -f test/metallb.yaml
       - name: Run tests
         run: |
           export PV_MIGRATE_KUBECONFIG_2=/home/runner/.kube/kind-2.yaml
