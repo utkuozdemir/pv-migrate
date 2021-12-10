@@ -79,12 +79,6 @@ jobs:
           cluster_name: kind-1
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
-      - name: Extract docker kind network
-        run: |  
-          docker network inspect kind
-          echo "-----------------------------"
-          echo KIND_NETWORK=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind) >> $GITHUB_ENV
-          echo "KIND is using Subnet $KIND_NETWORK"
       - name: Install Helm
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install MetalLB
@@ -97,7 +91,7 @@ jobs:
           --create-namespace \
           --wait \
           --values test/metallb-values.yaml \
-          --set configInline.address-pools[0].addresses[0]=$KIND_NETWORK
+          --set configInline.address-pools[0].addresses[0]=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind)
       - name: Create Kind Cluster 2
         uses: helm/kind-action@v1.2.0
         env:
