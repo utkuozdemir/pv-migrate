@@ -82,7 +82,7 @@ jobs:
       - name: Create Kind Cluster 2
         uses: helm/kind-action@v1.2.0
         env:
-          KUBECONFIG: ~/.kube/kind-2.yaml
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
         with:
           cluster_name: kind-2
           version: v0.11.1
@@ -91,11 +91,11 @@ jobs:
         run: kubectl apply -f test/metallb.yaml
       - name: Deploy MetalLB to kind-2
         env:
-          KUBECONFIG: ~/.kube/kind-2.yaml
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: kubectl apply -f test/metallb.yaml
       - name: Run tests
         run: |
-          export PV_MIGRATE_KUBECONFIG_2="${HOME}/.kube/kind-2.yaml"
+          export PV_MIGRATE_KUBECONFIG_2=/home/runner/.kube/kind-2.yaml
           go-acc --output profile.cov ./... -- -v -timeout 20m
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.0
