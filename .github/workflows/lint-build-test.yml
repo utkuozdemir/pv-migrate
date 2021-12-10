@@ -98,10 +98,10 @@ jobs:
           KUBECONFIG: ~/kind-2.yaml
         run: kubectl apply -f test/metallb.yaml
       - name: Run tests
-        env:
-          PV_MIGRATE_KUBECONFIG_1: ~/kind-1.yaml
-          PV_MIGRATE_KUBECONFIG_2: ~/kind-2.yaml
-        run: go-acc --output profile.cov ./... -- -v -timeout 20m
+        run: |
+          PV_MIGRATE_KUBECONFIG_1="${HOME}/kind-1.yaml"
+          PV_MIGRATE_KUBECONFIG_2="${HOME}/kind-2.yaml"
+          go-acc --output profile.cov ./... -- -v -timeout 20m
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.0
         with:
