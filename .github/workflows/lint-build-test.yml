@@ -75,8 +75,6 @@ jobs:
         run: go install github.com/ory/go-acc@v0.2.6
       - name: Create Kind Cluster 1
         uses: helm/kind-action@v1.2.0
-        env:
-          KUBECONFIG: ~/kind-1.yaml
         with:
           cluster_name: kind-1
           version: v0.11.1
@@ -84,23 +82,20 @@ jobs:
       - name: Create Kind Cluster 2
         uses: helm/kind-action@v1.2.0
         env:
-          KUBECONFIG: ~/kind-2.yaml
+          KUBECONFIG: ~/.kube/kind-2.yaml
         with:
           cluster_name: kind-2
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
       - name: Deploy MetalLB to kind-1
-        env:
-          KUBECONFIG: ~/kind-1.yaml
         run: kubectl apply -f test/metallb.yaml
       - name: Deploy MetalLB to kind-2
         env:
-          KUBECONFIG: ~/kind-2.yaml
+          KUBECONFIG: ~/.kube/kind-2.yaml
         run: kubectl apply -f test/metallb.yaml
       - name: Run tests
         run: |
-          PV_MIGRATE_KUBECONFIG_1="${HOME}/kind-1.yaml"
-          PV_MIGRATE_KUBECONFIG_2="${HOME}/kind-2.yaml"
+          PV_MIGRATE_KUBECONFIG_2="${HOME}/.kube/kind-2.yaml"
           go-acc --output profile.cov ./... -- -v -timeout 20m
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.0
