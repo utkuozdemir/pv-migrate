@@ -73,12 +73,31 @@ jobs:
       - name: Install go-acc
         # renovate: go-acc
         run: go install github.com/ory/go-acc@v0.2.6
+      - name: Install Helm
+        uses: stefanprodan/kube-tools@v1.6.0
+        with:
+          helmv3: 3.7.2
       - name: Create Kind Cluster 1
         uses: helm/kind-action@v1.2.0
         with:
           cluster_name: kind-1
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
+      - name: Extract docker kind network
+        run: |  
+          echo KIND_NETWORK=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind) >> $GITHUB_ENV
+          echo "KIND is using Subnet $KIND_NETWORK
+      - name: Deploy MetalLB
+        run: |
+          helmv3 repo add bitnami https://charts.bitnami.com/bitnami
+          helmv3 upgrade metallb \
+          --install bitnami/metallb \
+          --version 2.5.14 \
+          --namespace metallb-system \
+          --create-namespace \
+          --wait \
+          --values test/metallb-values.yaml \
+          --set configInline.address-pools[0].addresses[0]=$KIND_NETWORK
       - name: Create Kind Cluster 2
         uses: helm/kind-action@v1.2.0
         env:
@@ -87,8 +106,6 @@ jobs:
           cluster_name: kind-2
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
-      - name: Deploy MetalLB to kind-1
-        run: kubectl apply -f test/metallb.yaml
       - name: Run tests
         run: |
           export PV_MIGRATE_KUBECONFIG_2=/home/runner/.kube/kind-2.yaml
