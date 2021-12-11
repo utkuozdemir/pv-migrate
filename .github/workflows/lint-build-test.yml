@@ -107,7 +107,7 @@ jobs:
           export PVMIG_TEST_EXTRA_KUBECONFIG=/home/runner/.kube/kind-2.yaml
           go-acc --output profile.cov ./... -- -v -timeout 20m
       - name: Send coverage
-        uses: shogo82148/actions-goveralls@v1.5.0
+        uses: shogo82148/actions-goveralls@v1.5.1
         with:
           path-to-profile: profile.cov
           shallow: true
