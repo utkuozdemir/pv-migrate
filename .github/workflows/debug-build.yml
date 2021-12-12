@@ -13,6 +13,7 @@ on:
       - "docker/**"
       - "helm/**"
       - "renovate.json"
+      - ".krew.yaml"
   pull_request:
     branches:
       - master
@@ -24,6 +25,7 @@ on:
       - "docker/**"
       - "helm/**"
       - "renovate.json"
+      - ".krew.yaml"
 jobs:
   debug-build:
     runs-on: ubuntu-20.04
