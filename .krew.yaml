@@ -21,7 +21,7 @@ spec:
     - selector:
         matchLabels:
           os: linux
-          arch: armv7
+          arch: arm
       {{addURIAndSha "https://github.com/utkuozdemir/pv-migrate/releases/download/{{ .TagName }}/pv-migrate_{{ .TagName }}_linux_armv7.tar.gz" .TagName | indent 6 }}
       bin: pv-migrate
     - selector:
