@@ -42,6 +42,6 @@ spec:
           arch: amd64
       {{addURIAndSha "https://github.com/utkuozdemir/pv-migrate/releases/download/{{ .TagName }}/pv-migrate_{{ .TagName }}_windows_x86_64.zip" .TagName | indent 6 }}
       bin: pv-migrate.exe
-  shortDescription: CLI tool to easily migrate Kubernetes persistent volumes
+  shortDescription: Migrate data across persistent volumes
   description: |
-    pv-migrate uses ssh and rsync to copy data across persistent volume claims
+    pv-migrate uses ssh and rsync to copy data across persistent volumes
