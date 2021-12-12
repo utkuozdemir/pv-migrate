@@ -29,7 +29,7 @@ builds:
 
 archives:
   - id: pv-migrate-archive
-    # default name template except we ise .Tag instead of .Version to keep the "v" prefix
+    # default name template except we use .Tag instead of .Version to keep the "v" prefix
     name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}"
     builds:
       - pv-migrate
