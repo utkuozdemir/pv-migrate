@@ -1,0 +1,47 @@
+apiVersion: krew.googlecontainertools.github.com/v1alpha2
+kind: Plugin
+metadata:
+  name: pv-migrate
+spec:
+  version: {{ .TagName }}
+  homepage: https://github.com/utkuozdemir/pv-migrate
+  platforms:
+    - selector:
+        matchLabels:
+          os: linux
+          arch: amd64
+      {{addURIAndSha "https://github.com/utkuozdemir/pv-migrate/releases/download/{{ .TagName }}/pv-migrate_{{ .TagName }}_linux_x86_64.tar.gz" .TagName | indent 6 }}
+      bin: pv-migrate
+    - selector:
+        matchLabels:
+          os: linux
+          arch: arm64
+      {{addURIAndSha "https://github.com/utkuozdemir/pv-migrate/releases/download/{{ .TagName }}/pv-migrate_{{ .TagName }}_linux_arm64.tar.gz" .TagName | indent 6 }}
+      bin: pv-migrate
+    - selector:
+        matchLabels:
+          os: linux
+          arch: armv7
+      {{addURIAndSha "https://github.com/utkuozdemir/pv-migrate/releases/download/{{ .TagName }}/pv-migrate_{{ .TagName }}_linux_armv7.tar.gz" .TagName | indent 6 }}
+      bin: pv-migrate
+    - selector:
+        matchLabels:
+          os: darwin
+          arch: amd64
+      {{addURIAndSha "https://github.com/utkuozdemir/pv-migrate/releases/download/{{ .TagName }}/pv-migrate_{{ .TagName }}_darwin_x86_64.tar.gz" .TagName | indent 6 }}
+      bin: pv-migrate
+    - selector:
+        matchLabels:
+          os: darwin
+          arch: arm64
+      {{addURIAndSha "https://github.com/utkuozdemir/pv-migrate/releases/download/{{ .TagName }}/pv-migrate_{{ .TagName }}_darwin_arm64.tar.gz" .TagName | indent 6 }}
+      bin: pv-migrate
+    - selector:
+        matchLabels:
+          os: windows
+          arch: amd64
+      {{addURIAndSha "https://github.com/utkuozdemir/pv-migrate/releases/download/{{ .TagName }}/pv-migrate_{{ .TagName }}_windows_x86_64.zip" .TagName | indent 6 }}
+      bin: pv-migrate.exe
+  shortDescription: CLI tool to easily migrate Kubernetes persistent volumes
+  description: |
+    pv-migrate uses ssh and rsync to copy data across persistent volume claims
