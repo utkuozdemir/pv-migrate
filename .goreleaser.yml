@@ -18,7 +18,7 @@ builds:
       - arm
       - arm64
     goarm:
-     - 7
+     - "7"
     ignore:
       - goos: windows
         goarch: arm
@@ -29,6 +29,8 @@ builds:
 
 archives:
   - id: pv-migrate-archive
+    # default name template except we ise .Tag instead of .Version to keep the "v" prefix
+    name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}"
     builds:
       - pv-migrate
     replacements:
@@ -37,7 +39,7 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
-    files: 
+    files:
       - LICENSE
 
 checksum:
@@ -63,33 +65,33 @@ changelog:
 
 dockers:
   - image_templates:
-      - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-amd64
+      - docker.io/utkuozdemir/pv-migrate:{{ .Tag }}-amd64
     use: buildx
     dockerfile: Dockerfile
     build_flag_templates:
       - --platform=linux/amd64
   - image_templates:
-      - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-arm64
+      - docker.io/utkuozdemir/pv-migrate:{{ .Tag }}-arm64
     use: buildx
     goarch: arm64
     dockerfile: Dockerfile
     build_flag_templates:
       - --platform=linux/arm64
   - image_templates:
-      - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-armv7
+      - docker.io/utkuozdemir/pv-migrate:{{ .Tag }}-armv7
     use: buildx
     goarch: arm
-    goarm: 7
+    goarm: "7"
     dockerfile: Dockerfile
     build_flag_templates:
       - --platform=linux/arm/v7
 
 docker_manifests:
-  - name_template: docker.io/utkuozdemir/pv-migrate:{{ .Version }}
+  - name_template: docker.io/utkuozdemir/pv-migrate:{{ .Tag }}
     image_templates:
-      - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-amd64
-      - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-arm64
-      - docker.io/utkuozdemir/pv-migrate:{{ .Version }}-armv7
+      - docker.io/utkuozdemir/pv-migrate:{{ .Tag }}-amd64
+      - docker.io/utkuozdemir/pv-migrate:{{ .Tag }}-arm64
+      - docker.io/utkuozdemir/pv-migrate:{{ .Tag }}-armv7
 
 # To test docker image push, uncomment the following and run
 # goreleaser release --skip-validate --rm-dist --debug
