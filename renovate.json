@@ -77,8 +77,7 @@
       ],
       "depNameTemplate": "golang/go",
       "datasourceTemplate": "github-tags",
-      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)$",
-      "extractVersionTemplate": "go(?<version>\\d+\\.\\d+)"
+      "extractVersionTemplate": "^go(?<version>\\d+\\.\\d+\\.\\d+)$"
     }
   ]
 }
