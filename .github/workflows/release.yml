@@ -20,7 +20,7 @@ jobs:
           # renovate: go
           go-version: 1.17.5
       - name: Login to DockerHub
-        uses: docker/login-action@v1.11.0
+        uses: docker/login-action@v1.12.0
         with:
           username: utkuozdemir
           password: ${{ secrets.DOCKERHUB_TOKEN }}
