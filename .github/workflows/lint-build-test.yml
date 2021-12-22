@@ -60,7 +60,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v2.8.0
         with:
           # renovate: goreleaser
-          version: v1.1.0
+          version: v1.2.1
           args: build --snapshot --rm-dist --single-target
   test:
     runs-on: ubuntu-20.04
