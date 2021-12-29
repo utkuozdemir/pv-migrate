@@ -3,13 +3,13 @@ package strategy
 import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
-	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
 type Mnt2 struct {
 }
 
-func (r *Mnt2) canDo(t *task.Task) bool {
+func (r *Mnt2) canDo(t *migration.Migration) bool {
 	s := t.SourceInfo
 	d := t.DestInfo
 	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
@@ -26,28 +26,27 @@ func (r *Mnt2) canDo(t *task.Task) bool {
 	return sameNode || s.SupportsROX || s.SupportsRWX || d.SupportsRWX
 }
 
-func (r *Mnt2) Run(e *task.Execution) (bool, error) {
-	t := e.Task
-	if !r.canDo(t) {
+func (r *Mnt2) Run(a *migration.Attempt) (bool, error) {
+	m := a.Migration
+	if !r.canDo(m) {
 		return false, nil
 	}
 
-	s := e.Task.SourceInfo
-	d := e.Task.DestInfo
+	s := a.Migration.SourceInfo
+	d := a.Migration.DestInfo
 	ns := s.Claim.Namespace
-	opts := t.Migration.Options
 
-	node := determineTargetNode(t)
+	node := determineTargetNode(m)
 
 	srcMountPath := "/source"
 	destMountPath := "/dest"
 
-	srcPath := srcMountPath + "/" + t.Migration.Source.Path
-	destPath := destMountPath + "/" + t.Migration.Dest.Path
+	srcPath := srcMountPath + "/" + m.Request.Source.Path
+	destPath := destMountPath + "/" + m.Request.Dest.Path
 
 	rsyncCmd := rsync.Cmd{
-		NoChown:  opts.NoChown,
-		Delete:   opts.DeleteExtraneousFiles,
+		NoChown:  m.Request.NoChown,
+		Delete:   m.Request.DeleteExtraneousFiles,
 		SrcPath:  srcPath,
 		DestPath: destPath,
 	}
@@ -65,7 +64,7 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 				{
 					"name":      s.Claim.Name,
 					"mountPath": srcMountPath,
-					"readOnly":  opts.SourceMountReadOnly,
+					"readOnly":  m.Request.SourceMountReadOnly,
 				},
 				{
 					"name":      d.Claim.Name,
@@ -76,25 +75,25 @@ func (r *Mnt2) Run(e *task.Execution) (bool, error) {
 		},
 	}
 
-	releaseName := e.HelmReleaseNamePrefix
+	releaseName := a.HelmReleaseNamePrefix
 	releaseNames := []string{releaseName}
 
-	doneCh := registerCleanupHook(e, releaseNames)
-	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
+	doneCh := registerCleanupHook(a, releaseNames)
+	defer cleanupAndReleaseHook(a, releaseNames, doneCh)
 
-	err = installHelmChart(e, s, releaseName, vals)
+	err = installHelmChart(a, s, releaseName, vals)
 	if err != nil {
 		return true, err
 	}
 
-	showProgressBar := !opts.NoProgressBar
-	kubeClient := t.SourceInfo.ClusterClient.KubeClient
-	jobName := e.HelmReleaseNamePrefix + "-rsync"
-	err = k8s.WaitForJobCompletion(e.Logger, kubeClient, ns, jobName, showProgressBar)
+	showProgressBar := !m.Request.NoProgressBar
+	kubeClient := m.SourceInfo.ClusterClient.KubeClient
+	jobName := a.HelmReleaseNamePrefix + "-rsync"
+	err = k8s.WaitForJobCompletion(a.Logger, kubeClient, ns, jobName, showProgressBar)
 	return true, err
 }
 
-func determineTargetNode(t *task.Task) string {
+func determineTargetNode(t *migration.Migration) string {
 	s := t.SourceInfo
 	d := t.DestInfo
 	if (s.SupportsROX || s.SupportsRWX) && d.SupportsRWX {

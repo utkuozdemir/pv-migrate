@@ -9,7 +9,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
-	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	"helm.sh/helm/v3/pkg/chart/loader"
@@ -37,7 +36,7 @@ func New() *migrator {
 	}
 }
 
-func (m *migrator) Run(mig *migration.Migration) error {
+func (m *migrator) Run(mig *migration.Request) error {
 	nameToStrategyMap, err := m.getStrategyMap(mig.Strategies)
 	if err != nil {
 		return err
@@ -56,10 +55,10 @@ func (m *migrator) Run(mig *migration.Migration) error {
 
 	for _, name := range mig.Strategies {
 		id := util.RandomHexadecimalString(5)
-		e := task.Execution{
+		e := migration.Attempt{
 			ID:                    id,
 			HelmReleaseNamePrefix: "pv-migrate-" + id,
-			Task:                  t,
+			Migration:             t,
 			Logger:                t.Logger.WithField("id", id),
 		}
 
@@ -86,14 +85,14 @@ func (m *migrator) Run(mig *migration.Migration) error {
 	return errors.New("all strategies have failed")
 }
 
-func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
+func (m *migrator) buildTask(r *migration.Request) (*migration.Migration, error) {
 	chart, err := loader.LoadArchive(bytes.NewReader(chartBytes))
 	if err != nil {
 		return nil, err
 	}
 
-	source := mig.Source
-	dest := mig.Dest
+	source := r.Source
+	dest := r.Dest
 
 	sourceClient, err := m.getKubeClient(source.KubeconfigPath, source.Context)
 	if err != nil {
@@ -128,14 +127,14 @@ func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
 		return nil, err
 	}
 
-	logger := mig.Logger.WithFields(log.Fields{
+	logger := r.Logger.WithFields(log.Fields{
 		"source_ns": source.Namespace,
 		"source":    source.Name,
 		"dest_ns":   dest.Namespace,
 		"dest":      dest.Name,
 	})
 
-	ignoreMounted := mig.Options.IgnoreMounted
+	ignoreMounted := r.IgnoreMounted
 	err = handleMounted(logger, sourcePvcInfo, ignoreMounted)
 	if err != nil {
 		return nil, err
@@ -149,15 +148,15 @@ func (m *migrator) buildTask(mig *migration.Migration) (*task.Task, error) {
 		return nil, errors.New("destination pvc is not writeable")
 	}
 
-	t := task.Task{
+	mig := migration.Migration{
 		Chart:      chart,
-		Migration:  mig,
+		Request:    r,
 		Logger:     logger,
 		SourceInfo: sourcePvcInfo,
 		DestInfo:   destPvcInfo,
 	}
 
-	return &t, nil
+	return &mig, nil
 }
 
 func handleMounted(logger *log.Entry, info *pvc.Info, ignoreMounted bool) error {

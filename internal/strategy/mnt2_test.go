@@ -4,7 +4,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
-	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"github.com/utkuozdemir/pv-migrate/migration"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -33,13 +33,13 @@ func TestCanDoSameNode(t *testing.T) {
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
 
-	tsk := task.Task{
+	mig := migration.Migration{
 		SourceInfo: src,
 		DestInfo:   dst,
 	}
 
 	s := Mnt2{}
-	canDo := s.canDo(&tsk)
+	canDo := s.canDo(&mig)
 	assert.True(t, canDo)
 }
 
@@ -64,13 +64,13 @@ func TestCanDoDestRWX(t *testing.T) {
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
 
-	tsk := task.Task{
+	mig := migration.Migration{
 		SourceInfo: src,
 		DestInfo:   dst,
 	}
 
 	s := Mnt2{}
-	canDo := s.canDo(&tsk)
+	canDo := s.canDo(&mig)
 	assert.True(t, canDo)
 }
 
@@ -95,13 +95,13 @@ func TestCanDoSourceROX(t *testing.T) {
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
 
-	tsk := task.Task{
+	mig := migration.Migration{
 		SourceInfo: src,
 		DestInfo:   dst,
 	}
 
 	s := Mnt2{}
-	canDo := s.canDo(&tsk)
+	canDo := s.canDo(&mig)
 	assert.True(t, canDo)
 }
 
@@ -126,13 +126,13 @@ func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
 
-	tsk := task.Task{
+	mig := migration.Migration{
 		SourceInfo: src,
 		DestInfo:   dst,
 	}
 
 	s := Mnt2{}
-	canDo := s.canDo(&tsk)
+	canDo := s.canDo(&mig)
 	assert.False(t, canDo)
 }
 
@@ -158,13 +158,13 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	src, _ := pvc.New(c1, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c2, destNS, destPvc)
 
-	tsk := task.Task{
+	mig := migration.Migration{
 		SourceInfo: src,
 		DestInfo:   dst,
 	}
 
 	s := Mnt2{}
-	canDo := s.canDo(&tsk)
+	canDo := s.canDo(&mig)
 	assert.False(t, canDo)
 }
 
@@ -189,12 +189,12 @@ func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
 
-	tsk := task.Task{
+	mig := migration.Migration{
 		SourceInfo: src,
 		DestInfo:   dst,
 	}
 
-	targetNode := determineTargetNode(&tsk)
+	targetNode := determineTargetNode(&mig)
 	assert.Equal(t, destNode, targetNode)
 }
 
@@ -219,12 +219,12 @@ func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
 
-	tsk := task.Task{
+	mig := migration.Migration{
 		SourceInfo: src,
 		DestInfo:   dst,
 	}
 
-	targetNode := determineTargetNode(&tsk)
+	targetNode := determineTargetNode(&mig)
 	assert.Equal(t, sourceNode, targetNode)
 }
 

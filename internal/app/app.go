@@ -61,24 +61,23 @@ func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 				Action: func(c *cli.Context) error {
 					logger := extractLogger(c.Context)
 
-					s := migration.PVC{
-						KubeconfigPath: c.String(FlagSourceKubeconfig),
-						Context:        c.String(FlagSourceContext),
-						Namespace:      c.String(FlagSourceNamespace),
-						Name:           c.Args().Get(0),
-						Path:           c.String(FlagSourcePath),
-					}
-
-					d := migration.PVC{
-						KubeconfigPath: c.String(FlagDestKubeconfig),
-						Context:        c.String(FlagDestContext),
-						Namespace:      c.String(FlagDestNamespace),
-						Name:           c.Args().Get(1),
-						Path:           c.String(FlagDestPath),
-					}
-
-					opts := migration.Options{
-						DeleteExtraneousFiles: c.Bool(FlagDestDeleteExtraneousFiles),
+					deleteExtraneousFiles := c.Bool(FlagDestDeleteExtraneousFiles)
+					m := migration.Request{
+						Source: &migration.PVCInfo{
+							KubeconfigPath: c.String(FlagSourceKubeconfig),
+							Context:        c.String(FlagSourceContext),
+							Namespace:      c.String(FlagSourceNamespace),
+							Name:           c.Args().Get(0),
+							Path:           c.String(FlagSourcePath),
+						},
+						Dest: &migration.PVCInfo{
+							KubeconfigPath: c.String(FlagDestKubeconfig),
+							Context:        c.String(FlagDestContext),
+							Namespace:      c.String(FlagDestNamespace),
+							Name:           c.Args().Get(1),
+							Path:           c.String(FlagDestPath),
+						},
+						DeleteExtraneousFiles: deleteExtraneousFiles,
 						IgnoreMounted:         c.Bool(FlagIgnoreMounted),
 						SourceMountReadOnly:   c.Bool(FlagSourceMountReadOnly),
 						NoChown:               c.Bool(FlagNoChown),
@@ -88,19 +87,12 @@ func New(rootLogger *log.Logger, version string, commit string) *cli.App {
 						HelmValues:            c.StringSlice(FlagHelmSet),
 						HelmStringValues:      c.StringSlice(FlagHelmSetString),
 						HelmFileValues:        c.StringSlice(FlagHelmSetFile),
-					}
-
-					strategies := strings.Split(c.String(FlagStrategies), ",")
-					m := migration.Migration{
-						Source:     &s,
-						Dest:       &d,
-						Options:    &opts,
-						Strategies: strategies,
-						Logger:     logger,
+						Strategies:            strings.Split(c.String(FlagStrategies), ","),
+						Logger:                logger,
 					}
 
 					logger.Info(":rocket: Starting migration")
-					if opts.DeleteExtraneousFiles {
+					if deleteExtraneousFiles {
 						logger.Info(":white_exclamation_mark: " +
 							"Extraneous files will be deleted from the destination")
 					}

@@ -2,6 +2,8 @@ package migration
 
 import (
 	log "github.com/sirupsen/logrus"
+	"github.com/utkuozdemir/pv-migrate/internal/pvc"
+	"helm.sh/helm/v3/pkg/chart"
 )
 
 const (
@@ -11,7 +13,7 @@ const (
 	DefaultSourceMountReadOnly = true
 )
 
-type PVC struct {
+type PVCInfo struct {
 	KubeconfigPath string
 	Context        string
 	Namespace      string
@@ -19,15 +21,9 @@ type PVC struct {
 	Path           string
 }
 
-type Migration struct {
-	Source     *PVC
-	Dest       *PVC
-	Options    *Options
-	Strategies []string
-	Logger     *log.Entry
-}
-
-type Options struct {
+type Request struct {
+	Source                *PVCInfo
+	Dest                  *PVCInfo
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
@@ -38,4 +34,21 @@ type Options struct {
 	HelmValues            []string
 	HelmFileValues        []string
 	HelmStringValues      []string
+	Strategies            []string
+	Logger                *log.Entry
+}
+
+type Migration struct {
+	Chart      *chart.Chart
+	Request    *Request
+	Logger     *log.Entry
+	SourceInfo *pvc.Info
+	DestInfo   *pvc.Info
+}
+
+type Attempt struct {
+	ID                    string
+	HelmReleaseNamePrefix string
+	Migration             *Migration
+	Logger                *log.Entry
 }

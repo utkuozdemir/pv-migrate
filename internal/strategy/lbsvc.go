@@ -5,15 +5,15 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
-	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
+	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
 type LbSvc struct {
 }
 
-func (r *LbSvc) Run(e *task.Execution) (bool, error) {
-	t := e.Task
+func (r *LbSvc) Run(a *migration.Attempt) (bool, error) {
+	t := a.Migration
 
 	s := t.SourceInfo
 	d := t.DestInfo
@@ -21,29 +21,29 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 	destNs := d.Claim.Namespace
 
 	t.Logger.Info(":key: Generating SSH key pair")
-	keyAlgorithm := t.Migration.Options.KeyAlgorithm
+	keyAlgorithm := t.Request.KeyAlgorithm
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return true, err
 	}
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	srcReleaseName := e.HelmReleaseNamePrefix + "-src"
-	destReleaseName := e.HelmReleaseNamePrefix + "-dest"
+	srcReleaseName := a.HelmReleaseNamePrefix + "-src"
+	destReleaseName := a.HelmReleaseNamePrefix + "-dest"
 	releaseNames := []string{srcReleaseName, destReleaseName}
 
-	doneCh := registerCleanupHook(e, releaseNames)
-	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
+	doneCh := registerCleanupHook(a, releaseNames)
+	defer cleanupAndReleaseHook(a, releaseNames, doneCh)
 
 	srcMountPath := "/source"
 	destMountPath := "/dest"
 
-	err = installOnSource(e, srcReleaseName, publicKey, srcMountPath)
+	err = installOnSource(a, srcReleaseName, publicKey, srcMountPath)
 	if err != nil {
 		return true, err
 	}
 
-	sourceKubeClient := e.Task.SourceInfo.ClusterClient.KubeClient
+	sourceKubeClient := a.Migration.SourceInfo.ClusterClient.KubeClient
 	svcName := srcReleaseName + "-sshd"
 	lbSvcAddress, err := k8s.GetServiceAddress(sourceKubeClient, sourceNs, svcName)
 	if err != nil {
@@ -52,24 +52,23 @@ func (r *LbSvc) Run(e *task.Execution) (bool, error) {
 
 	sshTargetHost := formatSSHTargetHost(lbSvcAddress)
 
-	err = installOnDest(e, destReleaseName, privateKey, privateKeyMountPath,
+	err = installOnDest(a, destReleaseName, privateKey, privateKeyMountPath,
 		sshTargetHost, srcMountPath, destMountPath)
 	if err != nil {
 		return true, err
 	}
 
-	showProgressBar := !e.Task.Migration.Options.NoProgressBar
+	showProgressBar := !a.Migration.Request.NoProgressBar
 	kubeClient := d.ClusterClient.KubeClient
 	jobName := destReleaseName + "-rsync"
-	err = k8s.WaitForJobCompletion(e.Logger, kubeClient, destNs, jobName, showProgressBar)
+	err = k8s.WaitForJobCompletion(a.Logger, kubeClient, destNs, jobName, showProgressBar)
 	return true, err
 }
 
-func installOnSource(e *task.Execution, releaseName, publicKey, srcMountPath string) error {
-	t := e.Task
+func installOnSource(a *migration.Attempt, releaseName, publicKey, srcMountPath string) error {
+	t := a.Migration
 	s := t.SourceInfo
 	ns := s.Claim.Namespace
-	opts := t.Migration.Options
 
 	vals := map[string]interface{}{
 		"sshd": map[string]interface{}{
@@ -82,28 +81,27 @@ func installOnSource(e *task.Execution, releaseName, publicKey, srcMountPath str
 			"pvcMounts": []map[string]interface{}{
 				{
 					"name":      s.Claim.Name,
-					"readOnly":  opts.SourceMountReadOnly,
+					"readOnly":  t.Request.SourceMountReadOnly,
 					"mountPath": srcMountPath,
 				},
 			},
 		},
 	}
 
-	return installHelmChart(e, s, releaseName, vals)
+	return installHelmChart(a, s, releaseName, vals)
 }
 
-func installOnDest(e *task.Execution, releaseName, privateKey,
+func installOnDest(a *migration.Attempt, releaseName, privateKey,
 	privateKeyMountPath, sshHost, srcMountPath, destMountPath string) error {
-	t := e.Task
+	t := a.Migration
 	d := t.DestInfo
 	ns := d.Claim.Namespace
-	opts := t.Migration.Options
 
-	srcPath := srcMountPath + "/" + t.Migration.Source.Path
-	destPath := destMountPath + "/" + t.Migration.Dest.Path
+	srcPath := srcMountPath + "/" + t.Request.Source.Path
+	destPath := destMountPath + "/" + t.Request.Dest.Path
 	rsyncCmd := rsync.Cmd{
-		NoChown:    opts.NoChown,
-		Delete:     opts.DeleteExtraneousFiles,
+		NoChown:    t.Request.NoChown,
+		Delete:     t.Request.DeleteExtraneousFiles,
 		SrcPath:    srcPath,
 		DestPath:   destPath,
 		SrcUseSsh:  true,
@@ -132,7 +130,7 @@ func installOnDest(e *task.Execution, releaseName, privateKey,
 		},
 	}
 
-	return installHelmChart(e, d, releaseName, vals)
+	return installHelmChart(a, d, releaseName, vals)
 }
 
 func formatSSHTargetHost(host string) string {
