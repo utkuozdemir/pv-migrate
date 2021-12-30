@@ -216,6 +216,12 @@ $ pv-migrate migrate \
 **Note:** For it to run as kubectl plugin via `kubectl pv-migrate ...`, 
 put the binary with name `kubectl-pv_migrate` under your `PATH`.
 
+
+# Stargazers over time
+
+[![Stargazers over time](https://starchart.cc/utkuozdemir/pv-migrate.svg)](https://starchart.cc/utkuozdemir/pv-migrate)
+
+
 # Contributing
 
 See [CONTRIBUTING](CONTRIBUTING.md) for details.
