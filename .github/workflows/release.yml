@@ -28,7 +28,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v2.8.0
         with:
           # renovate: goreleaser
-          version: v1.2.4
+          version: v1.2.5
           args: release --rm-dist
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
