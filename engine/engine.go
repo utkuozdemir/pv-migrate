@@ -10,7 +10,7 @@ import (
 // of the strategies and execute them until one of them succeeds.
 type Engine interface {
 	// Run runs the migration
-	Run(m *migration.Migration) error
+	Run(r *migration.Request) error
 }
 
 func New() Engine {

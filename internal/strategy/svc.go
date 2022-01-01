@@ -4,40 +4,39 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
-	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
 type Svc struct {
 }
 
-func (r *Svc) canDo(t *task.Task) bool {
+func (r *Svc) canDo(t *migration.Migration) bool {
 	s := t.SourceInfo
 	d := t.DestInfo
 	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
 	return sameCluster
 }
 
-func (r *Svc) Run(e *task.Execution) (bool, error) {
-	t := e.Task
-	if !r.canDo(t) {
+func (r *Svc) Run(a *migration.Attempt) (bool, error) {
+	m := a.Migration
+	if !r.canDo(m) {
 		return false, nil
 	}
 
-	s := e.Task.SourceInfo
-	d := e.Task.DestInfo
+	s := a.Migration.SourceInfo
+	d := a.Migration.DestInfo
 	sourceNs := s.Claim.Namespace
 	destNs := d.Claim.Namespace
-	opts := t.Migration.Options
 
-	t.Logger.Info(":key: Generating SSH key pair")
-	keyAlgorithm := t.Migration.Options.KeyAlgorithm
+	m.Logger.Info(":key: Generating SSH key pair")
+	keyAlgorithm := m.Request.KeyAlgorithm
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return true, err
 	}
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	releaseName := e.HelmReleaseNamePrefix
+	releaseName := a.HelmReleaseNamePrefix
 	releaseNames := []string{releaseName}
 
 	sshRemoteHost := releaseName + "-sshd." + sourceNs
@@ -45,11 +44,11 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 	srcMountPath := "/source"
 	destMountPath := "/dest"
 
-	srcPath := srcMountPath + "/" + t.Migration.Source.Path
-	destPath := destMountPath + "/" + t.Migration.Dest.Path
+	srcPath := srcMountPath + "/" + m.Request.Source.Path
+	destPath := destMountPath + "/" + m.Request.Dest.Path
 	rsyncCmd := rsync.Cmd{
-		NoChown:    opts.NoChown,
-		Delete:     opts.DeleteExtraneousFiles,
+		NoChown:    m.Request.NoChown,
+		Delete:     m.Request.DeleteExtraneousFiles,
 		SrcPath:    srcPath,
 		DestPath:   destPath,
 		SrcUseSsh:  true,
@@ -83,23 +82,23 @@ func (r *Svc) Run(e *task.Execution) (bool, error) {
 				{
 					"name":      s.Claim.Name,
 					"mountPath": srcMountPath,
-					"readOnly":  opts.SourceMountReadOnly,
+					"readOnly":  m.Request.SourceMountReadOnly,
 				},
 			},
 		},
 	}
 
-	doneCh := registerCleanupHook(e, releaseNames)
-	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
+	doneCh := registerCleanupHook(a, releaseNames)
+	defer cleanupAndReleaseHook(a, releaseNames, doneCh)
 
-	err = installHelmChart(e, d, releaseName, vals)
+	err = installHelmChart(a, d, releaseName, vals)
 	if err != nil {
 		return true, err
 	}
 
-	showProgressBar := !opts.NoProgressBar
-	kubeClient := t.SourceInfo.ClusterClient.KubeClient
+	showProgressBar := !m.Request.NoProgressBar
+	kubeClient := m.SourceInfo.ClusterClient.KubeClient
 	jobName := releaseName + "-rsync"
-	err = k8s.WaitForJobCompletion(e.Logger, kubeClient, destNs, jobName, showProgressBar)
+	err = k8s.WaitForJobCompletion(a.Logger, kubeClient, destNs, jobName, showProgressBar)
 	return true, err
 }

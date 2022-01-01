@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/app"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -60,6 +61,9 @@ var (
 func TestMain(m *testing.M) {
 	err := setup()
 	if err != nil {
+		if teardownErr := teardown(); teardownErr != nil {
+			log.Errorf("failed to tearddown after test context init failure: %v", teardownErr)
+		}
 		log.Fatalf("failed to initialize test context: %v", err)
 	}
 	code := m.Run()
@@ -77,7 +81,7 @@ func TestSameNS(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug m -i -n %s -N %s source dest", ns1, ns1)
+	cmd := fmt.Sprintf("--log-level debug m -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
@@ -103,7 +107,7 @@ func TestSameNSLbSvc(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug m -s lbsvc -i -n %s -N %s source dest", ns1, ns1)
+	cmd := fmt.Sprintf("--log-level debug m -s lbsvc -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
@@ -129,7 +133,7 @@ func TestNoChown(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -i -o -n %s -N %s source dest", ns1, ns1)
+	cmd := fmt.Sprintf("--log-level debug --log-format json m -i -o -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
@@ -155,7 +159,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -d -i -n %s -N %s source dest", ns1, ns1)
+	cmd := fmt.Sprintf("--log-level debug --log-format json m -d -i -n %s -N %s source dest", ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
@@ -182,7 +186,7 @@ func TestMountedError(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -n %s -N %s source dest", ns1, ns1)
+	cmd := fmt.Sprintf("--log-level debug --log-format json m -n %s -N %s source dest", ns1, ns1)
 	err = runCliApp(cmd)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "ignore-mounted is not requested")
@@ -194,7 +198,7 @@ func TestDifferentNS(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -i -n %s -N %s source dest", ns1, ns2)
+	cmd := fmt.Sprintf("--log-level debug --log-format json m -i -n %s -N %s source dest", ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
@@ -220,7 +224,7 @@ func TestRSA(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -a rsa -i -n %s -N %s source dest", ns1, ns2)
+	cmd := fmt.Sprintf("--log-level debug --log-format json m -a rsa -i -n %s -N %s source dest", ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
@@ -246,7 +250,7 @@ func TestDifferentCluster(t *testing.T) {
 	_, err := execInPod(extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -K %s -i -n %s -N %s source dest",
+	cmd := fmt.Sprintf("--log-level debug --log-format json m -K %s -i -n %s -N %s source dest",
 		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
@@ -273,7 +277,7 @@ func TestLocal(t *testing.T) {
 	_, err := execInPod(extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("-l debug -f json m -K %s -s local -i -n %s -N %s source dest",
+	cmd := fmt.Sprintf("--log-level debug --log-format json m -K %s -s local -i -n %s -N %s source dest",
 		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
@@ -638,7 +642,14 @@ func deleteNs(cli *k8s.ClusterClient, name string) error {
 }
 
 func runCliApp(cmd string) error {
-	args := []string{os.Args[0]}
-	args = append(args, strings.Fields(cmd)...)
-	return app.New(log.New(), "", "").Run(args)
+	//args := []string{os.Args[0]}
+	//args = append(args, strings.Fields(cmd)...)
+	logger, err := applog.New()
+	if err != nil {
+		return err
+	}
+
+	cliApp := app.New(logger, "", "", "")
+	cliApp.SetArgs(strings.Fields(cmd))
+	return cliApp.Execute()
 }

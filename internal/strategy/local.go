@@ -9,7 +9,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
-	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"github.com/utkuozdemir/pv-migrate/migration"
 	"io"
 	"io/ioutil"
 	corev1 "k8s.io/api/core/v1"
@@ -29,42 +29,41 @@ const (
 type Local struct {
 }
 
-func (r *Local) Run(e *task.Execution) (bool, error) {
+func (r *Local) Run(a *migration.Attempt) (bool, error) {
 	_, err := exec.LookPath("ssh")
 	if err != nil {
 		return false, fmt.Errorf(":cross_mark: Error: binary not found in path: %s", "ssh")
 	}
 
-	t := e.Task
+	t := a.Migration
 	s := t.SourceInfo
 	d := t.DestInfo
-	opts := t.Migration.Options
 
 	t.Logger.Info(":key: Generating SSH key pair")
-	keyAlgorithm := t.Migration.Options.KeyAlgorithm
+	keyAlgorithm := t.Request.KeyAlgorithm
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return true, err
 	}
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	srcReleaseName := e.HelmReleaseNamePrefix + "-src"
-	destReleaseName := e.HelmReleaseNamePrefix + "-dest"
+	srcReleaseName := a.HelmReleaseNamePrefix + "-src"
+	destReleaseName := a.HelmReleaseNamePrefix + "-dest"
 	releaseNames := []string{srcReleaseName, destReleaseName}
 
-	doneCh := registerCleanupHook(e, releaseNames)
-	defer cleanupAndReleaseHook(e, releaseNames, doneCh)
+	doneCh := registerCleanupHook(a, releaseNames)
+	defer cleanupAndReleaseHook(a, releaseNames, doneCh)
 
 	srcMountPath := "/source"
 	destMountPath := "/dest"
 
-	err = installLocalOnSource(e, srcReleaseName, publicKey,
+	err = installLocalOnSource(a, srcReleaseName, publicKey,
 		privateKey, privateKeyMountPath, srcMountPath)
 	if err != nil {
 		return true, err
 	}
 
-	err = installLocalOnDest(e, destReleaseName, publicKey, destMountPath)
+	err = installLocalOnDest(a, destReleaseName, publicKey, destMountPath)
 	if err != nil {
 		return true, err
 	}
@@ -101,13 +100,13 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 		return true, err
 	}
 
-	srcPath := srcMountPath + "/" + t.Migration.Source.Path
-	destPath := destMountPath + "/" + t.Migration.Dest.Path
+	srcPath := srcMountPath + "/" + t.Request.Source.Path
+	destPath := destMountPath + "/" + t.Request.Dest.Path
 
 	rsyncCmd := rsync.Cmd{
 		Port:        sshReverseTunnelPort,
-		NoChown:     opts.NoChown,
-		Delete:      opts.DeleteExtraneousFiles,
+		NoChown:     t.Request.NoChown,
+		Delete:      t.Request.DeleteExtraneousFiles,
 		SrcPath:     srcPath,
 		DestPath:    destPath,
 		DestUseSsh:  true,
@@ -132,7 +131,7 @@ func (r *Local) Run(e *task.Execution) (bool, error) {
 	errorCh := make(chan error)
 	go func() { errorCh <- cmd.Run() }()
 
-	showProgressBar := !e.Task.Migration.Options.NoProgressBar &&
+	showProgressBar := !a.Migration.Request.NoProgressBar &&
 		t.Logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
 	successCh := make(chan bool, 1)
 
@@ -155,12 +154,11 @@ func getSshdPodForHelmRelease(pvcInfo *pvc.Info, name string) (*corev1.Pod, erro
 	return k8s.WaitForPod(pvcInfo.ClusterClient.KubeClient, pvcInfo.Claim.Namespace, labelSelector)
 }
 
-func installLocalOnSource(e *task.Execution, releaseName,
+func installLocalOnSource(a *migration.Attempt, releaseName,
 	publicKey, privateKey, privateKeyMountPath, srcMountPath string) error {
-	t := e.Task
+	t := a.Migration
 	s := t.SourceInfo
 	ns := s.Claim.Namespace
-	opts := t.Migration.Options
 
 	vals := map[string]interface{}{
 		"sshd": map[string]interface{}{
@@ -173,18 +171,18 @@ func installLocalOnSource(e *task.Execution, releaseName,
 			"pvcMounts": []map[string]interface{}{
 				{
 					"name":      s.Claim.Name,
-					"readOnly":  opts.SourceMountReadOnly,
+					"readOnly":  t.Request.SourceMountReadOnly,
 					"mountPath": srcMountPath,
 				},
 			},
 		},
 	}
 
-	return installHelmChart(e, s, releaseName, vals)
+	return installHelmChart(a, s, releaseName, vals)
 }
 
-func installLocalOnDest(e *task.Execution, releaseName, publicKey, destMountPath string) error {
-	t := e.Task
+func installLocalOnDest(a *migration.Attempt, releaseName, publicKey, destMountPath string) error {
+	t := a.Migration
 	d := t.DestInfo
 	ns := d.Claim.Namespace
 
@@ -208,7 +206,7 @@ func installLocalOnDest(e *task.Execution, releaseName, publicKey, destMountPath
 	}
 	defer func() { _ = os.Remove(valsFile) }()
 
-	return installHelmChart(e, d, releaseName, vals)
+	return installHelmChart(a, d, releaseName, vals)
 }
 
 func writePrivateKeyToTempFile(privateKey string) (string, error) {
@@ -267,7 +265,7 @@ func portForwardForPod(logger *log.Entry, restConfig *rest.Config,
 	}
 }
 
-// getFreePort asks the kernel for a free open port that is ready to use.
+// getFreePort asks the kernel for a free open port that is ready to usa.
 func getFreePort() (int, error) {
 	addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
 	if err != nil {

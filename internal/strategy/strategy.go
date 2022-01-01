@@ -6,7 +6,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
-	"github.com/utkuozdemir/pv-migrate/internal/task"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/action"
@@ -46,7 +45,7 @@ type Strategy interface {
 	// Run runs the migration for the given task execution.
 	//
 	// This is the actual implementation of the migration.
-	Run(execution *task.Execution) (bool, error)
+	Run(a *migration.Attempt) (bool, error)
 }
 
 func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
@@ -62,15 +61,15 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func registerCleanupHook(e *task.Execution, releaseNames []string) chan<- bool {
+func registerCleanupHook(a *migration.Attempt, releaseNames []string) chan<- bool {
 	doneCh := make(chan bool)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		select {
 		case <-signalCh:
-			e.Logger.Warn(":large_orange_diamond: Received termination signal")
-			cleanup(e, releaseNames)
+			a.Logger.Warn(":large_orange_diamond: Received termination signal")
+			cleanup(a, releaseNames)
 			os.Exit(1)
 		case <-doneCh:
 			return
@@ -79,18 +78,18 @@ func registerCleanupHook(e *task.Execution, releaseNames []string) chan<- bool {
 	return doneCh
 }
 
-func cleanupAndReleaseHook(e *task.Execution, releaseNames []string, doneCh chan<- bool) {
-	cleanup(e, releaseNames)
+func cleanupAndReleaseHook(a *migration.Attempt, releaseNames []string, doneCh chan<- bool) {
+	cleanup(a, releaseNames)
 	doneCh <- true
 }
 
-func cleanup(e *task.Execution, releaseNames []string) {
-	t := e.Task
-	logger := e.Logger
+func cleanup(a *migration.Attempt, releaseNames []string) {
+	mig := a.Migration
+	logger := a.Logger
 	logger.Info(":broom: Cleaning up")
 	var result *multierror.Error
 
-	for _, info := range []*pvc.Info{t.SourceInfo, t.DestInfo} {
+	for _, info := range []*pvc.Info{mig.SourceInfo, mig.DestInfo} {
 		for _, name := range releaseNames {
 			err := cleanupForPVC(logger, name, info)
 			if err != nil {
@@ -137,27 +136,27 @@ func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configu
 	return actionConfig, nil
 }
 
-func getMergedHelmValues(helmValuesFile string, opts *migration.Options) (map[string]interface{}, error) {
-	allValuesFiles := append([]string{helmValuesFile}, opts.HelmValuesFiles...)
+func getMergedHelmValues(helmValuesFile string, r *migration.Request) (map[string]interface{}, error) {
+	allValuesFiles := append([]string{helmValuesFile}, r.HelmValuesFiles...)
 	valsOptions := values.Options{
-		Values:       opts.HelmValues,
+		Values:       r.HelmValues,
 		ValueFiles:   allValuesFiles,
-		StringValues: opts.HelmStringValues,
-		FileValues:   opts.HelmFileValues,
+		StringValues: r.HelmStringValues,
+		FileValues:   r.HelmFileValues,
 	}
 
 	return valsOptions.MergeValues(helmProviders)
 }
 
-func installHelmChart(e *task.Execution, pvcInfo *pvc.Info, name string,
+func installHelmChart(a *migration.Attempt, pvcInfo *pvc.Info, name string,
 	values map[string]interface{}) error {
-	helmValuesFile, err := writeHelmValuesToTempFile(e.ID, values)
+	helmValuesFile, err := writeHelmValuesToTempFile(a.ID, values)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.Remove(helmValuesFile) }()
 
-	helmActionConfig, err := initHelmActionConfig(e.Logger, pvcInfo)
+	helmActionConfig, err := initHelmActionConfig(a.Logger, pvcInfo)
 	if err != nil {
 		return err
 	}
@@ -168,13 +167,13 @@ func installHelmChart(e *task.Execution, pvcInfo *pvc.Info, name string,
 	install.Wait = true
 	install.Timeout = 1 * time.Minute
 
-	t := e.Task
-	vals, err := getMergedHelmValues(helmValuesFile, t.Migration.Options)
+	mig := a.Migration
+	vals, err := getMergedHelmValues(helmValuesFile, mig.Request)
 	if err != nil {
 		return err
 	}
 
-	_, err = install.Run(t.Chart, vals)
+	_, err = install.Run(mig.Chart, vals)
 	return err
 }
 

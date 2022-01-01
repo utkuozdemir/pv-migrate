@@ -3,7 +3,7 @@ package strategy
 import (
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
-	"github.com/utkuozdemir/pv-migrate/internal/task"
+	"github.com/utkuozdemir/pv-migrate/migration"
 	v1 "k8s.io/api/core/v1"
 	"testing"
 )
@@ -29,12 +29,12 @@ func TestSvcCanDoSameCluster(t *testing.T) {
 	src, _ := pvc.New(c, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c, destNS, destPvc)
 
-	tsk := task.Task{
+	mig := migration.Migration{
 		SourceInfo: src,
 		DestInfo:   dst,
 	}
 
 	s := Svc{}
-	canDo := s.canDo(&tsk)
+	canDo := s.canDo(&mig)
 	assert.True(t, canDo)
 }
