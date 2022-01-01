@@ -104,9 +104,10 @@ jobs:
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
       - name: Run tests
-        run: |
-          export PVMIG_TEST_EXTRA_KUBECONFIG=/home/runner/.kube/kind-2.yaml
-          richgo test -coverpkg=./... -coverprofile=profile.cov -covermode=count -timeout 20m -v ./...
+        env:
+          RICHGO_FORCE_COLOR: "1"
+          PVMIG_TEST_EXTRA_KUBECONFIG: "/home/runner/.kube/kind-2.yaml"
+        run: richgo test -coverpkg=./... -coverprofile=profile.cov -covermode=count -timeout 20m -v ./...
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.1
         with:
