@@ -72,9 +72,8 @@ jobs:
         with:
           # renovate: go
           go-version: 1.17.5
-      - name: Install go-acc
-        # renovate: go-acc
-        run: go install github.com/ory/go-acc@v0.2.6
+      - name: Install richgo
+        run: go install github.com/kyoh86/richgo@v0.3.10
       - name: Create Kind Cluster 1
         uses: helm/kind-action@v1.2.0
         with:
@@ -107,7 +106,7 @@ jobs:
       - name: Run tests
         run: |
           export PVMIG_TEST_EXTRA_KUBECONFIG=/home/runner/.kube/kind-2.yaml
-          go-acc --output profile.cov ./... -- -v -timeout 20m
+          richgo test -coverpkg=./... -coverprofile=profile.cov -covermode=count -timeout 20m -v ./...
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.1
         with:
