@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/utkuozdemir/pv-migrate/engine"
@@ -52,10 +51,6 @@ func buildMigrateCmd() *cobra.Command {
 		Args:              cobra.ExactArgs(2),
 		ValidArgsFunction: buildPVCsCompletionFunc(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 2 {
-				return errors.New("exactly 2 arguments are required: [SOURCE-PVC] [DEST-PVC]")
-			}
-
 			f := cmd.Flags()
 
 			srcKubeconfigPath, _ := f.GetString(FlagSourceKubeconfig)
