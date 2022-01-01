@@ -30,6 +30,7 @@ const (
 
 var (
 	DefaultStrategies = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy}
+	AllStrategies     = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy, LocalStrategy}
 
 	nameToStrategy = map[string]Strategy{
 		Mnt2Strategy:  &Mnt2{},

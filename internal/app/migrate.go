@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"fmt"
 	"github.com/spf13/cobra"
 	"github.com/utkuozdemir/pv-migrate/engine"
@@ -37,13 +38,24 @@ const (
 	FlagHelmSetFile   = "helm-set-file"
 )
 
+var (
+	completionFuncNoFileComplete = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+)
+
 func buildMigrateCmd() *cobra.Command {
 	cmd := cobra.Command{
-		Use:     CommandMigrate,
-		Aliases: []string{"m"},
-		Short:   "Migrate data from one Kubernetes PersistentVolumeClaim to another",
-		Args:    cobra.ExactArgs(2),
+		Use:               CommandMigrate + " [SOURCE-PVC] [DEST-PVC]",
+		Aliases:           []string{"m"},
+		Short:             "Migrate data from one Kubernetes PersistentVolumeClaim to another",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: buildPVCsCompletionFunc(),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) != 2 {
+				return errors.New("exactly 2 arguments are required: [SOURCE-PVC] [DEST-PVC]")
+			}
+
 			f := cmd.Flags()
 
 			srcKubeconfigPath, _ := f.GetString(FlagSourceKubeconfig)
@@ -132,6 +144,21 @@ func buildMigrateCmd() *cobra.Command {
 	f.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringSlice(FlagHelmSetString, nil, "set additional Helm STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
 	f.StringSlice(FlagHelmSetFile, nil, "set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
+
+	_ = cmd.RegisterFlagCompletionFunc(FlagSourceContext, buildKubeContextCompletionFunc(FlagSourceKubeconfig))
+	_ = cmd.RegisterFlagCompletionFunc(FlagSourceNamespace, buildKubeNSCompletionFunc(FlagSourceKubeconfig, FlagSourceContext))
+	_ = cmd.RegisterFlagCompletionFunc(FlagSourcePath, completionFuncNoFileComplete)
+
+	_ = cmd.RegisterFlagCompletionFunc(FlagDestContext, buildKubeContextCompletionFunc(FlagDestKubeconfig))
+	_ = cmd.RegisterFlagCompletionFunc(FlagDestNamespace, buildKubeNSCompletionFunc(FlagDestKubeconfig, FlagDestContext))
+	_ = cmd.RegisterFlagCompletionFunc(FlagDestPath, completionFuncNoFileComplete)
+
+	_ = cmd.RegisterFlagCompletionFunc(FlagStrategies, buildSliceCompletionFunc(strategy.AllStrategies))
+	_ = cmd.RegisterFlagCompletionFunc(FlagSSHKeyAlgorithm, buildStaticSliceCompletionFunc(ssh.KeyAlgorithms))
+
+	_ = cmd.RegisterFlagCompletionFunc(FlagHelmSet, completionFuncNoFileComplete)
+	_ = cmd.RegisterFlagCompletionFunc(FlagHelmSetString, completionFuncNoFileComplete)
+	_ = cmd.RegisterFlagCompletionFunc(FlagHelmSetFile, completionFuncNoFileComplete)
 
 	return &cmd
 }
