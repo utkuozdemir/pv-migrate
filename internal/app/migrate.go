@@ -45,7 +45,7 @@ var (
 
 func buildMigrateCmd() *cobra.Command {
 	cmd := cobra.Command{
-		Use:               CommandMigrate + " [SOURCE-PVC] [DEST-PVC]",
+		Use:               CommandMigrate + " <source-pvc> <dest-pvc>",
 		Aliases:           []string{"m"},
 		Short:             "Migrate data from one Kubernetes PersistentVolumeClaim to another",
 		Args:              cobra.ExactArgs(2),
