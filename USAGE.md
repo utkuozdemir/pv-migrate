@@ -1,0 +1,119 @@
+# Usage
+
+Help command:
+```
+A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another
+
+Usage:
+  pv-migrate [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  migrate     Migrate data from one Kubernetes PersistentVolumeClaim to another
+
+Flags:
+  -h, --help                help for pv-migrate
+      --log-format string   log format, must be one of: json, fancy (default "fancy")
+      --log-level string    log level, must be one of: trace, debug, info, warn, error, fatal, panic (default "info")
+  -v, --version             version for pv-migrate
+```
+
+
+Command `migrate`:
+```
+Migrate data from one Kubernetes PersistentVolumeClaim to another
+
+Usage:
+  pv-migrate migrate <source-pvc> <dest-pvc> [flags]
+
+Aliases:
+  migrate, m
+
+Flags:
+  -C, --dest-context string            context in the kubeconfig file of the destination PVC
+  -d, --dest-delete-extraneous-files   delete extraneous files on the destination by using rsync's '--delete' flag
+  -K, --dest-kubeconfig string         path of the kubeconfig file of the destination PVC
+  -N, --dest-namespace string          namespace of the destination PVC
+  -P, --dest-path string               the filesystem path to migrate in the the destination PVC (default "/")
+      --helm-set strings               set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
+      --helm-set-file strings          set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)
+      --helm-set-string strings        set additional Helm STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
+  -f, --helm-values strings            set additional Helm values by a YAML file or a URL (can specify multiple)
+  -h, --help                           help for migrate
+  -i, --ignore-mounted                 do not fail if the source or destination PVC is mounted
+  -o, --no-chown                       omit chown on rsync
+  -b, --no-progress-bar                do not display a progress bar
+  -c, --source-context string          context in the kubeconfig file of the source PVC
+  -k, --source-kubeconfig string       path of the kubeconfig file of the source PVC
+  -R, --source-mount-read-only         mount the source PVC in ReadOnly mode (default true)
+  -n, --source-namespace string        namespace of the source PVC
+  -p, --source-path string             the filesystem path to migrate in the the source PVC (default "/")
+  -a, --ssh-key-algorithm string       ssh key algorithm to be used. Valid values are rsa,ed25519 (default "ed25519")
+  -s, --strategies strings             the comma-separated list of strategies to be used in the given order (default [mnt2,svc,lbsvc])
+
+Global Flags:
+      --log-format string   log format, must be one of: json, fancy (default "fancy")
+      --log-level string    log level, must be one of: trace, debug, info, warn, error, fatal, panic (default "info")
+```
+
+The Kubernetes resources created by pv-migrate are sourced from a [Helm chart](helm/pv-migrate).
+
+You can pass raw values to the backing Helm chart
+using the `--helm-*` flags for further customization: container images,
+resources, serviceacccounts, additional annotations etc.
+
+## Strategies
+
+`pv-migrate` has multiple strategies implemented to carry out the migration operation. Those are the following:
+
+| Name    | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+|---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `mnt2`  | **Mount both** - Mounts both PVCs in a single pod and runs a regular rsync, without using SSH or the network. Only applicable if source and destination PVCs are in the same namespace and both can be mounted from a single pod.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `svc`   | **Service** - Runs rsync+ssh over a Kubernetes Service (`ClusterIP`). Only applicable when source and destination PVCs are in the same Kubernetes cluster.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `lbsvc` | **Load Balancer Service** - Runs rsync+ssh over a Kubernetes Service of type `LoadBalancer`. Always applicable (will fail if `LoadBalancer` IP is not assigned for a long period).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `local` | **Local Transfer** - Runs sshd on both source and destination, then uses a combination of `kubectl port-forward` logic and an SSH reverse proxy to tunnel all the traffic over the client device (the device which runs pv-migrate, e.g. your laptop). Requires `ssh` command to be available on the client device. <br/><br/>Note that this strategy is **experimental** (and not enabled by default), potentially can put heavy load on both apiservers and is not as resilient as others. It is recommended for small amounts of data and/or when the only access to both clusters seems to be through `kubectl` (e.g. for air-gapped clusters, on jump hosts etc.). |
+
+## Examples
+
+To migrate contents of PersistentVolumeClaim `small-pvc` in namespace `source-ns`
+to the PersistentVolumeClaim `big-pvc` in namespace `dest-ns`, use the following command:
+
+Minimal example, source and destination are in the currently selected namespace in the context:
+```bash
+$ pv-migrate migrate old-pvc new-pvc
+```
+
+Example with different namespaces:
+```bash
+$ pv-migrate migrate \
+  --source-namespace source-ns \
+  --dest-namespace dest-ns \
+  old-pvc new-pvc
+```
+
+Between different clusters:
+```bash
+pv-migrate migrate \
+  --source-kubeconfig /path/to/source/kubeconfig \
+  --source-context some-context \
+  --source-namespace source-ns \
+  --dest-kubeconfig /path/to/dest/kubeconfig \
+  --dest-context some-other-context \
+  --dest-namespace dest-ns \
+  --dest-delete-extraneous-files \
+  old-pvc new-pvc
+```
+
+With custom rsync container image & sshd service account:
+```bash
+$ pv-migrate migrate \
+  --helm-set rsync.image.repository=mycustomrepo/rsync \
+  --helm-set rsync.image.tag=v42.0.0 \
+  --helm-set sshd.serviceAccount.create=false \
+  --helm-set sshd.serviceAccount.name=my-custom-sa \
+  old-pvc new-pvc
+```
+
+**Note:** For it to run as kubectl plugin via `kubectl pv-migrate ...`,
+put the binary with name `kubectl-pv_migrate` under your `PATH`.
