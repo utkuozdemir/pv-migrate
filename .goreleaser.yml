@@ -108,6 +108,7 @@ brews:
       name: Utku Ozdemir
       email: uoz@protonmail.com
     folder: Formula
+    goarm: "7"
     homepage: https://github.com/utkuozdemir/pv-migrate
     description: Persistent volume migration plugin for Kubernetes
     license: Apache-2.0
