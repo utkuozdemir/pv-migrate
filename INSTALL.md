@@ -53,7 +53,13 @@ docker run --rm -it utkuozdemir/pv-migrate:<IMAGE_TAG> pv-migrate migrate ...
 
 ## Installing Shell Completion
 
-To install completion for your shell, run `pv-migrate completion --help` and follow the instructions.  
+If you install `pv-migrate` using Homebrew, completions for bash, 
+zsh and fish will be installed for you - you don't need to do anything further.
+
+Completions are not supported when `pv-migrate` is installed using krew - see [here](https://github.com/kubernetes-sigs/krew/issues/543).
+
+If you have installed `pv-migrate` by directly downloading the binaries, 
+run `pv-migrate completion --help` and follow the instructions.  
 Here's the sample output of instructions:
 
 ```
