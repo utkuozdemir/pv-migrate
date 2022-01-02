@@ -42,6 +42,7 @@ archives:
         format: zip
     files:
       - LICENSE
+      - completions/*
 
 checksum:
   name_template: checksums.txt
