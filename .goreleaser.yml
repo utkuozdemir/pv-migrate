@@ -2,6 +2,7 @@
 before:
   hooks:
     - go mod download
+    - ./scripts/completions.sh
 
 builds:
   - id: pv-migrate
@@ -112,6 +113,11 @@ brews:
     license: Apache-2.0
     test: |
       system "#{bin}/pv-migrate -v"
+    install: |-
+      bin.install "pv-migrate"
+      bash_completion.install "completions/pv-migrate.bash" => "pv-migrate"
+      zsh_completion.install "completions/pv-migrate.zsh" => "_pv-migrate"
+      fish_completion.install "completions/pv-migrate.fish"
 
 scoop:
   bucket:
