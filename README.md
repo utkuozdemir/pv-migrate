@@ -63,7 +63,7 @@ See [INSTALL.md](INSTALL.md) for various installation methods and shell completi
 
 ## Usage
 
-See [USAGE.md](INSTALL.md) for the CLI reference and examples.
+See [USAGE.md](USAGE.md) for the CLI reference and examples.
 
 
 # Stargazers over time
