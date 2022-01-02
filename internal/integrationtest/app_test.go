@@ -5,6 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"os/user"
+	"strings"
+	"testing"
+	"time"
+
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -23,11 +29,6 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/utils/env"
-	"os"
-	"os/user"
-	"strings"
-	"testing"
-	"time"
 )
 
 const (
@@ -642,8 +643,8 @@ func deleteNs(cli *k8s.ClusterClient, name string) error {
 }
 
 func runCliApp(cmd string) error {
-	//args := []string{os.Args[0]}
-	//args = append(args, strings.Fields(cmd)...)
+	// args := []string{os.Args[0]}
+	// args = append(args, strings.Fields(cmd)...)
 	logger, err := applog.New()
 	if err != nil {
 		return err

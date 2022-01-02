@@ -41,8 +41,10 @@ func (c *Cmd) Build() (string, error) {
 
 	sshArgsStr := fmt.Sprintf("\"%s\"", strings.Join(sshArgs, " "))
 
-	rsyncArgs := []string{"-azv", "--info=progress2,misc0,flist0",
-		"--no-inc-recursive", "-e", sshArgsStr}
+	rsyncArgs := []string{
+		"-azv", "--info=progress2,misc0,flist0",
+		"--no-inc-recursive", "-e", sshArgsStr,
+	}
 	if c.NoChown {
 		rsyncArgs = append(rsyncArgs, "--no-o", "--no-g")
 	}

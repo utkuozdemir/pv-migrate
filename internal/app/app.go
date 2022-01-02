@@ -9,9 +9,7 @@ const (
 	appName = "pv-migrate"
 )
 
-var (
-	logger *log.Entry
-)
+var logger *log.Entry
 
 func New(rootLogger *log.Entry, version string, commit string, date string) *cobra.Command {
 	logger = rootLogger

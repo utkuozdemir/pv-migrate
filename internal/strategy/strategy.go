@@ -3,6 +3,12 @@ package strategy
 import (
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
@@ -13,12 +19,8 @@ import (
 	"helm.sh/helm/v3/pkg/cli/values"
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/storage/driver"
-	"io/ioutil"
+
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	"os"
-	"os/signal"
-	"syscall"
-	"time"
 )
 
 const (

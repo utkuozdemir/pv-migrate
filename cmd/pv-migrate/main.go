@@ -1,11 +1,13 @@
 package main
 
 import (
+	"math/rand"
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/app"
 	applog "github.com/utkuozdemir/pv-migrate/internal/log"
-	"math/rand"
-	"time"
+
 	// load all auth plugins - needed for gcp, azure etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 )
@@ -18,7 +20,6 @@ var (
 )
 
 func init() {
-
 	rand.Seed(time.Now().UnixNano())
 }
 

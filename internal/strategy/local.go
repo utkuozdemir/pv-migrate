@@ -3,6 +3,14 @@ package strategy
 import (
 	"errors"
 	"fmt"
+	"io"
+	"io/ioutil"
+	"net"
+	"os"
+	"os/exec"
+	"strconv"
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	applog "github.com/utkuozdemir/pv-migrate/internal/log"
@@ -10,15 +18,9 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/migration"
-	"io"
-	"io/ioutil"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
-	"net"
-	"os"
-	"os/exec"
-	"strconv"
-	"time"
 )
 
 const (
@@ -26,8 +28,7 @@ const (
 	sshReverseTunnelPort = 50000
 )
 
-type Local struct {
-}
+type Local struct{}
 
 func (r *Local) Run(a *migration.Attempt) (bool, error) {
 	_, err := exec.LookPath("ssh")
@@ -221,7 +222,7 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 
 	name := file.Name()
 
-	err = os.Chmod(name, 0600)
+	err = os.Chmod(name, 0o600)
 	if err != nil {
 		return "", err
 	}

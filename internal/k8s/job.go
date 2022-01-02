@@ -3,10 +3,12 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"io"
+
 	log "github.com/sirupsen/logrus"
 	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
-	"io"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )

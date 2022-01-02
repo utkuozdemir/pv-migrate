@@ -2,14 +2,16 @@ package k8s
 
 import (
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"io"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/transport/spdy"
 	"net/http"
 	"net/url"
 	"path"
+
+	log "github.com/sirupsen/logrus"
+
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
 )
 
 type PortForwardRequest struct {

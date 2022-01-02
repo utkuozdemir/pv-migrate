@@ -6,10 +6,11 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"golang.org/x/crypto/ed25519"
-	"golang.org/x/crypto/ssh"
 	"math/rand"
 	"strings"
+
+	"golang.org/x/crypto/ed25519"
+	"golang.org/x/crypto/ssh"
 )
 
 type KeyAlgorithm string
@@ -19,9 +20,7 @@ const (
 	Ed25519KeyAlgorithm = "ed25519"
 )
 
-var (
-	KeyAlgorithms = []string{RSAKeyAlgorithm, Ed25519KeyAlgorithm}
-)
+var KeyAlgorithms = []string{RSAKeyAlgorithm, Ed25519KeyAlgorithm}
 
 func CreateSSHKeyPair(keyAlgorithm string) (string, string, error) {
 	switch keyAlgorithm {
@@ -62,7 +61,6 @@ func createSSHRSAKeyPair() (string, string, error) {
 
 func createSSHEd25519KeyPair() (string, string, error) {
 	pubKey, privateKey, err := ed25519.GenerateKey(crand.Reader)
-
 	if err != nil {
 		return "", "", err
 	}
@@ -113,7 +111,7 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) []byte {
 
 	pk, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		//fmt.Fprintln(os.Stderr, "ed25519.PublicKey type assertion failed on an ed25519 public key. This should never ever happen.")
+		// fmt.Fprintln(os.Stderr, "ed25519.PublicKey type assertion failed on an ed25519 public key. This should never ever happen.")
 		return nil
 	}
 	pubKey := []byte(pk)

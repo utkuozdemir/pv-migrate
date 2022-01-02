@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"fmt"
+
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
@@ -9,8 +10,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
-type LbSvc struct {
-}
+type LbSvc struct{}
 
 func (r *LbSvc) Run(a *migration.Attempt) (bool, error) {
 	t := a.Migration

@@ -2,14 +2,14 @@ package app
 
 import (
 	"fmt"
-	"github.com/spf13/cobra"
-	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"os"
 	"strings"
+
+	"github.com/spf13/cobra"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 )
 
-var (
-	completionCmdlongDesc = fmt.Sprintf(`To load completions:
+var completionCmdlongDesc = fmt.Sprintf(`To load completions:
 
 Bash:
 
@@ -48,7 +48,6 @@ PowerShell:
   PS> %[1]s completion powershell > %[1]s.ps1
   # and source this file from your PowerShell profile.
 `, appName)
-)
 
 func buildComplectionCmd() *cobra.Command {
 	return &cobra.Command{

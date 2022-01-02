@@ -1,11 +1,12 @@
 package strategy
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	v1 "k8s.io/api/core/v1"
-	"testing"
 )
 
 func TestSvcCanDoSameCluster(t *testing.T) {

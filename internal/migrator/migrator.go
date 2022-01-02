@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
+	"strings"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
@@ -12,16 +14,15 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	"helm.sh/helm/v3/pkg/chart/loader"
-	"strings"
 )
 
-var (
-	//go:embed pv-migrate-0.2.0.tgz
-	chartBytes []byte
-)
+//go:embed pv-migrate-0.2.0.tgz
+var chartBytes []byte
 
-type strategyMapGetter func(names []string) (map[string]strategy.Strategy, error)
-type clusterClientGetter func(kubeconfigPath string, context string) (*k8s.ClusterClient, error)
+type (
+	strategyMapGetter   func(names []string) (map[string]strategy.Strategy, error)
+	clusterClientGetter func(kubeconfigPath string, context string) (*k8s.ClusterClient, error)
+)
 
 type migrator struct {
 	getKubeClient  clusterClientGetter

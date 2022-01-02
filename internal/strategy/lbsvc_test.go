@@ -1,8 +1,9 @@
 package strategy
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFormatSSHTargetHost(t *testing.T) {

@@ -3,13 +3,14 @@ package rsync
 import (
 	"bufio"
 	"fmt"
-	"github.com/kyokomi/emoji/v2"
-	"github.com/schollz/progressbar/v3"
-	log "github.com/sirupsen/logrus"
 	"io"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/kyokomi/emoji/v2"
+	"github.com/schollz/progressbar/v3"
+	log "github.com/sirupsen/logrus"
 )
 
 var (

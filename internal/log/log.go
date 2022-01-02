@@ -3,9 +3,10 @@ package log
 import (
 	"context"
 	"fmt"
+	"os"
+
 	"github.com/kyokomi/emoji/v2"
 	log "github.com/sirupsen/logrus"
-	"os"
 )
 
 type LoggerContextKey string
@@ -27,8 +28,10 @@ const (
 
 var (
 	Formats = []string{FormatJson, FormatFancy}
-	Levels  = []string{LevelTrace, LevelDebug, LevelInfo, LevelWarn,
-		LevelError, LevelFatal, LevelPanic}
+	Levels  = []string{
+		LevelTrace, LevelDebug, LevelInfo, LevelWarn,
+		LevelError, LevelFatal, LevelPanic,
+	}
 )
 
 func New() (*log.Entry, error) {
@@ -97,8 +100,7 @@ func getLogLevel(level string) (log.Level, error) {
 	return 0, fmt.Errorf("unknown log level: %s", level)
 }
 
-type fancyFormatter struct {
-}
+type fancyFormatter struct{}
 
 func (f *fancyFormatter) Format(e *log.Entry) ([]byte, error) {
 	msg := emoji.Sprintf("%s\n", e.Message)

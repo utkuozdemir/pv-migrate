@@ -6,8 +6,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
-type Mnt2 struct {
-}
+type Mnt2 struct{}
 
 func (r *Mnt2) canDo(t *migration.Migration) bool {
 	s := t.SourceInfo

@@ -1,6 +1,8 @@
 package migrator
 
 import (
+	"testing"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
@@ -11,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
-	"testing"
 )
 
 const (
@@ -78,14 +79,16 @@ func TestRunStrategiesInOrder(t *testing.T) {
 		},
 	}
 
-	m := migrator{getKubeClient: fakeClusterClientGetter(),
+	m := migrator{
+		getKubeClient: fakeClusterClientGetter(),
 		getStrategyMap: func(names []string) (map[string]strategy.Strategy, error) {
 			return map[string]strategy.Strategy{
 				"str1": &str1,
 				"str2": &str2,
 				"str3": &str3,
 			}, nil
-		}}
+		},
+	}
 
 	strs := []string{"str3", "str1", "str2"}
 	mig := buildMigrationRequestWithStrategies(strs, true)

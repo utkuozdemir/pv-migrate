@@ -7,8 +7,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
-type Svc struct {
-}
+type Svc struct{}
 
 func (r *Svc) canDo(t *migration.Migration) bool {
 	s := t.SourceInfo

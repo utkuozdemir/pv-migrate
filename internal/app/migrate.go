@@ -2,12 +2,13 @@ package app
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/spf13/cobra"
 	"github.com/utkuozdemir/pv-migrate/engine"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/migration"
-	"strings"
 )
 
 const (
@@ -37,11 +38,9 @@ const (
 	FlagHelmSetFile   = "helm-set-file"
 )
 
-var (
-	completionFuncNoFileComplete = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-)
+var completionFuncNoFileComplete = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return nil, cobra.ShellCompDirectiveNoFileComp
+}
 
 func buildMigrateCmd() *cobra.Command {
 	cmd := cobra.Command{
@@ -111,7 +110,6 @@ func buildMigrateCmd() *cobra.Command {
 			}
 
 			return engine.New().Run(&m)
-
 		},
 	}
 
