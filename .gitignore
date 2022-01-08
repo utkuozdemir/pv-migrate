@@ -173,3 +173,6 @@ override.tf.json
 # End of https://www.toptal.com/developers/gitignore/api/go,jetbrains+all,terraform
 
 /dist
+/profile.cov
+/.task
+/completions
