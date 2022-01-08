@@ -44,11 +44,11 @@ jobs:
           go-version: 1.17.5
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
-      - name: Ensure gofmt
-        if: ${{ always() }}
-        run: test -z "$(gofmt -s -d .)"
+      - name: Install gofumpt
+        run: go install mvdan.cc/gofumpt@v0.2.1
+      - name: Ensure code is properly formatted using gofumpt
+        run: test -z "$(gofumpt -s -d .)"
       - name: Run linters
-        if: ${{ always() }}
         uses: golangci/golangci-lint-action@v2.5.2
         with:
           # renovate: golangci-lint
