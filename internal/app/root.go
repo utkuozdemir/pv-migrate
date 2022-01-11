@@ -38,7 +38,7 @@ func buildRootCmd(version string, commit string, date string) *cobra.Command {
 		fmt.Sprintf("log format, must be one of: %s", strings.Join(applog.Formats, ", ")))
 
 	cmd.AddCommand(buildMigrateCmd())
-	cmd.AddCommand(buildComplectionCmd())
+	cmd.AddCommand(buildCompletionCmd())
 
 	_ = cmd.RegisterFlagCompletionFunc(FlagLogLevel, buildStaticSliceCompletionFunc(applog.Levels))
 	_ = cmd.RegisterFlagCompletionFunc(FlagLogFormat, buildStaticSliceCompletionFunc(applog.Formats))

@@ -49,7 +49,7 @@ PowerShell:
   # and source this file from your PowerShell profile.
 `, appName)
 
-func buildComplectionCmd() *cobra.Command {
+func buildCompletionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:                   "completion [bash|zsh|fish|powershell]",
 		Short:                 "Generate completion script",
