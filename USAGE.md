@@ -105,13 +105,13 @@ pv-migrate migrate \
   old-pvc new-pvc
 ```
 
-With custom rsync container image & sshd service account:
+With custom container images:
 ```bash
 $ pv-migrate migrate \
   --helm-set rsync.image.repository=mycustomrepo/rsync \
-  --helm-set rsync.image.tag=v42.0.0 \
-  --helm-set sshd.serviceAccount.create=false \
-  --helm-set sshd.serviceAccount.name=my-custom-sa \
+  --helm-set rsync.image.tag=v1.2.3 \
+  --helm-set sshd.image.repository=mycustomrepo/sshd \
+  --helm-set sshd.image.tag=v1.2.3 \
   old-pvc new-pvc
 ```
 
