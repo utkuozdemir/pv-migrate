@@ -10,14 +10,14 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.3.0
 	github.com/stretchr/testify v1.7.0
-	golang.org/x/crypto v0.0.0-20220126173729-e04a8579fee6
+	golang.org/x/crypto v0.0.0-20220126234351-aa10faf2a1f8
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 	helm.sh/helm/v3 v3.8.0
 	k8s.io/api v0.23.3
 	k8s.io/apimachinery v0.23.3
 	k8s.io/cli-runtime v0.23.3
 	k8s.io/client-go v0.23.3
-	k8s.io/utils v0.0.0-20211208161948-7d6a63dca704
+	k8s.io/utils v0.0.0-20220127004650-9b3446523e65
 )
 
 require (
