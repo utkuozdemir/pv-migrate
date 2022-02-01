@@ -1,12 +1,13 @@
 package ssh
 
 import (
-	crand "crypto/rand"
+	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"math/rand"
+	"math"
+	"math/big"
 	"strings"
 
 	"golang.org/x/crypto/ed25519"
@@ -34,7 +35,7 @@ func CreateSSHKeyPair(keyAlgorithm string) (string, string, error) {
 }
 
 func createSSHRSAKeyPair() (string, string, error) {
-	privateKey, err := rsa.GenerateKey(crand.Reader, 2048)
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return "", "", err
 	}
@@ -60,7 +61,7 @@ func createSSHRSAKeyPair() (string, string, error) {
 }
 
 func createSSHEd25519KeyPair() (string, string, error) {
-	pubKey, privateKey, err := ed25519.GenerateKey(crand.Reader)
+	pubKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		return "", "", err
 	}
@@ -68,7 +69,12 @@ func createSSHEd25519KeyPair() (string, string, error) {
 	// generate and write private key as PEM
 	var privKeyBuf strings.Builder
 
-	privateKeyPEM := &pem.Block{Type: "OPENSSH PRIVATE KEY", Bytes: marshalED25519PrivateKey(privateKey)}
+	ed25519PrivateKey, err := marshalED25519PrivateKey(privateKey)
+	if err != nil {
+		return "", "", err
+	}
+
+	privateKeyPEM := &pem.Block{Type: "OPENSSH PRIVATE KEY", Bytes: ed25519PrivateKey}
 	if err := pem.Encode(&privKeyBuf, privateKeyPEM); err != nil {
 		return "", "", err
 	}
@@ -80,8 +86,8 @@ func createSSHEd25519KeyPair() (string, string, error) {
 	return pubKeyBuf.String(), privKeyBuf.String(), nil
 }
 
-// marshalED25519PrivateKey is taken as-is from https://github.com/mikesmitty/edkey
-func marshalED25519PrivateKey(key ed25519.PrivateKey) []byte {
+// marshalED25519PrivateKey is taken from https://github.com/mikesmitty/edkey
+func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 	magic := append([]byte("openssh-key-v1"), 0)
 
 	var w struct {
@@ -103,16 +109,19 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) []byte {
 		Pad     []byte `ssh:"rest"`
 	}{}
 
-	ci := rand.Uint32()
+	ci, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
+	if err != nil {
+		return nil, err
+	}
 
-	pk1.Check1 = ci
-	pk1.Check2 = ci
+	pk1.Check1 = uint32(ci.Uint64())
+	pk1.Check2 = uint32(ci.Uint64())
 	pk1.Keytype = ssh.KeyAlgoED25519
 
 	pk, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		// fmt.Fprintln(os.Stderr, "ed25519.PublicKey type assertion failed on an ed25519 public key. This should never ever happen.")
-		return nil
+		return nil, fmt.Errorf("ed25519.PublicKey type assertion failed on an " +
+			"ed25519 public key, this should never happen")
 	}
 	pubKey := []byte(pk)
 
@@ -141,5 +150,5 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) []byte {
 	w.PrivKeyBlock = ssh.Marshal(pk1)
 
 	magic = append(magic, ssh.Marshal(w)...)
-	return magic
+	return magic, nil
 }
