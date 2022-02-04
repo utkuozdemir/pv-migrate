@@ -40,10 +40,10 @@ spec:
           resources:
             {{- toYaml .Values.sshd.resources | nindent 12 }}
           volumeMounts:
-            {{- range .Values.sshd.pvcMounts }}
-            - mountPath: {{ .mountPath }}
-              name: {{ .name }}
-              readOnly: {{ default false .readOnly }}
+            {{- range $index, $mount := .Values.sshd.pvcMounts }}
+            - mountPath: {{ $mount.mountPath }}
+              name: vol-{{ $index }}
+              readOnly: {{ default false $mount.readOnly }}
             {{- end }}
             {{- if .Values.sshd.publicKeyMount }}
             - mountPath: {{ .Values.sshd.publicKeyMountPath }}
@@ -69,11 +69,11 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
-      {{- range .Values.sshd.pvcMounts }}
-      - name: {{ .name }}
+      {{- range $index, $mount := .Values.sshd.pvcMounts }}
+      - name: vol-{{ $index }}
         persistentVolumeClaim:
-          claimName: {{ required ".Values.sshd.pvcMounts[*].pvcName is required!" .name }}
-          readOnly: {{ default false .readOnly }}
+          claimName: {{ required ".Values.sshd.pvcMounts[*].pvcName is required!" $mount.name }}
+          readOnly: {{ default false $mount.readOnly }}
       {{- end }}
       {{- if or .Values.sshd.publicKeyMount .Values.sshd.privateKeyMount }}
       - name: keys
