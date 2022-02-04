@@ -3,7 +3,8 @@
     "config:base",
     ":automergeBranch",
     ":automergeMinor",
-    ":automergeDigest"
+    ":automergeDigest",
+    ":semanticCommitTypeAll(chore)"
   ],
   "postUpdateOptions": [
     "gomodTidy"
