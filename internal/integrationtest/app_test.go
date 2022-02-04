@@ -37,6 +37,9 @@ const (
 	dataFilePath        = "/volume/file.txt"
 	extraDataFilePath   = "/volume/extra_file.txt"
 	generateDataContent = "DATA"
+
+	longSourcePvcName = "source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source-source"
+	longDestPvcName   = "dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest"
 )
 
 var (
@@ -299,6 +302,28 @@ func TestLocal(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestLongPVCNames(t *testing.T) {
+	_, err := execInPod(mainClusterCli, ns1, "long-dest", clearDataShellCommand)
+	assert.NoError(t, err)
+
+	cmd := fmt.Sprintf("--log-level debug m -i -n %s -N %s %s %s",
+		ns1, ns1, longSourcePvcName, longDestPvcName)
+	assert.NoError(t, runCliApp(cmd))
+
+	stdout, err := execInPod(mainClusterCli, ns1, "long-dest", printDataUidGidContentShellCommand)
+	assert.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUid, parts[0])
+	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+}
+
 func setup() error {
 	homeDir, err := userHomeDir()
 	if err != nil {
@@ -338,6 +363,11 @@ func setup() error {
 	}
 
 	_, err = createNs(extraClusterCli, ns3)
+	if err != nil {
+		return err
+	}
+
+	err = setupPVCsWithLongName()
 	if err != nil {
 		return err
 	}
@@ -423,6 +453,41 @@ func setup() error {
 	}
 
 	_, err = execInPod(mainClusterCli, ns1, "source", generateDataShellCommand)
+	return err
+}
+
+func setupPVCsWithLongName() error {
+	_, err := createPVC(mainClusterCli, ns1, longSourcePvcName)
+	if err != nil {
+		return err
+	}
+
+	_, err = createPVC(mainClusterCli, ns1, longDestPvcName)
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(mainClusterCli, ns1, "long-source", longSourcePvcName)
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(mainClusterCli, ns1, "long-dest", longDestPvcName)
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(mainClusterCli, ns1, "long-source")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(mainClusterCli, ns1, "long-dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = execInPod(mainClusterCli, ns1, "long-source", generateDataShellCommand)
 	return err
 }
 

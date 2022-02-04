@@ -55,10 +55,10 @@ spec:
           resources:
             {{- toYaml .Values.rsync.resources | nindent 12 }}
           volumeMounts:
-            {{- range .Values.rsync.pvcMounts }}
-            - mountPath: {{ .mountPath }}
-              name: {{ .name }}
-              readOnly: {{ default false .readOnly }}
+            {{- range $index, $mount := .Values.rsync.pvcMounts }}
+            - mountPath: {{ $mount.mountPath }}
+              name: vol-{{ $index }}
+              readOnly: {{ default false $mount.readOnly }}
             {{- end }}
             {{- if .Values.rsync.privateKeyMount }}
             - mountPath: {{ .Values.rsync.privateKeyMountPath }}
@@ -79,11 +79,11 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       volumes:
-        {{- range .Values.rsync.pvcMounts }}
-        - name: {{ .name }}
+        {{- range $index, $mount := .Values.rsync.pvcMounts }}
+        - name: vol-{{ $index }}
           persistentVolumeClaim:
-            claimName: {{ required ".Values.rsync.pvcMounts[*].pvcName is required!" .name }}
-            readOnly: {{ default false .readOnly }}
+            claimName: {{ required ".Values.rsync.pvcMounts[*].pvcName is required!" $mount.name }}
+            readOnly: {{ default false $mount.readOnly }}
         {{- end }}
         {{- if .Values.rsync.privateKeyMount }}
         - name: private-key
