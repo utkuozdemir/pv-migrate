@@ -123,3 +123,15 @@ func waitForPodTermination(ctx context.Context, cli kubernetes.Interface,
 
 	return result, nil
 }
+
+// GetNodeAddress permit to get the host address that host the pod
+// We use it on nodePort strategy
+func GetNodeAddress(ctx context.Context, cli kubernetes.Interface, ns, labelSelector string) (string, error) {
+
+	pod, err := WaitForPod(ctx, cli, ns, labelSelector)
+	if err != nil {
+		return "", err
+	}
+
+	return pod.Status.HostIP, nil
+}

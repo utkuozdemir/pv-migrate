@@ -84,3 +84,67 @@ func GetServiceAddress(
 
 	return result, nil
 }
+
+// GetServiceNodePort permit to get the service port
+// We use it on nodePort strategy
+func GetServiceNodePort(
+	ctx context.Context,
+	cli kubernetes.Interface,
+	namespace string,
+	name string,
+	serviceTimeout time.Duration,
+) (int, error) {
+	var result int
+
+	resCli := cli.CoreV1().Services(namespace)
+	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+
+	ctx, cancel := context.WithTimeout(ctx, serviceTimeout)
+	defer cancel()
+
+	listWatch := &cache.ListWatch{
+		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+			options.FieldSelector = fieldSelector
+
+			list, err := resCli.List(ctx, options)
+			if err != nil {
+				return nil, fmt.Errorf("failed to list services %s/%s: %w", namespace, name, err)
+			}
+
+			return list, nil
+		},
+		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+			options.FieldSelector = fieldSelector
+
+			resWatch, err := resCli.Watch(ctx, options)
+			if err != nil {
+				return nil, fmt.Errorf("failed to watch services %s/%s: %w", namespace, name, err)
+			}
+
+			return resWatch, nil
+		},
+	}
+
+	if _, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Service{}, nil,
+		func(event watch.Event) (bool, error) {
+			res, ok := event.Object.(*corev1.Service)
+			if !ok {
+				return false, fmt.Errorf("unexpected type while watching service: %s/%s", namespace, name)
+			}
+
+			if res.Spec.Type != corev1.ServiceTypeNodePort {
+				return false, fmt.Errorf("the service must be a nodePort type %s/%s", namespace, name)
+			}
+
+			if len(res.Spec.Ports) > 0 {
+				result = int(res.Spec.Ports[0].NodePort)
+				return true, nil
+			}
+
+			return false, nil
+		}); err != nil {
+		return 0, fmt.Errorf("failed to get service %s/%s address: %w", namespace, name, err)
+	}
+
+	return result, nil
+}
