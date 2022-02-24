@@ -49,7 +49,7 @@ jobs:
       - name: Ensure code is properly formatted using gofumpt
         run: test -z "$(gofumpt -s -d .)"
       - name: Run linters
-        uses: golangci/golangci-lint-action@v2.5.2
+        uses: golangci/golangci-lint-action@v3.0.0
         with:
           # renovate: golangci-lint
           version: v1.44.2
