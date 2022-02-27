@@ -57,7 +57,7 @@ jobs:
           args: --timeout=3m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v2.8.1
+        uses: goreleaser/goreleaser-action@v2.9.0
         with:
           # renovate: goreleaser
           version: v1.5.0
