@@ -27,7 +27,10 @@ sshd:
   # -- SSHD pod security context
   podSecurityContext: {}
   # -- SSHD deployment security context
-  securityContext: {}
+  securityContext:
+    capabilities:
+      add:
+      - CAP_SYS_CHROOT
   service:
     # -- SSHD service type
     type: ClusterIP
