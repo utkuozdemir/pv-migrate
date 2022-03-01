@@ -34,3 +34,12 @@ That's it.
   docker.io/utkuozdemir/pv-migrate-sshd:1.0.0
   docker.io/utkuozdemir/pv-migrate-rsync:1.0.0
   ```
+
+## Editing the helm chart
+The `pv-migrate` helm chart is located at `helm/pv-migrate`. It is inserted into the go code during build. The source is located in `internal/migrator/pv-migrate-X.Y.z.tgz`.
+
+If you want to tweak the helm chart, you must run the following command before recompiling the code in order
+to update the chart:
+```bash
+$ tar -cvzf internal/migrator/pv-migrate-*.tgz -C helm/ pv-migrate
+```
