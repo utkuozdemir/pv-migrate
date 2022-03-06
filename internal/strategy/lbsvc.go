@@ -13,15 +13,15 @@ import (
 type LbSvc struct{}
 
 func (r *LbSvc) Run(a *migration.Attempt) (bool, error) {
-	t := a.Migration
+	m := a.Migration
 
-	s := t.SourceInfo
-	d := t.DestInfo
+	s := m.SourceInfo
+	d := m.DestInfo
 	sourceNs := s.Claim.Namespace
 	destNs := d.Claim.Namespace
 
-	t.Logger.Info(":key: Generating SSH key pair")
-	keyAlgorithm := t.Request.KeyAlgorithm
+	m.Logger.Info(":key: Generating SSH key pair")
+	keyAlgorithm := m.Request.KeyAlgorithm
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return true, err
@@ -51,6 +51,9 @@ func (r *LbSvc) Run(a *migration.Attempt) (bool, error) {
 	}
 
 	sshTargetHost := formatSSHTargetHost(lbSvcAddress)
+	if m.Request.DestHostOverride != "" {
+		sshTargetHost = m.Request.DestHostOverride
+	}
 
 	err = installOnDest(a, destReleaseName, privateKey, privateKeyMountPath,
 		sshTargetHost, srcMountPath, destMountPath)

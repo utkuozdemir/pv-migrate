@@ -16,7 +16,7 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
-//go:embed pv-migrate-0.2.2.tgz
+//go:embed helm-chart.tgz
 var chartBytes []byte
 
 type (

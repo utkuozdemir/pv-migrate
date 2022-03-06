@@ -7,8 +7,15 @@ metadata:
   labels:
     app.kubernetes.io/component: sshd
     {{- include "pv-migrate.labels" . | nindent 4 }}
+  {{- with .Values.sshd.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   type: {{ .Values.sshd.service.type }}
+  {{- with .Values.sshd.service.loadBalancerIP }}
+  loadBalancerIP: {{ . }}
+  {{- end }}
   ports:
     - port: {{ .Values.sshd.service.port }}
       targetPort: 22

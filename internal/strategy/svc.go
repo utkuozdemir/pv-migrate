@@ -38,7 +38,10 @@ func (r *Svc) Run(a *migration.Attempt) (bool, error) {
 	releaseName := a.HelmReleaseNamePrefix
 	releaseNames := []string{releaseName}
 
-	sshRemoteHost := releaseName + "-sshd." + sourceNs
+	sshTargetHost := releaseName + "-sshd." + sourceNs
+	if m.Request.DestHostOverride != "" {
+		sshTargetHost = m.Request.DestHostOverride
+	}
 
 	srcMountPath := "/source"
 	destMountPath := "/dest"
@@ -51,7 +54,7 @@ func (r *Svc) Run(a *migration.Attempt) (bool, error) {
 		SrcPath:    srcPath,
 		DestPath:   destPath,
 		SrcUseSsh:  true,
-		SrcSshHost: sshRemoteHost,
+		SrcSshHost: sshTargetHost,
 	}
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {

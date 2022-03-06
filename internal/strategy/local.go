@@ -36,12 +36,12 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 		return false, fmt.Errorf(":cross_mark: Error: binary not found in path: %s", "ssh")
 	}
 
-	t := a.Migration
-	s := t.SourceInfo
-	d := t.DestInfo
+	m := a.Migration
+	s := m.SourceInfo
+	d := m.DestInfo
 
-	t.Logger.Info(":key: Generating SSH key pair")
-	keyAlgorithm := t.Request.KeyAlgorithm
+	m.Logger.Info(":key: Generating SSH key pair")
+	keyAlgorithm := m.Request.KeyAlgorithm
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return true, err
@@ -74,7 +74,7 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 		return true, err
 	}
 
-	srcFwdPort, srcStopChan, err := portForwardForPod(t.Logger, s.ClusterClient.RestConfig,
+	srcFwdPort, srcStopChan, err := portForwardForPod(m.Logger, s.ClusterClient.RestConfig,
 		sourceSshdPod.Namespace, sourceSshdPod.Name)
 	if err != nil {
 		return true, err
@@ -86,7 +86,7 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 		return true, err
 	}
 
-	destFwdPort, destStopChan, err := portForwardForPod(t.Logger, d.ClusterClient.RestConfig,
+	destFwdPort, destStopChan, err := portForwardForPod(m.Logger, d.ClusterClient.RestConfig,
 		destSshdPod.Namespace, destSshdPod.Name)
 	if err != nil {
 		return true, err
@@ -101,13 +101,13 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 		return true, err
 	}
 
-	srcPath := srcMountPath + "/" + t.Request.Source.Path
-	destPath := destMountPath + "/" + t.Request.Dest.Path
+	srcPath := srcMountPath + "/" + m.Request.Source.Path
+	destPath := destMountPath + "/" + m.Request.Dest.Path
 
 	rsyncCmd := rsync.Cmd{
 		Port:        sshReverseTunnelPort,
-		NoChown:     t.Request.NoChown,
-		Delete:      t.Request.DeleteExtraneousFiles,
+		NoChown:     m.Request.NoChown,
+		Delete:      m.Request.DeleteExtraneousFiles,
 		SrcPath:     srcPath,
 		DestPath:    destPath,
 		DestUseSsh:  true,
@@ -133,14 +133,14 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 	go func() { errorCh <- cmd.Run() }()
 
 	showProgressBar := !a.Migration.Request.NoProgressBar &&
-		t.Logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
+		m.Logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
 	successCh := make(chan bool, 1)
 
 	logTail := rsync.LogTail{
 		LogReaderFunc:   func() (io.ReadCloser, error) { return reader, nil },
 		SuccessCh:       successCh,
 		ShowProgressBar: showProgressBar,
-		Logger:          t.Logger,
+		Logger:          m.Logger,
 	}
 
 	go logTail.Start()
