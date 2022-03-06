@@ -19,10 +19,11 @@ const (
 	FlagSourceNamespace  = "source-namespace"
 	FlagSourcePath       = "source-path"
 
-	FlagDestKubeconfig = "dest-kubeconfig"
-	FlagDestContext    = "dest-context"
-	FlagDestNamespace  = "dest-namespace"
-	FlagDestPath       = "dest-path"
+	FlagDestKubeconfig   = "dest-kubeconfig"
+	FlagDestContext      = "dest-context"
+	FlagDestNamespace    = "dest-namespace"
+	FlagDestPath         = "dest-path"
+	FlagDestHostOverride = "dest-host-override"
 
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
@@ -72,6 +73,7 @@ func buildMigrateCmd() *cobra.Command {
 			helmSetString, _ := f.GetStringSlice(FlagHelmSetString)
 			helmSetFile, _ := f.GetStringSlice(FlagHelmSetFile)
 			strs, _ := f.GetStringSlice(FlagStrategies)
+			destHostOverride, _ := f.GetString(FlagDestHostOverride)
 
 			deleteExtraneousFiles, _ := f.GetBool(FlagDestDeleteExtraneousFiles)
 			m := migration.Request{
@@ -100,6 +102,7 @@ func buildMigrateCmd() *cobra.Command {
 				HelmStringValues:      helmSetString,
 				HelmFileValues:        helmSetFile,
 				Strategies:            strs,
+				DestHostOverride:      destHostOverride,
 				Logger:                logger,
 			}
 
@@ -132,6 +135,11 @@ func buildMigrateCmd() *cobra.Command {
 	f.BoolP(FlagSourceMountReadOnly, "R", true, "mount the source PVC in ReadOnly mode")
 	f.StringSliceP(FlagStrategies, "s", strategy.DefaultStrategies, "the comma-separated list of strategies to be used in the given order")
 	f.StringP(FlagSSHKeyAlgorithm, "a", ssh.Ed25519KeyAlgorithm, fmt.Sprintf("ssh key algorithm to be used. Valid values are %s", strings.Join(ssh.KeyAlgorithms, ",")))
+	f.StringP(FlagDestHostOverride, "h", "",
+		"the override for the rsync host destination when it is run over SSH, "+
+			"in cases when you need to target a different destination IP on rsync for some reason. "+
+			"By default, it is determined by used strategy and differs across strategies. "+
+			"Has no effect for mnt2 and local strategies")
 
 	f.StringSliceP(FlagHelmValues, "f", nil, "set additional Helm values by a YAML file or a URL (can specify multiple)")
 	f.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")

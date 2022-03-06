@@ -29,6 +29,7 @@ type Request struct {
 	HelmStringValues      []string
 	Strategies            []string
 	Logger                *log.Entry
+	DestHostOverride      string
 }
 
 type Migration struct {
