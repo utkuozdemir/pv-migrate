@@ -33,6 +33,7 @@ Aliases:
 Flags:
   -C, --dest-context string            context in the kubeconfig file of the destination PVC
   -d, --dest-delete-extraneous-files   delete extraneous files on the destination by using rsync's '--delete' flag
+  -H, --dest-host-override string      the override for the rsync host destination when it is run over SSH, in cases when you need to target a different destination IP on rsync for some reason. By default, it is determined by used strategy and differs across strategies. Has no effect for mnt2 and local strategies
   -K, --dest-kubeconfig string         path of the kubeconfig file of the destination PVC
   -N, --dest-namespace string          namespace of the destination PVC
   -P, --dest-path string               the filesystem path to migrate in the the destination PVC (default "/")
