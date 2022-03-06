@@ -36,6 +36,10 @@ sshd:
     type: ClusterIP
     # -- SSHD service port
     port: 22
+    # -- SSHD service annotations
+    annotations: {}
+    # -- SSHD service load balancer IP
+    loadBalancerIP: ""
   # -- SSHD pod resources
   resources: {}
   # -- The node name to schedule SSHD pod on
