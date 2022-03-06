@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"k8s.io/apimachinery/pkg/util/intstr"
+
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -203,6 +205,57 @@ func TestDifferentNS(t *testing.T) {
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("--log-level debug --log-format json m -i -n %s -N %s source dest", ns1, ns2)
+	assert.NoError(t, runCliApp(cmd))
+
+	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
+	assert.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUid, parts[0])
+	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
+	assert.NoError(t, err)
+}
+
+func TestLbSvcDestHostOverride(t *testing.T) {
+	assert.NoError(t, clearDests())
+
+	svcName := "alternative-svc"
+	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(context.Background(),
+		&corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: svcName,
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app.kubernetes.io/component": "sshd",
+					"app.kubernetes.io/name":      "pv-migrate",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Name:       "ssh",
+						Port:       22,
+						TargetPort: intstr.FromInt(22),
+					},
+				},
+			},
+		}, metav1.CreateOptions{})
+	assert.NoError(t, err)
+
+	_, err = execInPod(mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
+	destHostOverride := svcName + "." + ns1
+	cmd := fmt.Sprintf(
+		"--log-level debug --log-format json m -i -n %s -N %s -H %s source dest",
+		ns1, ns2, destHostOverride)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
