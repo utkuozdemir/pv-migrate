@@ -88,6 +88,7 @@ jobs:
       - name: Install Cilium on kind-1 with default-deny policy
         run: |
           helm repo add cilium https://helm.cilium.io
+          
           helm upgrade cilium \
           --install cilium/cilium \
           --namespace=kube-system \
@@ -102,6 +103,12 @@ jobs:
           --set ipam.mode=kubernetes \
           --set operator.enabled=false \
           --set policyEnforcementMode=always
+          
+          kubectl wait pod \
+          --namespace kube-system \
+          --for=condition=Ready \
+          -l k8s-app=cilium \
+          --timeout=5m
 
       - name: DEBUG
         run: kubectl get pod -A -owide
@@ -137,7 +144,6 @@ jobs:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: Install Cilium on kind-2 with default-deny policy
         run: |
-          helm repo add cilium https://helm.cilium.io
           helm upgrade cilium \
           --install cilium/cilium \
           --namespace=kube-system \
@@ -152,6 +158,12 @@ jobs:
           --set ipam.mode=kubernetes \
           --set operator.enabled=false \
           --set policyEnforcementMode=always
+          
+          kubectl wait pod \
+          --namespace kube-system \
+          --for=condition=Ready \
+          -l k8s-app=cilium \
+          --timeout=5m
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: Run tests
