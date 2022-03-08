@@ -96,7 +96,7 @@ jobs:
           --set bpf.masquerade=false \
           --set ipam.mode=kubernetes \
           --set operator.enabled=false \
-          --set policyEnforcementMode=always \
+          --set policyEnforcementMode=default \
           --set debug.enabled=true
 
       - name: Debug
