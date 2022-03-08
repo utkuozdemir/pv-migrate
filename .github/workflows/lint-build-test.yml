@@ -86,12 +86,19 @@ jobs:
           wget https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
+      - name: Install allow-all network policy on kind-1 kube-system
+        run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
       - name: Install cilium
-        run: cilium install
+        run: cilium install --config enable-policy=always
       - name: Install Helm
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-#      - name: Install allow-all network policy on kind-1 kube-system
-#        run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+      - name: DEBUG
+        run: |
+          helm ls -A
+          echo "---------------------------------------------------"
+          helm get values -n kube-system cilium || true
+          echo "---------------------------------------------------"
+          kubectl get pod -A -owide
 #      - name: Install Cilium on kind-1 with default-deny policy
 #        run: |
 #          helm repo add cilium https://helm.cilium.io
