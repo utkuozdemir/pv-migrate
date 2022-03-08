@@ -102,6 +102,10 @@ jobs:
           --set ipam.mode=kubernetes \
           --set operator.enabled=false \
           --set policyEnforcementMode=always
+
+      - name: DEBUG
+        run: kubectl get pod -A -owide
+
       - name: Install MetalLB
         run: |
           IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
@@ -111,10 +115,13 @@ jobs:
           --version 2.5.14 \
           --namespace metallb-system \
           --create-namespace \
-          --wait \
           --values test/metallb-values.yaml \
           --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
           helm -n metallb-system get values metallb
+
+      - name: DEBUG
+        run: kubectl get pod -A -owide
+
       - name: Create Kind Cluster 2
         uses: helm/kind-action@v1.2.0
         env:
