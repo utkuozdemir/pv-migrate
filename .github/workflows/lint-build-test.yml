@@ -81,32 +81,39 @@ jobs:
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
           config: test/kind-config.yaml
+      - name: Install cilium-cli
+        run: |
+          wget https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
+          sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
+          rm cilium-linux-amd64.tar.gz
+      - name: Install cilium
+        run: cilium install
       - name: Install Helm
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-      - name: Install allow-all network policy on kind-1 kube-system
-        run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
-      - name: Install Cilium on kind-1 with default-deny policy
-        run: |
-          helm repo add cilium https://helm.cilium.io
-          helm upgrade cilium \
-          --install cilium/cilium \
-          --namespace=kube-system \
-          --version 1.11.2 \
-          --set kubeProxyReplacement=disabled \
-          --set bpf.masquerade=false \
-          --set ipam.mode=kubernetes \
-          --set operator.enabled=false \
-          --set policyEnforcementMode=default \
-          --set debug.enabled=true
+#      - name: Install allow-all network policy on kind-1 kube-system
+#        run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+#      - name: Install Cilium on kind-1 with default-deny policy
+#        run: |
+#          helm repo add cilium https://helm.cilium.io
+#          helm upgrade cilium \
+#          --install cilium/cilium \
+#          --namespace=kube-system \
+#          --version 1.11.2 \
+#          --set kubeProxyReplacement=disabled \
+#          --set bpf.masquerade=false \
+#          --set ipam.mode=kubernetes \
+#          --set operator.enabled=false \
+#          --set policyEnforcementMode=default \
+#          --set debug.enabled=true
 
-      - name: Debug
-        run: |
-          for ((i=0;i<32;i++)); do
-            kubectl -n kube-system logs --timestamps --tail 3 --all-containers -l k8s-app=cilium || true;
-            kubectl -n kube-system describe pod -l k8s-app=cilium;
-            echo "---------";
-            sleep 5;
-          done
+#      - name: Debug
+#        run: |
+#          for ((i=0;i<32;i++)); do
+#            kubectl -n kube-system logs --timestamps --tail 3 --all-containers -l k8s-app=cilium || true;
+#            kubectl -n kube-system describe pod -l k8s-app=cilium;
+#            echo "---------";
+#            sleep 5;
+#          done
 
       - name: Install MetalLB
         run: |
