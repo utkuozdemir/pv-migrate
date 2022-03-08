@@ -1,3 +1,6 @@
+networkPolicy:
+  enabled: true
+
 configInline:
   address-pools:
     - name: default
