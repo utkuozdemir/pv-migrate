@@ -96,12 +96,12 @@ jobs:
           --set bpf.masquerade=false \
           --set ipam.mode=kubernetes \
           --set operator.enabled=false \
-          --set policyEnforcementMode=always
+          --set policyEnforcementMode=always \
+          --set debug.enabled=true
 
       - name: Debug
         run: |
           for ((i=0;i<32;i++)); do
-            kubectl get pod -A -owide
             kubectl logs --tail 3 --all-containers -l k8s-app=cilium;
             echo "---------";
             sleep 5;
