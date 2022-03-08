@@ -105,9 +105,10 @@ jobs:
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm upgrade metallb \
           --install bitnami/metallb \
-          --version 2.5.14 \
           --namespace metallb-system \
+          --version 2.5.14 \
           --create-namespace \
+          --atomic \
           --values test/metallb-values.yaml \
           --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
           helm -n metallb-system get values metallb
