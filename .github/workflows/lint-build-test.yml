@@ -88,12 +88,10 @@ jobs:
       - name: Install Cilium on kind-1 with default-deny policy
         run: |
           helm repo add cilium https://helm.cilium.io
-          
           helm upgrade cilium \
           --install cilium/cilium \
           --namespace=kube-system \
           --version 1.11.2 \
-          --atomic \
           --set kubeProxyReplacement=partial \
           --set hostServices.enabled=false \
           --set externalIPs.enabled=true \
@@ -103,15 +101,14 @@ jobs:
           --set ipam.mode=kubernetes \
           --set operator.enabled=false \
           --set policyEnforcementMode=always
-          
-          kubectl wait pod \
-          --namespace kube-system \
-          --for=condition=Ready \
-          -l k8s-app=cilium \
-          --timeout=5m
-
       - name: DEBUG
-        run: kubectl get pod -A -owide
+        run: sleep 30 && kubectl get pod -A -owide
+      - name: Debug - logs1
+        run: sleep 60 && kubectl logs -n kube-system --all-containers -l k8s-app=cilium
+      - name: Debug - logs2
+        run: sleep 60 && kubectl logs -n kube-system --all-containers -l k8s-app=cilium
+#      - name: DEBUG - logs
+#        run: kubectl logs -n kube-system --all-containers -l k8s-app=cilium --follow
 
       - name: Install MetalLB
         run: |
@@ -159,7 +156,7 @@ jobs:
           --set operator.enabled=false \
           --set policyEnforcementMode=always
           
-          kubectl logs -n kube-system --all-containers -l k8s-app=cilium --follow
+          
           
           kubectl wait pod \
           --namespace kube-system \
