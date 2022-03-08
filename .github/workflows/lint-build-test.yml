@@ -103,7 +103,7 @@ jobs:
         run: |
           for ((i=0;i<32;i++)); do
             kubectl -n kube-system logs --timestamps --tail 3 --all-containers -l k8s-app=cilium || true;
-            kubectl describe pod -l k8s-app=cilium;
+            kubectl -n kube-system describe pod -l k8s-app=cilium;
             echo "---------";
             sleep 5;
           done
