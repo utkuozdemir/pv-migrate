@@ -80,8 +80,28 @@ jobs:
           cluster_name: kind-1
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
+          config: test/kind-config.yaml
       - name: Install Helm
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Install allow-all network policy on kind-1 kube-system
+        run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+      - name: Install Cilium on kind-1 with default-deny policy
+        run: |
+          helm repo add cilium https://helm.cilium.io
+          helm upgrade cilium \
+          --install cilium/cilium \
+          --namespace=kube-system \
+          --version 1.11.2 \
+          --atomic \
+          --set kubeProxyReplacement=partial \
+          --set hostServices.enabled=false \
+          --set externalIPs.enabled=true \
+          --set nodePort.enabled=true \
+          --set hostPort.enabled=true \
+          --set bpf.masquerade=false \
+          --set ipam.mode=kubernetes \
+          --set operator.enabled=false \
+          --set policyEnforcementMode=always
       - name: Install MetalLB
         run: |
           IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
@@ -103,10 +123,34 @@ jobs:
           cluster_name: kind-2
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
+          config: test/kind-config.yaml
+      - name: Install allow-all network policy on kind-2 kube-system
+        run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
+      - name: Install Cilium on kind-2 with default-deny policy
+        run: |
+          helm repo add cilium https://helm.cilium.io
+          helm upgrade cilium \
+          --install cilium/cilium \
+          --namespace=kube-system \
+          --version 1.11.2 \
+          --atomic \
+          --set kubeProxyReplacement=partial \
+          --set hostServices.enabled=false \
+          --set externalIPs.enabled=true \
+          --set nodePort.enabled=true \
+          --set hostPort.enabled=true \
+          --set bpf.masquerade=false \
+          --set ipam.mode=kubernetes \
+          --set operator.enabled=false \
+          --set policyEnforcementMode=always
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: Run tests
         env:
           RICHGO_FORCE_COLOR: "1"
-          PVMIG_TEST_EXTRA_KUBECONFIG: "/home/runner/.kube/kind-2.yaml"
+          PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: richgo test -coverpkg=./... -coverprofile=profile.cov -covermode=count -timeout 20m -v ./...
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.1
