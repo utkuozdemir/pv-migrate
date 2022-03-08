@@ -31,6 +31,7 @@ The helm chart of pv-migrate
 | rsync.image.tag | string | `"1.0.0"` | Rsync image tag |
 | rsync.imagePullSecrets | list | `[]` | Rsync image pull secrets |
 | rsync.namespace | string | `""` | Namespace to run Rsync pod in |
+| rsync.networkPolicy.enabled | bool | `true` | Enable Rsync network policy |
 | rsync.nodeName | string | `""` | The node name to schedule Rsync pod on |
 | rsync.nodeSelector | object | `{}` | Rsync node selector |
 | rsync.podAnnotations | object | `{}` | Rsync pod annotations |
@@ -53,6 +54,7 @@ The helm chart of pv-migrate
 | sshd.image.tag | string | `"1.0.0"` | SSHD image tag |
 | sshd.imagePullSecrets | list | `[]` | SSHD image pull secrets |
 | sshd.namespace | string | `""` | Namespace to run SSHD pod in |
+| sshd.networkPolicy.enabled | bool | `true` | Enable SSHD network policy |
 | sshd.nodeName | string | `""` | The node name to schedule SSHD pod on |
 | sshd.nodeSelector | object | `{}` | SSHD node selector |
 | sshd.podAnnotations | object | `{}` | SSHD pod annotations |

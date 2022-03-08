@@ -59,6 +59,9 @@ sshd:
       tolerationSeconds: 300
   # -- SSHD pod affinity
   affinity: {}
+  networkPolicy:
+    # -- Enable SSHD network policy
+    enabled: true
 
   # -- Mount a public key into the SSHD pod
   publicKeyMount: true
@@ -133,6 +136,9 @@ rsync:
   restartPolicy: Never
   # Rsync job backoff limit
   backoffLimit: 0
+  networkPolicy:
+    # -- Enable Rsync network policy
+    enabled: true
 
   # -- Mount a private key into the Rsync pod
   privateKeyMount: false
