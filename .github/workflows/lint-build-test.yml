@@ -88,7 +88,7 @@ jobs:
           rm cilium-linux-amd64.tar.gz
       - name: Install allow-all network policy on kind-1 kube-system
         run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
-      - name: Install cilium
+      - name: Install cilium on kind-1 with default-deny policy
         run: cilium install --config enable-policy=always
       - name: Install Helm
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
@@ -99,29 +99,6 @@ jobs:
           helm get values -n kube-system cilium || true
           echo "---------------------------------------------------"
           kubectl get pod -A -owide
-#      - name: Install Cilium on kind-1 with default-deny policy
-#        run: |
-#          helm repo add cilium https://helm.cilium.io
-#          helm upgrade cilium \
-#          --install cilium/cilium \
-#          --namespace=kube-system \
-#          --version 1.11.2 \
-#          --set kubeProxyReplacement=disabled \
-#          --set bpf.masquerade=false \
-#          --set ipam.mode=kubernetes \
-#          --set operator.enabled=false \
-#          --set policyEnforcementMode=default \
-#          --set debug.enabled=true
-
-#      - name: Debug
-#        run: |
-#          for ((i=0;i<32;i++)); do
-#            kubectl -n kube-system logs --timestamps --tail 3 --all-containers -l k8s-app=cilium || true;
-#            kubectl -n kube-system describe pod -l k8s-app=cilium;
-#            echo "---------";
-#            sleep 5;
-#          done
-
       - name: Install MetalLB
         run: |
           IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
@@ -134,10 +111,6 @@ jobs:
           --values test/metallb-values.yaml \
           --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
           helm -n metallb-system get values metallb
-
-      - name: DEBUG
-        run: kubectl get pod -A -owide
-
       - name: Create Kind Cluster 2
         uses: helm/kind-action@v1.2.0
         env:
@@ -152,29 +125,7 @@ jobs:
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: Install Cilium on kind-2 with default-deny policy
-        run: |
-          helm upgrade cilium \
-          --install cilium/cilium \
-          --namespace=kube-system \
-          --version 1.11.2 \
-          --atomic \
-          --set kubeProxyReplacement=partial \
-          --set hostServices.enabled=false \
-          --set externalIPs.enabled=true \
-          --set nodePort.enabled=true \
-          --set hostPort.enabled=true \
-          --set bpf.masquerade=false \
-          --set ipam.mode=kubernetes \
-          --set operator.enabled=false \
-          --set policyEnforcementMode=always
-          
-          
-          
-          kubectl wait pod \
-          --namespace kube-system \
-          --for=condition=Ready \
-          -l k8s-app=cilium \
-          --timeout=5m
+        run: cilium install --config enable-policy=always
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: Run tests
