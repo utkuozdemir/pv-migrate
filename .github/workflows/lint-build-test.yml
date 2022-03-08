@@ -74,24 +74,25 @@ jobs:
           go-version: 1.17.5
       - name: Install richgo
         run: go install github.com/kyoh86/richgo@v0.3.10
-      - name: Create Kind Cluster 1
+      - name: Install Helm
+        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Install cilium-cli
+        run: |
+          wget https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
+          sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
+          rm cilium-linux-amd64.tar.gz
+
+      - name: kind-1 - Create cluster
         uses: helm/kind-action@v1.2.0
         with:
           cluster_name: kind-1
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
           config: test/kind-config.yaml
-      - name: Install cilium-cli
-        run: |
-          wget https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
-          sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
-          rm cilium-linux-amd64.tar.gz
-      - name: Install allow-all network policy on kind-1 kube-system
+      - name: kind-1 - Install allow-all network policy on kube-system
         run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
-      - name: Install cilium on kind-1 with default-deny policy
+      - name: kind-1 - Install Cilium with default-deny policy
         run: cilium install --config enable-policy=always
-      - name: Install Helm
-        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: DEBUG
         run: |
           helm ls -A
@@ -99,7 +100,7 @@ jobs:
           helm get values -n kube-system cilium || true
           echo "---------------------------------------------------"
           kubectl get pod -A -owide
-      - name: Install MetalLB
+      - name: kind-1 - Install MetalLB
         run: |
           IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
           helm repo add bitnami https://charts.bitnami.com/bitnami
@@ -112,7 +113,10 @@ jobs:
           --values test/metallb-values.yaml \
           --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
           helm -n metallb-system get values metallb
-      - name: Create Kind Cluster 2
+      - name: kind-1 - Wait for all pods in the cluster to be ready
+        run: kubectl wait pod --for=condition=Ready --all --all-namespaces
+
+      - name: kind-2 - Create cluster
         uses: helm/kind-action@v1.2.0
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
@@ -121,14 +125,19 @@ jobs:
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
           config: test/kind-config.yaml
-      - name: Install allow-all network policy on kind-2 kube-system
+      - name: kind-2 - Install allow-all network policy on kube-system
         run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
-      - name: Install Cilium on kind-2 with default-deny policy
+      - name: kind-2 - Install Cilium with default-deny policy
         run: cilium install --config enable-policy=always
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
+      - name: kind-2 - Wait for all pods in the cluster to be ready
+        run: kubectl wait pod --for=condition=Ready --all --all-namespaces
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
+
       - name: Run tests
         env:
           RICHGO_FORCE_COLOR: "1"
