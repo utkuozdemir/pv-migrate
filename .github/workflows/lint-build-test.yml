@@ -159,6 +159,8 @@ jobs:
           --set operator.enabled=false \
           --set policyEnforcementMode=always
           
+          kubectl logs -n kube-system --all-containers -l k8s-app=cilium --follow
+          
           kubectl wait pod \
           --namespace kube-system \
           --for=condition=Ready \
