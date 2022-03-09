@@ -78,7 +78,7 @@ jobs:
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install cilium-cli
         run: |
-          wget https://github.com/cilium/cilium-cli/releases/latest/download/cilium-linux-amd64.tar.gz
+          wget https://github.com/cilium/cilium-cli/releases/v0.10.4/download/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
@@ -89,19 +89,15 @@ jobs:
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
           config: test/kind-config.yaml
+      - name: kind-1 - Create metallb-system namespace
+        run: kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
       - name: kind-1 - Install allow-all network policies on system namespaces
         run: |
           kubectl -n kube-system apply -f test/netpol-allow-all.yaml
           kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
+          kubectl -n metallb-system apply -f test/netpol-allow-all.yaml
       - name: kind-1 - Install Cilium with default-deny policy
         run: cilium install --config enable-policy=always
-      - name: DEBUG
-        run: |
-          helm ls -A
-          echo "---------------------------------------------------"
-          helm get values -n kube-system cilium || true
-          echo "---------------------------------------------------"
-          kubectl get pod -A -owide
       - name: kind-1 - Install MetalLB
         run: |
           IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
@@ -110,7 +106,6 @@ jobs:
           --install bitnami/metallb \
           --namespace metallb-system \
           --version 2.5.14 \
-          --create-namespace \
           --atomic \
           --values test/metallb-values.yaml \
           --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
