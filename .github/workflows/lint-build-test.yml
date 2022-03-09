@@ -89,8 +89,10 @@ jobs:
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
           config: test/kind-config.yaml
-      - name: kind-1 - Install allow-all network policy on kube-system
-        run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+      - name: kind-1 - Install allow-all network policies on system namespaces
+        run: |
+          kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+          kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
       - name: kind-1 - Install Cilium with default-deny policy
         run: cilium install --config enable-policy=always
       - name: DEBUG
@@ -125,8 +127,10 @@ jobs:
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
           config: test/kind-config.yaml
-      - name: kind-2 - Install allow-all network policy on kube-system
-        run: kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+      - name: kind-2 - Install allow-all network policies on system namespaces
+        run: |
+          kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+          kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: kind-2 - Install Cilium with default-deny policy
