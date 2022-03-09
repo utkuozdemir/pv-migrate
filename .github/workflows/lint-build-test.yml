@@ -37,7 +37,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3.0.0
-      - name: Setup Go
+      - name: Install go
         uses: actions/setup-go@v3.0.0
         with:
           # renovate: go
@@ -67,14 +67,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3.0.0
-      - name: Setup Go
+      - name: Install go
         uses: actions/setup-go@v3.0.0
         with:
           # renovate: go
           go-version: 1.17.5
       - name: Install richgo
         run: go install github.com/kyoh86/richgo@v0.3.10
-      - name: Install Helm
+      - name: Install helm
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install cilium-cli
         run: |
