@@ -78,7 +78,7 @@ jobs:
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install cilium-cli
         run: |
-          wget https://github.com/cilium/cilium-cli/releases/v0.10.4/download/cilium-linux-amd64.tar.gz
+          wget https://github.com/cilium/cilium-cli/releases/download/v0.10.4/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
