@@ -199,7 +199,7 @@ func TestMountedError(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -n %s -N %s source dest", migrateCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	err = runCliApp(cmd)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "ignore-mounted is not requested")
@@ -237,7 +237,7 @@ func TestFailWithoutNetworkPolicies(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
+	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdline, ns1, ns2)
 	assert.Error(t, runCliApp(cmd))
 }
 
