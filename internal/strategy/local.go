@@ -156,7 +156,8 @@ func getSshdPodForHelmRelease(pvcInfo *pvc.Info, name string) (*corev1.Pod, erro
 }
 
 func installLocalOnSource(a *migration.Attempt, releaseName,
-	publicKey, privateKey, privateKeyMountPath, srcMountPath string) error {
+	publicKey, privateKey, privateKeyMountPath, srcMountPath string,
+) error {
 	t := a.Migration
 	s := t.SourceInfo
 	ns := s.Claim.Namespace
@@ -232,7 +233,8 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 }
 
 func portForwardForPod(logger *log.Entry, restConfig *rest.Config,
-	ns, name string) (int, chan<- struct{}, error) {
+	ns, name string,
+) (int, chan<- struct{}, error) {
 	port, err := getFreePort()
 	if err != nil {
 		return 0, nil, err

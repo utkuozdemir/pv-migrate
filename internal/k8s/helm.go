@@ -15,7 +15,8 @@ type HelmRESTClientGetter struct {
 }
 
 func NewRESTClientGetter(restConfig *rest.Config,
-	clientConfig clientcmd.ClientConfig) *HelmRESTClientGetter {
+	clientConfig clientcmd.ClientConfig,
+) *HelmRESTClientGetter {
 	return &HelmRESTClientGetter{
 		restConfig:   restConfig,
 		clientConfig: clientConfig,

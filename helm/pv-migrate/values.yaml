@@ -61,7 +61,7 @@ sshd:
   affinity: {}
   networkPolicy:
     # -- Enable SSHD network policy
-    enabled: true
+    enabled: false
 
   # -- Mount a public key into the SSHD pod
   publicKeyMount: true
@@ -138,7 +138,7 @@ rsync:
   backoffLimit: 0
   networkPolicy:
     # -- Enable Rsync network policy
-    enabled: true
+    enabled: false
 
   # -- Mount a private key into the Rsync pod
   privateKeyMount: false

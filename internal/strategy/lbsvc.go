@@ -95,7 +95,8 @@ func installOnSource(a *migration.Attempt, releaseName, publicKey, srcMountPath 
 }
 
 func installOnDest(a *migration.Attempt, releaseName, privateKey,
-	privateKeyMountPath, sshHost, srcMountPath, destMountPath string) error {
+	privateKeyMountPath, sshHost, srcMountPath, destMountPath string,
+) error {
 	t := a.Migration
 	d := t.DestInfo
 	ns := d.Claim.Namespace
