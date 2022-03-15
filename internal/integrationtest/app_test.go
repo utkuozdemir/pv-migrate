@@ -45,10 +45,8 @@ const (
 	longDestPvcName = "dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-" +
 		"dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest"
 
-	migrateCmdlinePrefix = "" +
-		"--log-level debug " +
-		"--log-format json " +
-		"migrate " +
+	migrateCmdline            = "--log-level debug --log-format json migrate "
+	migrateCmdlineWithNetpols = migrateCmdline +
 		"--helm-set rsync.networkPolicy.enabled=true " +
 		"--helm-set sshd.networkPolicy.enabled=true"
 )
@@ -96,7 +94,7 @@ func TestSameNS(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlinePrefix, ns1, ns1)
+	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
@@ -122,7 +120,7 @@ func TestSameNSLbSvc(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s source dest", migrateCmdlinePrefix, ns1, ns1)
+	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
@@ -148,7 +146,7 @@ func TestNoChown(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -o -n %s -N %s source dest", migrateCmdlinePrefix, ns1, ns1)
+	cmd := fmt.Sprintf("%s -i -o -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
@@ -174,7 +172,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -d -i -n %s -N %s source dest", migrateCmdlinePrefix, ns1, ns1)
+	cmd := fmt.Sprintf("%s -d -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
@@ -201,7 +199,7 @@ func TestMountedError(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -n %s -N %s source dest", migrateCmdlinePrefix, ns1, ns1)
+	cmd := fmt.Sprintf("%s -n %s -N %s source dest", migrateCmdline, ns1, ns1)
 	err = runCliApp(cmd)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "ignore-mounted is not requested")
@@ -213,7 +211,7 @@ func TestDifferentNS(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlinePrefix, ns1, ns2)
+	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
@@ -231,6 +229,16 @@ func TestDifferentNS(t *testing.T) {
 
 	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
 	assert.NoError(t, err)
+}
+
+func TestFailWithoutNetworkPolicies(t *testing.T) {
+	assert.NoError(t, clearDests())
+
+	_, err := execInPod(mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
+	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
+	assert.Error(t, runCliApp(cmd))
 }
 
 func TestLbSvcDestHostOverride(t *testing.T) {
@@ -263,7 +271,7 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
-		"%s -i -n %s -N %s -H %s source dest", migrateCmdlinePrefix, ns1, ns2, destHostOverride)
+		"%s -i -n %s -N %s -H %s source dest", migrateCmdlineWithNetpols, ns1, ns2, destHostOverride)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
@@ -289,7 +297,7 @@ func TestRSA(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s source dest", migrateCmdlinePrefix, ns1, ns2)
+	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
@@ -315,7 +323,7 @@ func TestDifferentCluster(t *testing.T) {
 	_, err := execInPod(extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s source dest", migrateCmdlinePrefix,
+	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s source dest", migrateCmdlineWithNetpols,
 		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
@@ -342,7 +350,7 @@ func TestLocal(t *testing.T) {
 	_, err := execInPod(extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s source dest", migrateCmdlinePrefix,
+	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s source dest", migrateCmdlineWithNetpols,
 		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
@@ -368,7 +376,7 @@ func TestLongPVCNames(t *testing.T) {
 	assert.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -i -n %s -N %s %s %s",
-		migrateCmdlinePrefix, ns1, ns1, longSourcePvcName, longDestPvcName)
+		migrateCmdlineWithNetpols, ns1, ns1, longSourcePvcName, longDestPvcName)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "long-dest", printDataUidGidContentShellCommand)
