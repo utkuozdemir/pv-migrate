@@ -94,7 +94,8 @@ func (l *LogTail) tailWithRetry(beforeFunc func(), logFunc func(string), success
 }
 
 func (l *LogTail) tail(beforeFunc func(),
-	logFunc func(string), successFunc func()) (bool, error) {
+	logFunc func(string), successFunc func(),
+) (bool, error) {
 	s, err := l.LogReaderFunc()
 	if err != nil {
 		return false, err

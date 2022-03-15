@@ -234,7 +234,8 @@ func buildTestClient(objects ...runtime.Object) *k8s.ClusterClient {
 }
 
 func buildTestClientWithApiServerHost(apiServerHost string,
-	objects ...runtime.Object) *k8s.ClusterClient {
+	objects ...runtime.Object,
+) *k8s.ClusterClient {
 	return &k8s.ClusterClient{
 		KubeClient:       fake.NewSimpleClientset(objects...),
 		RESTClientGetter: nil,

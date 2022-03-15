@@ -1,0 +1,19 @@
+{{- if .Values.sshd.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "pv-migrate.fullname" . }}-sshd
+  namespace: {{ .Values.sshd.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: sshd
+      {{- include "pv-migrate.selectorLabels" . | nindent 6 }}
+  ingress:
+    - {}
+  egress:
+    - {}
+  policyTypes:
+    - Ingress
+    - Egress
+{{- end }}

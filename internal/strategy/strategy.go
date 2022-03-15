@@ -152,7 +152,8 @@ func getMergedHelmValues(helmValuesFile string, r *migration.Request) (map[strin
 }
 
 func installHelmChart(a *migration.Attempt, pvcInfo *pvc.Info, name string,
-	values map[string]interface{}) error {
+	values map[string]interface{},
+) error {
 	helmValuesFile, err := writeHelmValuesToTempFile(a.ID, values)
 	if err != nil {
 		return err

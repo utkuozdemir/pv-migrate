@@ -26,7 +26,8 @@ func buildTestPod(namespace string, name string, node string, pvc string) *corev
 }
 
 func buildTestPVC(namespace string, name string,
-	accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
+	accessModes ...corev1.PersistentVolumeAccessMode,
+) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,

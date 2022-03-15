@@ -37,7 +37,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3.0.0
-      - name: Setup Go
+      - name: Install go
         uses: actions/setup-go@v3.0.0
         with:
           # renovate: go
@@ -67,35 +67,53 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3.0.0
-      - name: Setup Go
+      - name: Install go
         uses: actions/setup-go@v3.0.0
         with:
           # renovate: go
           go-version: 1.17.5
       - name: Install richgo
         run: go install github.com/kyoh86/richgo@v0.3.10
-      - name: Create Kind Cluster 1
+      - name: Install helm
+        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Install cilium-cli
+        run: |
+          wget https://github.com/cilium/cilium-cli/releases/download/v0.10.4/cilium-linux-amd64.tar.gz
+          sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
+          rm cilium-linux-amd64.tar.gz
+
+      - name: kind-1 - Create cluster
         uses: helm/kind-action@v1.2.0
         with:
           cluster_name: kind-1
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
-      - name: Install Helm
-        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-      - name: Install MetalLB
+          config: test/kind-config.yaml
+      - name: kind-1 - Create metallb-system namespace
+        run: kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
+      - name: kind-1 - Install allow-all network policies on system namespaces
+        run: |
+          kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+          kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
+          kubectl -n metallb-system apply -f test/netpol-allow-all.yaml
+      - name: kind-1 - Install Cilium with default-deny policy
+        run: cilium install --config enable-policy=always
+      - name: kind-1 - Install MetalLB
         run: |
           IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm upgrade metallb \
           --install bitnami/metallb \
-          --version 2.5.14 \
           --namespace metallb-system \
-          --create-namespace \
-          --wait \
+          --version 2.5.14 \
+          --atomic \
           --values test/metallb-values.yaml \
           --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
           helm -n metallb-system get values metallb
-      - name: Create Kind Cluster 2
+      - name: kind-1 - Wait for all pods in the cluster to be ready
+        run: kubectl wait pod --for=condition=Ready --all --all-namespaces
+
+      - name: kind-2 - Create cluster
         uses: helm/kind-action@v1.2.0
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
@@ -103,10 +121,26 @@ jobs:
           cluster_name: kind-2
           version: v0.11.1
           node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
+          config: test/kind-config.yaml
+      - name: kind-2 - Install allow-all network policies on system namespaces
+        run: |
+          kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+          kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
+      - name: kind-2 - Install Cilium with default-deny policy
+        run: cilium install --config enable-policy=always
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
+      - name: kind-2 - Wait for all pods in the cluster to be ready
+        run: kubectl wait pod --for=condition=Ready --all --all-namespaces
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
+
       - name: Run tests
         env:
           RICHGO_FORCE_COLOR: "1"
-          PVMIG_TEST_EXTRA_KUBECONFIG: "/home/runner/.kube/kind-2.yaml"
+          PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: richgo test -coverpkg=./... -coverprofile=profile.cov -covermode=count -timeout 20m -v ./...
       - name: Send coverage
         uses: shogo82148/actions-goveralls@v1.5.1

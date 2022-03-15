@@ -33,7 +33,8 @@ func GetClusterClient(kubeconfigPath string, context string) (*ClusterClient, er
 }
 
 func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config,
-	genericclioptions.RESTClientGetter, string, error) {
+	genericclioptions.RESTClientGetter, string, error,
+) {
 	clientConfigLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	if kubeconfigPath != "" {
 		clientConfigLoadingRules.ExplicitPath = kubeconfigPath

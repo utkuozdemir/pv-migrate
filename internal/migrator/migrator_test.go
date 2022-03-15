@@ -9,7 +9,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
@@ -119,8 +118,8 @@ func buildMigrationRequestWithStrategies(strategies []string, ignoreMounted bool
 }
 
 func fakeClusterClientGetter() clusterClientGetter {
-	pvcA := buildTestPVC(sourceNS, sourcePVC, v1.ReadOnlyMany)
-	pvcB := buildTestPVC(destNS, destPVC, v1.ReadWriteOnce, v1.ReadWriteMany)
+	pvcA := buildTestPVC(sourceNS, sourcePVC, corev1.ReadOnlyMany)
+	pvcB := buildTestPVC(destNS, destPVC, corev1.ReadWriteOnce, corev1.ReadWriteMany)
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPVC)
 
@@ -151,7 +150,8 @@ func buildTestPod(namespace string, name string, node string, pvc string) *corev
 }
 
 func buildTestPVC(namespace string, name string,
-	accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
+	accessModes ...corev1.PersistentVolumeAccessMode,
+) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: namespace,
