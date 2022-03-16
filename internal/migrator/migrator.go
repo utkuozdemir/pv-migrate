@@ -43,7 +43,7 @@ func (m *migrator) Run(mig *migration.Request) error {
 		return err
 	}
 
-	t, err := m.buildTask(mig)
+	t, err := m.buildMigration(mig)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (m *migrator) Run(mig *migration.Request) error {
 	return errors.New("all strategies have failed")
 }
 
-func (m *migrator) buildTask(r *migration.Request) (*migration.Migration, error) {
+func (m *migrator) buildMigration(r *migration.Request) (*migration.Migration, error) {
 	chart, err := loader.LoadArchive(bytes.NewReader(chartBytes))
 	if err != nil {
 		return nil, err
@@ -95,17 +95,9 @@ func (m *migrator) buildTask(r *migration.Request) (*migration.Migration, error)
 	source := r.Source
 	dest := r.Dest
 
-	sourceClient, err := m.getKubeClient(source.KubeconfigPath, source.Context)
+	sourceClient, destClient, err := m.getClusterClients(r)
 	if err != nil {
 		return nil, err
-	}
-
-	destClient := sourceClient
-	if source.KubeconfigPath != dest.KubeconfigPath || source.Context != dest.Context {
-		destClient, err = m.getKubeClient(dest.KubeconfigPath, dest.Context)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	sourceNs := source.Namespace
@@ -135,12 +127,7 @@ func (m *migrator) buildTask(r *migration.Request) (*migration.Migration, error)
 		"dest":      dest.Name,
 	})
 
-	ignoreMounted := r.IgnoreMounted
-	err = handleMounted(logger, sourcePvcInfo, ignoreMounted)
-	if err != nil {
-		return nil, err
-	}
-	err = handleMounted(logger, destPvcInfo, ignoreMounted)
+	err = handleMountedPVCs(logger, r, sourcePvcInfo, destPvcInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -158,6 +145,44 @@ func (m *migrator) buildTask(r *migration.Request) (*migration.Migration, error)
 	}
 
 	return &mig, nil
+}
+
+func (m *migrator) getClusterClients(r *migration.Request) (*k8s.ClusterClient, *k8s.ClusterClient, error) {
+	source := r.Source
+	dest := r.Dest
+
+	sourceClient, err := m.getKubeClient(source.KubeconfigPath, source.Context)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	destClient := sourceClient
+	if source.KubeconfigPath != dest.KubeconfigPath || source.Context != dest.Context {
+		destClient, err = m.getKubeClient(dest.KubeconfigPath, dest.Context)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return sourceClient, destClient, nil
+}
+
+func handleMountedPVCs(logger *log.Entry, r *migration.Request, sourcePvcInfo, destPvcInfo *pvc.Info) error {
+	ignoreMounted := r.IgnoreMounted
+	err := handleMounted(logger, sourcePvcInfo, ignoreMounted)
+	if err != nil {
+		return err
+	}
+	err = handleMounted(logger, destPvcInfo, ignoreMounted)
+	if err != nil {
+		return err
+	}
+
+	if !(destPvcInfo.SupportsRWO || destPvcInfo.SupportsRWX) {
+		return errors.New("destination pvc is not writeable")
+	}
+
+	return nil
 }
 
 func handleMounted(logger *log.Entry, info *pvc.Info, ignoreMounted bool) error {

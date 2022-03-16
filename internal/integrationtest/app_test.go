@@ -421,22 +421,110 @@ func setup() error {
 	ns2 = "pv-migrate-test-2-" + util.RandomHexadecimalString(5)
 	ns3 = "pv-migrate-test-3-" + util.RandomHexadecimalString(5)
 
-	_, err = createNs(mainClusterCli, ns1)
+	err = setupNSs()
 	if err != nil {
 		return err
 	}
 
-	_, err = createNs(mainClusterCli, ns2)
+	err = setupPVCs()
 	if err != nil {
 		return err
 	}
 
-	_, err = createNs(extraClusterCli, ns3)
+	err = setupPods()
 	if err != nil {
 		return err
 	}
 
-	err = setupPVCsWithLongName()
+	err = setupWaitForPVCs()
+	if err != nil {
+		return err
+	}
+
+	err = setupWaitForPods()
+	if err != nil {
+		return err
+	}
+
+	_, err = execInPod(mainClusterCli, ns1, "source", generateDataShellCommand)
+	return err
+}
+
+func setupNSs() error {
+	_, err := createNS(mainClusterCli, ns1)
+	if err != nil {
+		return err
+	}
+
+	_, err = createNS(mainClusterCli, ns2)
+	if err != nil {
+		return err
+	}
+
+	_, err = createNS(extraClusterCli, ns3)
+	return err
+}
+
+func setupWaitForPVCs() error {
+	err := waitUntilPVCIsBound(mainClusterCli, ns1, "source")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPVCIsBound(mainClusterCli, ns1, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPVCIsBound(mainClusterCli, ns2, "dest")
+	if err != nil {
+		return err
+	}
+
+	return waitUntilPVCIsBound(extraClusterCli, ns3, "dest")
+}
+
+func setupWaitForPods() error {
+	err := waitUntilPodIsRunning(mainClusterCli, ns1, "source")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(mainClusterCli, ns1, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(mainClusterCli, ns2, "dest")
+	if err != nil {
+		return err
+	}
+
+	return waitUntilPodIsRunning(extraClusterCli, ns3, "dest")
+}
+
+func setupPods() error {
+	_, err := createPod(mainClusterCli, ns1, "source", "source")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(mainClusterCli, ns1, "dest", "dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(mainClusterCli, ns2, "dest", "dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(extraClusterCli, ns3, "dest", "dest")
+	return err
+}
+
+func setupPVCs() error {
+	err := setupPVCsWithLongName()
 	if err != nil {
 		return err
 	}
@@ -457,71 +545,6 @@ func setup() error {
 	}
 
 	_, err = createPVC(extraClusterCli, ns3, "dest")
-	if err != nil {
-		return err
-	}
-
-	_, err = createPod(mainClusterCli, ns1, "source", "source")
-	if err != nil {
-		return err
-	}
-
-	_, err = createPod(mainClusterCli, ns1, "dest", "dest")
-	if err != nil {
-		return err
-	}
-
-	_, err = createPod(mainClusterCli, ns2, "dest", "dest")
-	if err != nil {
-		return err
-	}
-
-	_, err = createPod(extraClusterCli, ns3, "dest", "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(mainClusterCli, ns1, "source")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(mainClusterCli, ns1, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(mainClusterCli, ns2, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(extraClusterCli, ns3, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(mainClusterCli, ns1, "source")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(mainClusterCli, ns1, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(mainClusterCli, ns2, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(extraClusterCli, ns3, "dest")
-	if err != nil {
-		return err
-	}
-
-	_, err = execInPod(mainClusterCli, ns1, "source", generateDataShellCommand)
 	return err
 }
 
@@ -762,7 +785,7 @@ func clearDests() error {
 	return err
 }
 
-func createNs(cli *k8s.ClusterClient, name string) (*corev1.Namespace, error) {
+func createNS(cli *k8s.ClusterClient, name string) (*corev1.Namespace, error) {
 	return cli.KubeClient.CoreV1().
 		Namespaces().Create(context.TODO(), &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{

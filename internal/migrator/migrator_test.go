@@ -28,7 +28,7 @@ const (
 func TestBuildTask(t *testing.T) {
 	m := migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(true)
-	tsk, err := m.buildTask(mig)
+	tsk, err := m.buildMigration(mig)
 	assert.Nil(t, err)
 
 	s := tsk.SourceInfo
@@ -50,7 +50,7 @@ func TestBuildTask(t *testing.T) {
 func TestBuildTaskMounted(t *testing.T) {
 	m := migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(false)
-	tsk, err := m.buildTask(mig)
+	tsk, err := m.buildMigration(mig)
 	assert.Nil(t, tsk)
 	assert.Error(t, err)
 }

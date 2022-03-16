@@ -54,6 +54,13 @@ func (c *Cmd) Build() (string, error) {
 
 	rsyncArgsStr := strings.Join(rsyncArgs, " ")
 
+	src := c.buildSrc()
+	dest := c.buildDest()
+
+	return fmt.Sprintf("%s %s %s %s", cmd, rsyncArgsStr, src, dest), nil
+}
+
+func (c *Cmd) buildSrc() string {
 	var src strings.Builder
 	if c.SrcUseSsh {
 		sshDestUser := "root"
@@ -64,6 +71,10 @@ func (c *Cmd) Build() (string, error) {
 	}
 	src.WriteString(c.SrcPath)
 
+	return src.String()
+}
+
+func (c *Cmd) buildDest() string {
 	var dest strings.Builder
 	if c.DestUseSsh {
 		sshDestUser := "root"
@@ -74,5 +85,5 @@ func (c *Cmd) Build() (string, error) {
 	}
 	dest.WriteString(c.DestPath)
 
-	return fmt.Sprintf("%s %s %s %s", cmd, rsyncArgsStr, src.String(), dest.String()), nil
+	return dest.String()
 }

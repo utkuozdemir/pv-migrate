@@ -26,6 +26,9 @@ import (
 const (
 	portForwardTimeout   = 30 * time.Second
 	sshReverseTunnelPort = 50000
+
+	localSrcMountPath = "/source"
+	localDestMountPath = "/dest"
 )
 
 type Local struct{}
@@ -40,34 +43,15 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 	s := m.SourceInfo
 	d := m.DestInfo
 
-	m.Logger.Info(":key: Generating SSH key pair")
-	keyAlgorithm := m.Request.KeyAlgorithm
-	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
+	srcReleaseName, destReleaseName, privateKey, err := r.installLocalReleases(a)
 	if err != nil {
 		return true, err
 	}
-	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	srcReleaseName := a.HelmReleaseNamePrefix + "-src"
-	destReleaseName := a.HelmReleaseNamePrefix + "-dest"
 	releaseNames := []string{srcReleaseName, destReleaseName}
 
 	doneCh := registerCleanupHook(a, releaseNames)
 	defer cleanupAndReleaseHook(a, releaseNames, doneCh)
-
-	srcMountPath := "/source"
-	destMountPath := "/dest"
-
-	err = installLocalOnSource(a, srcReleaseName, publicKey,
-		privateKey, privateKeyMountPath, srcMountPath)
-	if err != nil {
-		return true, err
-	}
-
-	err = installLocalOnDest(a, destReleaseName, publicKey, destMountPath)
-	if err != nil {
-		return true, err
-	}
 
 	sourceSshdPod, err := getSshdPodForHelmRelease(s, srcReleaseName)
 	if err != nil {
@@ -101,8 +85,8 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 		return true, err
 	}
 
-	srcPath := srcMountPath + "/" + m.Request.Source.Path
-	destPath := destMountPath + "/" + m.Request.Dest.Path
+	srcPath := localSrcMountPath + "/" + m.Request.Source.Path
+	destPath := localDestMountPath + "/" + m.Request.Dest.Path
 
 	rsyncCmd := rsync.Cmd{
 		Port:        sshReverseTunnelPort,
@@ -148,6 +132,30 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 	err = <-errorCh
 	successCh <- err == nil
 	return true, err
+}
+
+func (r *Local) installLocalReleases(a *migration.Attempt) (srcReleaseName, destReleaseName,
+	privateKey string, err error) {
+	a.Migration.Logger.Info(":key: Generating SSH key pair")
+	keyAlgorithm := a.Migration.Request.KeyAlgorithm
+	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
+	if err != nil {
+		return
+	}
+
+	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
+
+	srcReleaseName = a.HelmReleaseNamePrefix + "-src"
+	destReleaseName = a.HelmReleaseNamePrefix + "-dest"
+
+	err = installLocalOnSource(a, srcReleaseName, publicKey,
+		privateKey, privateKeyMountPath, localSrcMountPath)
+	if err != nil {
+		return
+	}
+
+	err = installLocalOnDest(a, destReleaseName, publicKey, localDestMountPath)
+    return
 }
 
 func getSshdPodForHelmRelease(pvcInfo *pvc.Info, name string) (*corev1.Pod, error) {
