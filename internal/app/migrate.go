@@ -39,7 +39,8 @@ const (
 	FlagHelmSetFile   = "helm-set-file"
 )
 
-var completionFuncNoFileComplete = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+var completionFuncNoFileComplete = func(cmd *cobra.Command, args []string,
+	toComplete string) ([]string, cobra.ShellCompDirective) {
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -128,30 +129,41 @@ func buildMigrateCmd() *cobra.Command {
 	f.StringP(FlagDestNamespace, "N", "", "namespace of the destination PVC")
 	f.StringP(FlagDestPath, "P", "/", "the filesystem path to migrate in the the destination PVC")
 
-	f.BoolP(FlagDestDeleteExtraneousFiles, "d", false, "delete extraneous files on the destination by using rsync's '--delete' flag")
-	f.BoolP(FlagIgnoreMounted, "i", false, "do not fail if the source or destination PVC is mounted")
+	f.BoolP(FlagDestDeleteExtraneousFiles, "d", false,
+		"delete extraneous files on the destination by using rsync's '--delete' flag")
+	f.BoolP(FlagIgnoreMounted, "i", false,
+		"do not fail if the source or destination PVC is mounted")
 	f.BoolP(FlagNoChown, "o", false, "omit chown on rsync")
 	f.BoolP(FlagNoProgressBar, "b", false, "do not display a progress bar")
 	f.BoolP(FlagSourceMountReadOnly, "R", true, "mount the source PVC in ReadOnly mode")
-	f.StringSliceP(FlagStrategies, "s", strategy.DefaultStrategies, "the comma-separated list of strategies to be used in the given order")
-	f.StringP(FlagSSHKeyAlgorithm, "a", ssh.Ed25519KeyAlgorithm, fmt.Sprintf("ssh key algorithm to be used. Valid values are %s", strings.Join(ssh.KeyAlgorithms, ",")))
+	f.StringSliceP(FlagStrategies, "s", strategy.DefaultStrategies,
+		"the comma-separated list of strategies to be used in the given order")
+	f.StringP(FlagSSHKeyAlgorithm, "a", ssh.Ed25519KeyAlgorithm,
+		fmt.Sprintf("ssh key algorithm to be used. Valid values are %s",
+			strings.Join(ssh.KeyAlgorithms, ",")))
 	f.StringP(FlagDestHostOverride, "H", "",
 		"the override for the rsync host destination when it is run over SSH, "+
 			"in cases when you need to target a different destination IP on rsync for some reason. "+
 			"By default, it is determined by used strategy and differs across strategies. "+
 			"Has no effect for mnt2 and local strategies")
 
-	f.StringSliceP(FlagHelmValues, "f", nil, "set additional Helm values by a YAML file or a URL (can specify multiple)")
-	f.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
-	f.StringSlice(FlagHelmSetString, nil, "set additional Helm STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)")
-	f.StringSlice(FlagHelmSetFile, nil, "set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
+	f.StringSliceP(FlagHelmValues, "f", nil,
+		"set additional Helm values by a YAML file or a URL (can specify multiple)")
+	f.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify " +
+		"multiple or separate values with commas: key1=val1,key2=val2)")
+	f.StringSlice(FlagHelmSetString, nil, "set additional Helm STRING values on the command line " +
+		"(can specify multiple or separate values with commas: key1=val1,key2=val2)")
+	f.StringSlice(FlagHelmSetFile, nil, "set additional Helm values from respective files specified " +
+		"via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
 
 	_ = cmd.RegisterFlagCompletionFunc(FlagSourceContext, buildKubeContextCompletionFunc(FlagSourceKubeconfig))
-	_ = cmd.RegisterFlagCompletionFunc(FlagSourceNamespace, buildKubeNSCompletionFunc(FlagSourceKubeconfig, FlagSourceContext))
+	_ = cmd.RegisterFlagCompletionFunc(FlagSourceNamespace,
+		buildKubeNSCompletionFunc(FlagSourceKubeconfig, FlagSourceContext))
 	_ = cmd.RegisterFlagCompletionFunc(FlagSourcePath, completionFuncNoFileComplete)
 
 	_ = cmd.RegisterFlagCompletionFunc(FlagDestContext, buildKubeContextCompletionFunc(FlagDestKubeconfig))
-	_ = cmd.RegisterFlagCompletionFunc(FlagDestNamespace, buildKubeNSCompletionFunc(FlagDestKubeconfig, FlagDestContext))
+	_ = cmd.RegisterFlagCompletionFunc(FlagDestNamespace,
+		buildKubeNSCompletionFunc(FlagDestKubeconfig, FlagDestContext))
 	_ = cmd.RegisterFlagCompletionFunc(FlagDestPath, completionFuncNoFileComplete)
 
 	_ = cmd.RegisterFlagCompletionFunc(FlagStrategies, buildSliceCompletionFunc(strategy.AllStrategies))
