@@ -27,7 +27,7 @@ const (
 	portForwardTimeout   = 30 * time.Second
 	sshReverseTunnelPort = 50000
 
-	localSrcMountPath = "/source"
+	localSrcMountPath  = "/source"
 	localDestMountPath = "/dest"
 )
 
@@ -135,7 +135,8 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 }
 
 func (r *Local) installLocalReleases(a *migration.Attempt) (srcReleaseName, destReleaseName,
-	privateKey string, err error) {
+	privateKey string, err error,
+) {
 	a.Migration.Logger.Info(":key: Generating SSH key pair")
 	keyAlgorithm := a.Migration.Request.KeyAlgorithm
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
@@ -155,7 +156,7 @@ func (r *Local) installLocalReleases(a *migration.Attempt) (srcReleaseName, dest
 	}
 
 	err = installLocalOnDest(a, destReleaseName, publicKey, localDestMountPath)
-    return
+	return
 }
 
 func getSshdPodForHelmRelease(pvcInfo *pvc.Info, name string) (*corev1.Pod, error) {

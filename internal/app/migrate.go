@@ -40,7 +40,8 @@ const (
 )
 
 var completionFuncNoFileComplete = func(cmd *cobra.Command, args []string,
-	toComplete string) ([]string, cobra.ShellCompDirective) {
+	toComplete string,
+) ([]string, cobra.ShellCompDirective) {
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -149,11 +150,11 @@ func buildMigrateCmd() *cobra.Command {
 
 	f.StringSliceP(FlagHelmValues, "f", nil,
 		"set additional Helm values by a YAML file or a URL (can specify multiple)")
-	f.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify " +
+	f.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify "+
 		"multiple or separate values with commas: key1=val1,key2=val2)")
-	f.StringSlice(FlagHelmSetString, nil, "set additional Helm STRING values on the command line " +
+	f.StringSlice(FlagHelmSetString, nil, "set additional Helm STRING values on the command line "+
 		"(can specify multiple or separate values with commas: key1=val1,key2=val2)")
-	f.StringSlice(FlagHelmSetFile, nil, "set additional Helm values from respective files specified " +
+	f.StringSlice(FlagHelmSetFile, nil, "set additional Helm values from respective files specified "+
 		"via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
 
 	_ = cmd.RegisterFlagCompletionFunc(FlagSourceContext, buildKubeContextCompletionFunc(FlagSourceKubeconfig))
