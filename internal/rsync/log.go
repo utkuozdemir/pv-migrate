@@ -53,7 +53,7 @@ func (l *LogTail) tailWithProgressBar() {
 			progressbar.OptionShowBytes(true),
 			progressbar.OptionSetRenderBlankState(true),
 			progressbar.OptionFullWidth(),
-			progressbar.OptionOnCompletion(func() { fmt.Println() }),
+			progressbar.OptionOnCompletion(func() { fmt.Println() }), //nolint:forbidigo
 			progressbar.OptionSetDescription(emoji.Sprint(":open_file_folder: Copying data...")),
 		)
 	}, func(s string) {

@@ -103,7 +103,6 @@ func cleanup(a *migration.Attempt, releaseNames []string) {
 
 	err := result.ErrorOrNil()
 	if err != nil {
-		fmt.Println(err.Error())
 		logger.WithError(err).
 			Warn(":large_orange_diamond: Cleanup failed, you might want to clean up manually")
 		return

@@ -37,6 +37,8 @@ func New(c *k8s.ClusterClient, namespace string, name string) (*Info, error) {
 
 	for _, accessMode := range claim.Spec.AccessModes {
 		switch accessMode {
+		case corev1.ReadWriteOncePod:
+			supportsRWO = true
 		case corev1.ReadWriteOnce:
 			supportsRWO = true
 		case corev1.ReadOnlyMany:

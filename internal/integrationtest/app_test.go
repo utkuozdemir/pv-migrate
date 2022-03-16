@@ -668,6 +668,7 @@ func createPVC(cli *k8s.ClusterClient, ns string, name string) (*corev1.Persiste
 		Create(context.TODO(), &pvc, metav1.CreateOptions{})
 }
 
+//nolint:dupl
 func waitUntilPodIsRunning(cli *k8s.ClusterClient, ns string, name string) error {
 	resCli := cli.KubeClient.CoreV1().Pods(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
@@ -697,6 +698,7 @@ func waitUntilPodIsRunning(cli *k8s.ClusterClient, ns string, name string) error
 	return err
 }
 
+//nolint:dupl
 func waitUntilPVCIsBound(cli *k8s.ClusterClient, ns string, name string) error {
 	resCli := cli.KubeClient.CoreV1().PersistentVolumeClaims(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()

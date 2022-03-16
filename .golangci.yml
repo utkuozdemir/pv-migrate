@@ -5,4 +5,14 @@ linters:
     - containedctx
     - contextcheck
     - cyclop
+    - decorder
+    - dogsled
+    - dupl
+    - durationcheck
+    - errname
+    - errorlint
+    - exhaustive
+    - exportloopref
+    - forbidigo
+    - forcetypeassert
     - lll

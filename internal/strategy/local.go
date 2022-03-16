@@ -289,5 +289,11 @@ func getFreePort() (int, error) {
 		return 0, err
 	}
 	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port, nil
+
+	tcpAddr, ok := l.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0, errors.New("could not get TCP address from listener")
+	}
+
+	return tcpAddr.Port, nil
 }
