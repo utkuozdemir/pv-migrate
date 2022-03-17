@@ -64,3 +64,4 @@ linters:
     - tparallel
     - unconvert
     - unparam
+    - varnamelen

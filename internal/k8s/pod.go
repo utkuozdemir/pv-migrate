@@ -19,13 +19,13 @@ const (
 	podWatchTimeout = 2 * time.Minute
 )
 
-func WaitForPod(cli kubernetes.Interface, ns, labelSelector string) (*corev1.Pod, error) {
+func WaitForPod(cli kubernetes.Interface, namespace, labelSelector string) (*corev1.Pod, error) {
 	var result *corev1.Pod
 
-	resCli := cli.CoreV1().Pods(ns)
+	resCli := cli.CoreV1().Pods(namespace)
 	ctx, cancel := context.WithTimeout(context.TODO(), podWatchTimeout)
 	defer cancel()
-	lw := &cache.ListWatch{
+	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.LabelSelector = labelSelector
 
@@ -38,12 +38,12 @@ func WaitForPod(cli kubernetes.Interface, ns, labelSelector string) (*corev1.Pod
 		},
 	}
 
-	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil,
+	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
 				return false, fmt.Errorf("unexpected type while watcing pods "+
-					"in ns %s with label selector %s", ns, labelSelector)
+					"in ns %s with label selector %s", namespace, labelSelector)
 			}
 
 			phase := res.Status.Phase
@@ -59,13 +59,13 @@ func WaitForPod(cli kubernetes.Interface, ns, labelSelector string) (*corev1.Pod
 	return result, err
 }
 
-func waitForPodTermination(cli kubernetes.Interface, ns string, name string) (*corev1.PodPhase, error) {
+func waitForPodTermination(cli kubernetes.Interface, namespace string, name string) (*corev1.PodPhase, error) {
 	var result *corev1.PodPhase
 
-	resCli := cli.CoreV1().Pods(ns)
+	resCli := cli.CoreV1().Pods(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 	ctx := context.Background()
-	lw := &cache.ListWatch{
+	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
 
@@ -78,11 +78,11 @@ func waitForPodTermination(cli kubernetes.Interface, ns string, name string) (*c
 		},
 	}
 
-	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil,
+	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", ns, name)
+				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", namespace, name)
 			}
 
 			phase := res.Status.Phase

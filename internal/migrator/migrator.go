@@ -41,36 +41,36 @@ func New() *Migrator {
 	}
 }
 
-func (m *Migrator) Run(mig *migration.Request) error {
-	nameToStrategyMap, err := m.getStrategyMap(mig.Strategies)
+func (m *Migrator) Run(request *migration.Request) error {
+	nameToStrategyMap, err := m.getStrategyMap(request.Strategies)
 	if err != nil {
 		return err
 	}
 
-	t, err := m.buildMigration(mig)
+	mig, err := m.buildMigration(request)
 	if err != nil {
 		return err
 	}
 
-	strs := strings.Join(mig.Strategies, ", ")
-	t.Logger.
+	strs := strings.Join(request.Strategies, ", ")
+	mig.Logger.
 		WithField("strategies", strs).
 		Infof(":thought_balloon: Will attempt %v strategies: %s",
 			len(nameToStrategyMap), strs)
 
-	for _, name := range mig.Strategies {
+	for _, name := range request.Strategies {
 		id := util.RandomHexadecimalString(attemptIDLength)
-		e := migration.Attempt{
+		attempt := migration.Attempt{
 			ID:                    id,
 			HelmReleaseNamePrefix: "pv-migrate-" + id,
-			Migration:             t,
-			Logger:                t.Logger.WithField("id", id),
+			Migration:             mig,
+			Logger:                mig.Logger.WithField("id", id),
 		}
 
-		sLogger := e.Logger.WithField("strategy", name)
+		sLogger := attempt.Logger.WithField("strategy", name)
 		sLogger.Infof(":helicopter: Attempting strategy: %s", name)
 		s := nameToStrategyMap[name]
-		accepted, runErr := s.Run(&e)
+		accepted, runErr := s.Run(&attempt)
 		if !accepted {
 			sLogger.Infof(":fox: Strategy '%s' cannot handle this migration, "+
 				"will try the next one", name)
@@ -92,16 +92,16 @@ func (m *Migrator) Run(mig *migration.Request) error {
 	return errors.New("all strategies have failed")
 }
 
-func (m *Migrator) buildMigration(r *migration.Request) (*migration.Migration, error) {
+func (m *Migrator) buildMigration(request *migration.Request) (*migration.Migration, error) {
 	chart, err := loader.LoadArchive(bytes.NewReader(chartBytes))
 	if err != nil {
 		return nil, err
 	}
 
-	source := r.Source
-	dest := r.Dest
+	source := request.Source
+	dest := request.Dest
 
-	sourceClient, destClient, err := m.getClusterClients(r)
+	sourceClient, destClient, err := m.getClusterClients(request)
 	if err != nil {
 		return nil, err
 	}
@@ -126,14 +126,14 @@ func (m *Migrator) buildMigration(r *migration.Request) (*migration.Migration, e
 		return nil, err
 	}
 
-	logger := r.Logger.WithFields(log.Fields{
+	logger := request.Logger.WithFields(log.Fields{
 		"source_ns": source.Namespace,
 		"source":    source.Name,
 		"dest_ns":   dest.Namespace,
 		"dest":      dest.Name,
 	})
 
-	err = handleMountedPVCs(logger, r, sourcePvcInfo, destPvcInfo)
+	err = handleMountedPVCs(logger, request, sourcePvcInfo, destPvcInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +144,7 @@ func (m *Migrator) buildMigration(r *migration.Request) (*migration.Migration, e
 
 	mig := migration.Migration{
 		Chart:      chart,
-		Request:    r,
+		Request:    request,
 		Logger:     logger,
 		SourceInfo: sourcePvcInfo,
 		DestInfo:   destPvcInfo,

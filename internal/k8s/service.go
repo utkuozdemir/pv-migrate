@@ -19,14 +19,14 @@ const (
 	serviceLbCheckTimeout = 120 * time.Second
 )
 
-func GetServiceAddress(cli kubernetes.Interface, ns string, name string) (string, error) {
+func GetServiceAddress(cli kubernetes.Interface, namespace string, name string) (string, error) {
 	var result string
 
-	resCli := cli.CoreV1().Services(ns)
+	resCli := cli.CoreV1().Services(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 	ctx, cancel := context.WithTimeout(context.TODO(), serviceLbCheckTimeout)
 	defer cancel()
-	lw := &cache.ListWatch{
+	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
 
@@ -39,11 +39,11 @@ func GetServiceAddress(cli kubernetes.Interface, ns string, name string) (string
 		},
 	}
 
-	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Service{}, nil,
+	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Service{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Service)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing service %s/%s", ns, name)
+				return false, fmt.Errorf("unexpected type while watcing service %s/%s", namespace, name)
 			}
 
 			if res.Spec.Type == corev1.ServiceTypeClusterIP {

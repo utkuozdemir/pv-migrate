@@ -18,8 +18,8 @@ type Info struct {
 	SupportsRWX   bool
 }
 
-func New(c *k8s.ClusterClient, namespace string, name string) (*Info, error) {
-	kubeClient := c.KubeClient
+func New(client *k8s.ClusterClient, namespace string, name string) (*Info, error) {
+	kubeClient := client.KubeClient
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).
 		Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
@@ -49,7 +49,7 @@ func New(c *k8s.ClusterClient, namespace string, name string) (*Info, error) {
 	}
 
 	return &Info{
-		ClusterClient: c,
+		ClusterClient: client,
 		Claim:         claim,
 		MountedNode:   mountedNode,
 		SupportsRWO:   supportsRWO,

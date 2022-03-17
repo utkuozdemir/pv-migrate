@@ -17,41 +17,41 @@ func (r *Svc) canDo(t *migration.Migration) bool {
 	return sameCluster
 }
 
-func (r *Svc) Run(a *migration.Attempt) (bool, error) {
-	m := a.Migration
-	if !r.canDo(m) {
+func (r *Svc) Run(attempt *migration.Attempt) (bool, error) {
+	mig := attempt.Migration
+	if !r.canDo(mig) {
 		return false, nil
 	}
 
-	s := a.Migration.SourceInfo
-	d := a.Migration.DestInfo
-	sourceNs := s.Claim.Namespace
-	destNs := d.Claim.Namespace
+	sourceInfo := attempt.Migration.SourceInfo
+	destInfo := attempt.Migration.DestInfo
+	sourceNs := sourceInfo.Claim.Namespace
+	destNs := destInfo.Claim.Namespace
 
-	m.Logger.Info(":key: Generating SSH key pair")
-	keyAlgorithm := m.Request.KeyAlgorithm
+	mig.Logger.Info(":key: Generating SSH key pair")
+	keyAlgorithm := mig.Request.KeyAlgorithm
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return true, err
 	}
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	releaseName := a.HelmReleaseNamePrefix
+	releaseName := attempt.HelmReleaseNamePrefix
 	releaseNames := []string{releaseName}
 
 	sshTargetHost := releaseName + "-sshd." + sourceNs
-	if m.Request.DestHostOverride != "" {
-		sshTargetHost = m.Request.DestHostOverride
+	if mig.Request.DestHostOverride != "" {
+		sshTargetHost = mig.Request.DestHostOverride
 	}
 
 	srcMountPath := "/source"
 	destMountPath := "/dest"
 
-	srcPath := srcMountPath + "/" + m.Request.Source.Path
-	destPath := destMountPath + "/" + m.Request.Dest.Path
+	srcPath := srcMountPath + "/" + mig.Request.Source.Path
+	destPath := destMountPath + "/" + mig.Request.Dest.Path
 	rsyncCmd := rsync.Cmd{
-		NoChown:    m.Request.NoChown,
-		Delete:     m.Request.DeleteExtraneousFiles,
+		NoChown:    mig.Request.NoChown,
+		Delete:     mig.Request.DeleteExtraneousFiles,
 		SrcPath:    srcPath,
 		DestPath:   destPath,
 		SrcUseSSH:  true,
@@ -71,7 +71,7 @@ func (r *Svc) Run(a *migration.Attempt) (bool, error) {
 			"privateKeyMountPath": privateKeyMountPath,
 			"pvcMounts": []map[string]interface{}{
 				{
-					"name":      d.Claim.Name,
+					"name":      destInfo.Claim.Name,
 					"mountPath": destMountPath,
 				},
 			},
@@ -83,26 +83,26 @@ func (r *Svc) Run(a *migration.Attempt) (bool, error) {
 			"publicKey": publicKey,
 			"pvcMounts": []map[string]interface{}{
 				{
-					"name":      s.Claim.Name,
+					"name":      sourceInfo.Claim.Name,
 					"mountPath": srcMountPath,
-					"readOnly":  m.Request.SourceMountReadOnly,
+					"readOnly":  mig.Request.SourceMountReadOnly,
 				},
 			},
 		},
 	}
 
-	doneCh := registerCleanupHook(a, releaseNames)
-	defer cleanupAndReleaseHook(a, releaseNames, doneCh)
+	doneCh := registerCleanupHook(attempt, releaseNames)
+	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
 
-	err = installHelmChart(a, d, releaseName, vals)
+	err = installHelmChart(attempt, destInfo, releaseName, vals)
 	if err != nil {
 		return true, err
 	}
 
-	showProgressBar := !m.Request.NoProgressBar
-	kubeClient := m.SourceInfo.ClusterClient.KubeClient
+	showProgressBar := !mig.Request.NoProgressBar
+	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
 	jobName := releaseName + "-rsync"
-	err = k8s.WaitForJobCompletion(a.Logger, kubeClient, destNs, jobName, showProgressBar)
+	err = k8s.WaitForJobCompletion(attempt.Logger, kubeClient, destNs, jobName, showProgressBar)
 
 	return true, err
 }

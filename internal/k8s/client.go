@@ -15,7 +15,7 @@ type ClusterClient struct {
 }
 
 func GetClusterClient(kubeconfigPath string, context string) (*ClusterClient, error) {
-	config, rcGetter, ns, err := buildK8sConfig(kubeconfigPath, context)
+	config, rcGetter, namespace, err := buildK8sConfig(kubeconfigPath, context)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func GetClusterClient(kubeconfigPath string, context string) (*ClusterClient, er
 		RestConfig:       config,
 		KubeClient:       kubeClient,
 		RESTClientGetter: rcGetter,
-		NsInContext:      ns,
+		NsInContext:      namespace,
 	}, nil
 }
 

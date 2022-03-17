@@ -615,12 +615,12 @@ func userHomeDir() (string, error) {
 	return usr.HomeDir, nil
 }
 
-func createPod(cli *k8s.ClusterClient, ns string, name string, pvc string) (*corev1.Pod, error) {
+func createPod(cli *k8s.ClusterClient, namespace string, name string, pvc string) (*corev1.Pod, error) {
 	terminationGracePeriodSeconds := int64(0)
-	p := corev1.Pod{
+	pod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: ns,
+			Namespace: namespace,
 		},
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
@@ -651,14 +651,14 @@ func createPod(cli *k8s.ClusterClient, ns string, name string, pvc string) (*cor
 	}
 
 	return cli.KubeClient.CoreV1().
-		Pods(ns).Create(context.TODO(), &p, metav1.CreateOptions{})
+		Pods(namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 }
 
-func createPVC(cli *k8s.ClusterClient, ns string, name string) (*corev1.PersistentVolumeClaim, error) {
+func createPVC(cli *k8s.ClusterClient, namespace string, name string) (*corev1.PersistentVolumeClaim, error) {
 	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: ns,
+			Namespace: namespace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -672,17 +672,17 @@ func createPVC(cli *k8s.ClusterClient, ns string, name string) (*corev1.Persiste
 		},
 	}
 
-	return cli.KubeClient.CoreV1().PersistentVolumeClaims(ns).
+	return cli.KubeClient.CoreV1().PersistentVolumeClaims(namespace).
 		Create(context.TODO(), &pvc, metav1.CreateOptions{})
 }
 
 //nolint:dupl
-func waitUntilPodIsRunning(cli *k8s.ClusterClient, ns string, name string) error {
-	resCli := cli.KubeClient.CoreV1().Pods(ns)
+func waitUntilPodIsRunning(cli *k8s.ClusterClient, namespace string, name string) error {
+	resCli := cli.KubeClient.CoreV1().Pods(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	lw := &cache.ListWatch{
+	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
 
@@ -695,11 +695,11 @@ func waitUntilPodIsRunning(cli *k8s.ClusterClient, ns string, name string) error
 		},
 	}
 
-	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil,
+	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", ns, name)
+				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", namespace, name)
 			}
 
 			return res.Status.Phase == corev1.PodRunning, nil
@@ -709,12 +709,12 @@ func waitUntilPodIsRunning(cli *k8s.ClusterClient, ns string, name string) error
 }
 
 //nolint:dupl
-func waitUntilPVCIsBound(cli *k8s.ClusterClient, ns string, name string) error {
-	resCli := cli.KubeClient.CoreV1().PersistentVolumeClaims(ns)
+func waitUntilPVCIsBound(cli *k8s.ClusterClient, namespace string, name string) error {
+	resCli := cli.KubeClient.CoreV1().PersistentVolumeClaims(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	lw := &cache.ListWatch{
+	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
 
@@ -727,11 +727,11 @@ func waitUntilPVCIsBound(cli *k8s.ClusterClient, ns string, name string) error {
 		},
 	}
 
-	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.PersistentVolumeClaim{}, nil,
+	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.PersistentVolumeClaim{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.PersistentVolumeClaim)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing pvc %s/%s", ns, name)
+				return false, fmt.Errorf("unexpected type while watcing pvc %s/%s", namespace, name)
 			}
 
 			return res.Status.Phase == corev1.ClaimBound, nil

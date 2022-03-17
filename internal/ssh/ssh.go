@@ -92,7 +92,7 @@ func createSSHEd25519KeyPair() (string, string, error) {
 func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 	magic := append([]byte("openssh-key-v1"), 0)
 
-	var w struct {
+	var message struct {
 		CipherName   string
 		KdfName      string
 		KdfOpts      string
@@ -111,13 +111,13 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 		Pad     []byte `ssh:"rest"`
 	}{}
 
-	ci, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
+	rnd, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
 	if err != nil {
 		return nil, err
 	}
 
-	pk1.Check1 = uint32(ci.Uint64())
-	pk1.Check2 = uint32(ci.Uint64())
+	pk1.Check1 = uint32(rnd.Uint64())
+	pk1.Check2 = uint32(rnd.Uint64())
 	pk1.Keytype = ssh.KeyAlgoED25519
 
 	pk, ok := key.Public().(ed25519.PublicKey)
@@ -145,14 +145,14 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 	pubkeyFull = append(pubkeyFull, []byte{0x0, 0x0, 0x0, 0x20}...)
 	pubkeyFull = append(pubkeyFull, pubKey...)
 
-	w.CipherName = "none"
-	w.KdfName = "none"
-	w.KdfOpts = ""
-	w.NumKeys = 1
-	w.PubKey = pubkeyFull
-	w.PrivKeyBlock = ssh.Marshal(pk1)
+	message.CipherName = "none"
+	message.KdfName = "none"
+	message.KdfOpts = ""
+	message.NumKeys = 1
+	message.PubKey = pubkeyFull
+	message.PrivKeyBlock = ssh.Marshal(pk1)
 
-	magic = append(magic, ssh.Marshal(w)...)
+	magic = append(magic, ssh.Marshal(message)...)
 
 	return magic, nil
 }

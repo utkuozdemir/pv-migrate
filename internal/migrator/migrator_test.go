@@ -33,20 +33,20 @@ func TestBuildTask(t *testing.T) {
 	tsk, err := m.buildMigration(mig)
 	assert.Nil(t, err)
 
-	s := tsk.SourceInfo
-	d := tsk.DestInfo
-	assert.Equal(t, "namespace1", s.Claim.Namespace)
-	assert.Equal(t, "pvc1", s.Claim.Name)
-	assert.Equal(t, "node1", s.MountedNode)
-	assert.False(t, s.SupportsRWO)
-	assert.True(t, s.SupportsROX)
-	assert.False(t, s.SupportsRWX)
-	assert.Equal(t, "namespace2", d.Claim.Namespace)
-	assert.Equal(t, "pvc2", d.Claim.Name)
-	assert.Equal(t, "node2", d.MountedNode)
-	assert.True(t, d.SupportsRWO)
-	assert.False(t, d.SupportsROX)
-	assert.True(t, d.SupportsRWX)
+	sourceInfo := tsk.SourceInfo
+	destInfo := tsk.DestInfo
+	assert.Equal(t, "namespace1", sourceInfo.Claim.Namespace)
+	assert.Equal(t, "pvc1", sourceInfo.Claim.Name)
+	assert.Equal(t, "node1", sourceInfo.MountedNode)
+	assert.False(t, sourceInfo.SupportsRWO)
+	assert.True(t, sourceInfo.SupportsROX)
+	assert.False(t, sourceInfo.SupportsRWX)
+	assert.Equal(t, "namespace2", destInfo.Claim.Namespace)
+	assert.Equal(t, "pvc2", destInfo.Claim.Name)
+	assert.Equal(t, "node2", destInfo.MountedNode)
+	assert.True(t, destInfo.SupportsRWO)
+	assert.False(t, destInfo.SupportsROX)
+	assert.True(t, destInfo.SupportsRWX)
 }
 
 func TestBuildTaskMounted(t *testing.T) {
@@ -87,7 +87,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 		},
 	}
 
-	m := Migrator{
+	migrator := Migrator{
 		getKubeClient: fakeClusterClientGetter(),
 		getStrategyMap: func(names []string) (map[string]strategy.Strategy, error) {
 			return map[string]strategy.Strategy{
@@ -101,7 +101,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	strs := []string{"str3", "str1", "str2"}
 	mig := buildMigrationRequestWithStrategies(strs, true)
 
-	err := m.Run(mig)
+	err := migrator.Run(mig)
 	assert.NoError(t, err)
 	assert.Equal(t, []int{3, 1, 2}, result)
 }

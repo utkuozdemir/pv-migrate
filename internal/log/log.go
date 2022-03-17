@@ -40,18 +40,18 @@ func New() (*log.Entry, error) {
 	l := log.New()
 	l.SetOutput(os.Stdout)
 
-	e := l.WithContext(context.Background())
-	err := Configure(e, LevelInfo, FormatFancy)
+	entry := l.WithContext(context.Background())
+	err := Configure(entry, LevelInfo, FormatFancy)
 	if err != nil {
 		return nil, err
 	}
 
-	return e, nil
+	return entry, nil
 }
 
-func Configure(e *log.Entry, level string, format string) error {
-	l := e.Logger
-	l.SetOutput(os.Stdout)
+func Configure(entry *log.Entry, level string, format string) error {
+	logger := entry.Logger
+	logger.SetOutput(os.Stdout)
 	formatter, err := getLogFormatter(format)
 	if err != nil {
 		return err
@@ -62,9 +62,9 @@ func Configure(e *log.Entry, level string, format string) error {
 		return err
 	}
 
-	l.SetFormatter(formatter)
-	l.SetLevel(logLevel)
-	e.Context = context.WithValue(e.Context, FormatContextKey, format)
+	logger.SetFormatter(formatter)
+	logger.SetLevel(logLevel)
+	entry.Context = context.WithValue(entry.Context, FormatContextKey, format)
 
 	return nil
 }

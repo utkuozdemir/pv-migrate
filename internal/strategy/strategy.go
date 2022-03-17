@@ -66,15 +66,15 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func registerCleanupHook(a *migration.Attempt, releaseNames []string) chan<- bool {
+func registerCleanupHook(attempt *migration.Attempt, releaseNames []string) chan<- bool {
 	doneCh := make(chan bool)
 	signalCh := make(chan os.Signal, 1)
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		select {
 		case <-signalCh:
-			a.Logger.Warn(":large_orange_diamond: Received termination signal")
-			cleanup(a, releaseNames)
+			attempt.Logger.Warn(":large_orange_diamond: Received termination signal")
+			cleanup(attempt, releaseNames)
 			os.Exit(1)
 		case <-doneCh:
 			return
@@ -143,28 +143,28 @@ func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configu
 	return actionConfig, nil
 }
 
-func getMergedHelmValues(helmValuesFile string, r *migration.Request) (map[string]interface{}, error) {
-	allValuesFiles := append([]string{helmValuesFile}, r.HelmValuesFiles...)
+func getMergedHelmValues(helmValuesFile string, request *migration.Request) (map[string]interface{}, error) {
+	allValuesFiles := append([]string{helmValuesFile}, request.HelmValuesFiles...)
 	valsOptions := values.Options{
-		Values:       r.HelmValues,
+		Values:       request.HelmValues,
 		ValueFiles:   allValuesFiles,
-		StringValues: r.HelmStringValues,
-		FileValues:   r.HelmFileValues,
+		StringValues: request.HelmStringValues,
+		FileValues:   request.HelmFileValues,
 	}
 
 	return valsOptions.MergeValues(helmProviders)
 }
 
-func installHelmChart(a *migration.Attempt, pvcInfo *pvc.Info, name string,
+func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string,
 	values map[string]interface{},
 ) error {
-	helmValuesFile, err := writeHelmValuesToTempFile(a.ID, values)
+	helmValuesFile, err := writeHelmValuesToTempFile(attempt.ID, values)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.Remove(helmValuesFile) }()
 
-	helmActionConfig, err := initHelmActionConfig(a.Logger, pvcInfo)
+	helmActionConfig, err := initHelmActionConfig(attempt.Logger, pvcInfo)
 	if err != nil {
 		return err
 	}
@@ -175,7 +175,7 @@ func installHelmChart(a *migration.Attempt, pvcInfo *pvc.Info, name string,
 	install.Wait = true
 	install.Timeout = 1 * time.Minute
 
-	mig := a.Migration
+	mig := attempt.Migration
 	vals, err := getMergedHelmValues(helmValuesFile, mig.Request)
 	if err != nil {
 		return err
@@ -187,18 +187,18 @@ func installHelmChart(a *migration.Attempt, pvcInfo *pvc.Info, name string,
 }
 
 func writeHelmValuesToTempFile(id string, vals map[string]interface{}) (string, error) {
-	f, err := ioutil.TempFile("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
+	file, err := ioutil.TempFile("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = f.Close() }()
+	defer func() { _ = file.Close() }()
 
-	encoder := yaml.NewEncoder(f)
+	encoder := yaml.NewEncoder(file)
 	encoder.SetIndent(helmValuesYAMLIndent)
 	err = encoder.Encode(vals)
 	if err != nil {
 		return "", err
 	}
 
-	return f.Name(), nil
+	return file.Name(), nil
 }

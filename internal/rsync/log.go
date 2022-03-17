@@ -107,15 +107,15 @@ func (l *LogTail) tailWithRetry(beforeFunc func(), logFunc func(string), success
 func (l *LogTail) tail(beforeFunc func(),
 	logFunc func(string), successFunc func(),
 ) (bool, error) {
-	s, err := l.LogReaderFunc()
+	logReader, err := l.LogReaderFunc()
 	if err != nil {
 		return false, err
 	}
 
-	defer func() { _ = s.Close() }()
+	defer func() { _ = logReader.Close() }()
 
 	beforeFunc()
-	sc := bufio.NewScanner(s)
+	scanner := bufio.NewScanner(logReader)
 	for {
 		select {
 		case success := <-l.SuccessCh:
@@ -125,16 +125,16 @@ func (l *LogTail) tail(beforeFunc func(),
 
 			return true, nil
 		default:
-			if !sc.Scan() {
+			if !scanner.Scan() {
 				return false, nil
 			}
-			logFunc(sc.Text())
+			logFunc(scanner.Text())
 		}
 	}
 }
 
-func parseLine(l *string) (*progress, error) {
-	endMatches := findNamedMatches(rsyncEndRegex, l)
+func parseLine(line *string) (*progress, error) {
+	endMatches := findNamedMatches(rsyncEndRegex, line)
 	if len(endMatches) > 0 {
 		total, err := parseNumBytes(endMatches["bytes"])
 		if err != nil {
@@ -144,7 +144,7 @@ func parseLine(l *string) (*progress, error) {
 		return &progress{percentage: percentHundred, transferred: total, total: total}, nil
 	}
 
-	prMatches := findNamedMatches(progressRegex, l)
+	prMatches := findNamedMatches(progressRegex, line)
 	if len(prMatches) == 0 {
 		return nil, errNoMatch
 	}

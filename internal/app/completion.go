@@ -157,14 +157,14 @@ func buildPVCsCompletionFunc() func(cmd *cobra.Command, args []string,
 
 		kubeconfig, _ := cmd.Flags().GetString(FlagSourceKubeconfig)
 		context, _ := cmd.Flags().GetString(FlagSourceContext)
-		ns, _ := cmd.Flags().GetString(FlagSourceNamespace)
+		namespace, _ := cmd.Flags().GetString(FlagSourceNamespace)
 		if len(args) == 1 {
 			kubeconfig, _ = cmd.Flags().GetString(FlagDestKubeconfig)
 			context, _ = cmd.Flags().GetString(FlagDestContext)
-			ns, _ = cmd.Flags().GetString(FlagDestNamespace)
+			namespace, _ = cmd.Flags().GetString(FlagDestNamespace)
 		}
 
-		pvcs, err := k8s.GetPVCs(kubeconfig, context, ns)
+		pvcs, err := k8s.GetPVCs(kubeconfig, context, namespace)
 		if err != nil {
 			logger.Tracef("error: %v", err)
 

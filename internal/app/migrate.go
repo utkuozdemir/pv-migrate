@@ -55,32 +55,32 @@ func buildMigrateCmd() *cobra.Command {
 		Args:              cobra.ExactArgs(migrateCmdNumArgs),
 		ValidArgsFunction: buildPVCsCompletionFunc(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			f := cmd.Flags()
+			flags := cmd.Flags()
 
-			srcKubeconfigPath, _ := f.GetString(FlagSourceKubeconfig)
-			srcContext, _ := f.GetString(FlagSourceContext)
-			srcNS, _ := f.GetString(FlagSourceNamespace)
-			srcPath, _ := f.GetString(FlagSourcePath)
+			srcKubeconfigPath, _ := flags.GetString(FlagSourceKubeconfig)
+			srcContext, _ := flags.GetString(FlagSourceContext)
+			srcNS, _ := flags.GetString(FlagSourceNamespace)
+			srcPath, _ := flags.GetString(FlagSourcePath)
 
-			destKubeconfigPath, _ := f.GetString(FlagDestKubeconfig)
-			destContext, _ := f.GetString(FlagDestContext)
-			destNS, _ := f.GetString(FlagDestNamespace)
-			destPath, _ := f.GetString(FlagDestPath)
+			destKubeconfigPath, _ := flags.GetString(FlagDestKubeconfig)
+			destContext, _ := flags.GetString(FlagDestContext)
+			destNS, _ := flags.GetString(FlagDestNamespace)
+			destPath, _ := flags.GetString(FlagDestPath)
 
-			ignoreMounted, _ := f.GetBool(FlagIgnoreMounted)
-			srcMountReadOnly, _ := f.GetBool(FlagSourceMountReadOnly)
-			noChown, _ := f.GetBool(FlagNoChown)
-			noProgressBar, _ := f.GetBool(FlagNoProgressBar)
-			sshKeyAlg, _ := f.GetString(FlagSSHKeyAlgorithm)
-			helmValues, _ := f.GetStringSlice(FlagHelmValues)
-			helmSet, _ := f.GetStringSlice(FlagHelmSet)
-			helmSetString, _ := f.GetStringSlice(FlagHelmSetString)
-			helmSetFile, _ := f.GetStringSlice(FlagHelmSetFile)
-			strs, _ := f.GetStringSlice(FlagStrategies)
-			destHostOverride, _ := f.GetString(FlagDestHostOverride)
+			ignoreMounted, _ := flags.GetBool(FlagIgnoreMounted)
+			srcMountReadOnly, _ := flags.GetBool(FlagSourceMountReadOnly)
+			noChown, _ := flags.GetBool(FlagNoChown)
+			noProgressBar, _ := flags.GetBool(FlagNoProgressBar)
+			sshKeyAlg, _ := flags.GetString(FlagSSHKeyAlgorithm)
+			helmValues, _ := flags.GetStringSlice(FlagHelmValues)
+			helmSet, _ := flags.GetStringSlice(FlagHelmSet)
+			helmSetString, _ := flags.GetStringSlice(FlagHelmSetString)
+			helmSetFile, _ := flags.GetStringSlice(FlagHelmSetFile)
+			strs, _ := flags.GetStringSlice(FlagStrategies)
+			destHostOverride, _ := flags.GetString(FlagDestHostOverride)
 
-			deleteExtraneousFiles, _ := f.GetBool(FlagDestDeleteExtraneousFiles)
-			m := migration.Request{
+			deleteExtraneousFiles, _ := flags.GetBool(FlagDestDeleteExtraneousFiles)
+			request := migration.Request{
 				Source: &migration.PVCInfo{
 					KubeconfigPath: srcKubeconfigPath,
 					Context:        srcContext,
@@ -116,47 +116,47 @@ func buildMigrateCmd() *cobra.Command {
 					"Extraneous files will be deleted from the destination")
 			}
 
-			return engine.New().Run(&m)
+			return engine.New().Run(&request)
 		},
 	}
 
-	f := cmd.Flags()
+	flags := cmd.Flags()
 
-	f.StringP(FlagSourceKubeconfig, "k", "", "path of the kubeconfig file of the source PVC")
-	f.StringP(FlagSourceContext, "c", "", "context in the kubeconfig file of the source PVC")
-	f.StringP(FlagSourceNamespace, "n", "", "namespace of the source PVC")
-	f.StringP(FlagSourcePath, "p", "/", "the filesystem path to migrate in the the source PVC")
+	flags.StringP(FlagSourceKubeconfig, "k", "", "path of the kubeconfig file of the source PVC")
+	flags.StringP(FlagSourceContext, "c", "", "context in the kubeconfig file of the source PVC")
+	flags.StringP(FlagSourceNamespace, "n", "", "namespace of the source PVC")
+	flags.StringP(FlagSourcePath, "p", "/", "the filesystem path to migrate in the the source PVC")
 
-	f.StringP(FlagDestKubeconfig, "K", "", "path of the kubeconfig file of the destination PVC")
-	f.StringP(FlagDestContext, "C", "", "context in the kubeconfig file of the destination PVC")
-	f.StringP(FlagDestNamespace, "N", "", "namespace of the destination PVC")
-	f.StringP(FlagDestPath, "P", "/", "the filesystem path to migrate in the the destination PVC")
+	flags.StringP(FlagDestKubeconfig, "K", "", "path of the kubeconfig file of the destination PVC")
+	flags.StringP(FlagDestContext, "C", "", "context in the kubeconfig file of the destination PVC")
+	flags.StringP(FlagDestNamespace, "N", "", "namespace of the destination PVC")
+	flags.StringP(FlagDestPath, "P", "/", "the filesystem path to migrate in the the destination PVC")
 
-	f.BoolP(FlagDestDeleteExtraneousFiles, "d", false,
+	flags.BoolP(FlagDestDeleteExtraneousFiles, "d", false,
 		"delete extraneous files on the destination by using rsync's '--delete' flag")
-	f.BoolP(FlagIgnoreMounted, "i", false,
+	flags.BoolP(FlagIgnoreMounted, "i", false,
 		"do not fail if the source or destination PVC is mounted")
-	f.BoolP(FlagNoChown, "o", false, "omit chown on rsync")
-	f.BoolP(FlagNoProgressBar, "b", false, "do not display a progress bar")
-	f.BoolP(FlagSourceMountReadOnly, "R", true, "mount the source PVC in ReadOnly mode")
-	f.StringSliceP(FlagStrategies, "s", strategy.DefaultStrategies,
+	flags.BoolP(FlagNoChown, "o", false, "omit chown on rsync")
+	flags.BoolP(FlagNoProgressBar, "b", false, "do not display a progress bar")
+	flags.BoolP(FlagSourceMountReadOnly, "R", true, "mount the source PVC in ReadOnly mode")
+	flags.StringSliceP(FlagStrategies, "s", strategy.DefaultStrategies,
 		"the comma-separated list of strategies to be used in the given order")
-	f.StringP(FlagSSHKeyAlgorithm, "a", ssh.Ed25519KeyAlgorithm,
+	flags.StringP(FlagSSHKeyAlgorithm, "a", ssh.Ed25519KeyAlgorithm,
 		fmt.Sprintf("ssh key algorithm to be used. Valid values are %s",
 			strings.Join(ssh.KeyAlgorithms, ",")))
-	f.StringP(FlagDestHostOverride, "H", "",
+	flags.StringP(FlagDestHostOverride, "H", "",
 		"the override for the rsync host destination when it is run over SSH, "+
 			"in cases when you need to target a different destination IP on rsync for some reason. "+
 			"By default, it is determined by used strategy and differs across strategies. "+
 			"Has no effect for mnt2 and local strategies")
 
-	f.StringSliceP(FlagHelmValues, "f", nil,
+	flags.StringSliceP(FlagHelmValues, "f", nil,
 		"set additional Helm values by a YAML file or a URL (can specify multiple)")
-	f.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify "+
+	flags.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify "+
 		"multiple or separate values with commas: key1=val1,key2=val2)")
-	f.StringSlice(FlagHelmSetString, nil, "set additional Helm STRING values on the command line "+
+	flags.StringSlice(FlagHelmSetString, nil, "set additional Helm STRING values on the command line "+
 		"(can specify multiple or separate values with commas: key1=val1,key2=val2)")
-	f.StringSlice(FlagHelmSetFile, nil, "set additional Helm values from respective files specified "+
+	flags.StringSlice(FlagHelmSetFile, nil, "set additional Helm values from respective files specified "+
 		"via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
 
 	_ = cmd.RegisterFlagCompletionFunc(FlagSourceContext, buildKubeContextCompletionFunc(FlagSourceKubeconfig))
