@@ -77,15 +77,15 @@ resources, serviceacccounts, additional annotations etc.
 
 ## Examples
 
-To migrate contents of PersistentVolumeClaim `small-pvc` in namespace `source-ns`
-to the PersistentVolumeClaim `big-pvc` in namespace `dest-ns`, use the following command:
+See the various examples below which copy the contents of the `old-pvc` into the `new-pvc`.
 
-Minimal example, source and destination are in the currently selected namespace in the context:
+### Example 1: In a single namespace (minimal example)
+
 ```bash
 $ pv-migrate migrate old-pvc new-pvc
 ```
 
-Example with different namespaces:
+### Example 2: Between namespaces
 ```bash
 $ pv-migrate migrate \
   --source-namespace source-ns \
@@ -93,7 +93,8 @@ $ pv-migrate migrate \
   old-pvc new-pvc
 ```
 
-Between different clusters:
+### Example 3: Between different clusters
+
 ```bash
 pv-migrate migrate \
   --source-kubeconfig /path/to/source/kubeconfig \
@@ -106,7 +107,8 @@ pv-migrate migrate \
   old-pvc new-pvc
 ```
 
-With custom container images:
+### Example 4: Using custom container images from custom repository
+
 ```bash
 $ pv-migrate migrate \
   --helm-set rsync.image.repository=mycustomrepo/rsync \
@@ -115,6 +117,18 @@ $ pv-migrate migrate \
   --helm-set sshd.image.tag=v1.2.3 \
   old-pvc new-pvc
 ```
+
+### Example 5: Enabling network policies (on clusters with deny-all traffic rules)
+
+```bash
+$ pv-migrate migrate \
+  --helm-set sshd.networkPolicy.enabled=true \
+  --helm-set rsync.networkPolicy.enabled=true \
+  --source-namespace source-ns \
+  --dest-namespace dest-ns \
+  old-pvc new-pvc
+```
+
 
 **For further customization on the rendered manifests** (custom labels, annotations etc.), see the [Helm chart values](helm/pv-migrate).
 
