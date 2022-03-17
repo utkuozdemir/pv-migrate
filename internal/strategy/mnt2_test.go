@@ -14,6 +14,8 @@ import (
 )
 
 func TestCanDoSameNode(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -45,6 +47,8 @@ func TestCanDoSameNode(t *testing.T) {
 }
 
 func TestCanDoDestRWX(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -76,6 +80,8 @@ func TestCanDoDestRWX(t *testing.T) {
 }
 
 func TestCanDoSourceROX(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -107,6 +113,8 @@ func TestCanDoSourceROX(t *testing.T) {
 }
 
 func TestCannotDoSameClusterDifferentNS(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -138,6 +146,8 @@ func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 }
 
 func TestMnt2CannotDoDifferentCluster(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -170,6 +180,8 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 }
 
 func TestDetermineTargetNodeROXToTWO(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -200,6 +212,8 @@ func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 }
 
 func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"

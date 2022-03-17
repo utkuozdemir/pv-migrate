@@ -7,6 +7,8 @@ import (
 )
 
 func TestParseLogLineEndMatch(t *testing.T) {
+	t.Parallel()
+
 	l := "total size is 1,879,048,192  speedup is 31,548.30"
 	p, err := parseLine(&l)
 	assert.NoError(t, err)

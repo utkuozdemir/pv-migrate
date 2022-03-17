@@ -8,6 +8,8 @@ import (
 )
 
 func TestConfigureFancy(t *testing.T) {
+	t.Parallel()
+
 	l, err := New()
 	assert.NoError(t, err)
 	err = Configure(l, "debug", "fancy")
@@ -16,6 +18,8 @@ func TestConfigureFancy(t *testing.T) {
 }
 
 func TestConfigureJson(t *testing.T) {
+	t.Parallel()
+
 	l, err := New()
 	assert.NoError(t, err)
 	err = Configure(l, "info", "json")
@@ -24,6 +28,8 @@ func TestConfigureJson(t *testing.T) {
 }
 
 func TestBuildInvalidLevel(t *testing.T) {
+	t.Parallel()
+
 	l, err := New()
 	assert.NoError(t, err)
 	err = Configure(l, "invalid", "json")
@@ -31,6 +37,8 @@ func TestBuildInvalidLevel(t *testing.T) {
 }
 
 func TestBuildInvalidFormat(t *testing.T) {
+	t.Parallel()
+
 	l, err := New()
 	assert.NoError(t, err)
 	err = Configure(l, "debug", "invalid")

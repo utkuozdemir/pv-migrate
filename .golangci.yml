@@ -48,3 +48,8 @@ linters:
     - nilerr
     - nilnil
     - nlreturn
+    - noctx
+    - nolintlint
+    - paralleltest
+    - prealloc
+    - predeclared

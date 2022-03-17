@@ -13,6 +13,8 @@ import (
 var kubeconfig string
 
 func TestGetClusterClient(t *testing.T) {
+	t.Parallel()
+
 	c := prepareKubeconfig()
 	defer func() { _ = os.Remove(c) }()
 	clusterClient, err := GetClusterClient(c, "context-1")
@@ -38,6 +40,8 @@ func TestGetClusterClient(t *testing.T) {
 }
 
 func TestBuildK8sConfig(t *testing.T) {
+	t.Parallel()
+
 	c := prepareKubeconfig()
 	defer func() {
 		_ = os.Remove(c)
