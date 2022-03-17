@@ -31,4 +31,8 @@ linters:
     - goheader
 #    - goimports # inconsistent with gci
     - gomnd
+    - gomoddirectives
+#    - gomodguard # no need
+    - goprintffuncname
+    - gosec
     - lll

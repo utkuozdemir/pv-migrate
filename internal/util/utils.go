@@ -1,21 +1,24 @@
 package util
 
 import (
-	"math/rand"
+	"crypto/rand"
+	"fmt"
+	"math/big"
 	"net"
-	"time"
 )
 
-var (
-	letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
-	random  = rand.New(rand.NewSource(time.Now().UTC().UnixNano()))
-)
+var letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
 // RandomHexadecimalString returns a random lowercase hexadecimal string of given length.
 func RandomHexadecimalString(length int) string {
+	lengthBigInt := big.NewInt(int64(length))
 	b := make([]rune, length)
 	for i := range b {
-		b[i] = letters[random.Intn(len(letters))]
+		rnd, err := rand.Int(rand.Reader, lengthBigInt)
+		if err != nil {
+			panic(fmt.Sprintf("failed to generate random number: %v", err))
+		}
+		b[i] = letters[rnd.Int64()]
 	}
 	return string(b)
 }
