@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -23,7 +24,12 @@ const (
 	RSAKeyLengthBits = 2048
 )
 
-var KeyAlgorithms = []string{RSAKeyAlgorithm, Ed25519KeyAlgorithm}
+var (
+	KeyAlgorithms = []string{RSAKeyAlgorithm, Ed25519KeyAlgorithm}
+
+	ErrUnexpectedKeyAlgorithm         = errors.New("unexpected key algorithm")
+	ErrUnexpectedTypeEd25519PublicKey = errors.New("unexpected type for ed25519 public key")
+)
 
 func CreateSSHKeyPair(keyAlgorithm string) (string, string, error) {
 	switch keyAlgorithm {
@@ -32,7 +38,7 @@ func CreateSSHKeyPair(keyAlgorithm string) (string, string, error) {
 	case Ed25519KeyAlgorithm:
 		return createSSHEd25519KeyPair()
 	default:
-		return "", "", fmt.Errorf("unexpected key algorithm: %v", keyAlgorithm)
+		return "", "", fmt.Errorf("%w: %v", ErrUnexpectedKeyAlgorithm, keyAlgorithm)
 	}
 }
 
@@ -125,8 +131,7 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 
 	publicKey, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		return nil, fmt.Errorf("ed25519.PublicKey type assertion failed on an " +
-			"ed25519 public key, this should never happen")
+		return nil, ErrUnexpectedTypeEd25519PublicKey
 	}
 
 	pubKey := []byte(publicKey)

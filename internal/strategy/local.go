@@ -33,12 +33,18 @@ const (
 	privateKeyFileMode = 0o600
 )
 
+var (
+	ErrNoTCPAddress       = errors.New("could not get TCP address from listener")
+	ErrPortForwardTimeout = errors.New("timed out waiting for port-forward to be ready")
+	ErrSSHBinaryNotFound  = errors.New("ssh binary not found")
+)
+
 type Local struct{}
 
 func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 	_, err := exec.LookPath("ssh")
 	if err != nil {
-		return false, fmt.Errorf(":cross_mark: Error: binary not found in path: %s", "ssh")
+		return false, ErrSSHBinaryNotFound
 	}
 
 	migration := attempt.Migration
@@ -285,7 +291,7 @@ func portForwardForPod(logger *log.Entry, restConfig *rest.Config,
 	case <-readyChan:
 		return port, stopChan, nil
 	case <-time.After(portForwardTimeout):
-		return 0, nil, errors.New("timed out waiting for port-forward to be ready")
+		return 0, nil, ErrPortForwardTimeout
 	}
 }
 
@@ -305,7 +311,7 @@ func getFreePort() (int, error) {
 
 	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
 	if !ok {
-		return 0, errors.New("could not get TCP address from listener")
+		return 0, ErrNoTCPAddress
 	}
 
 	return tcpAddr.Port, nil

@@ -43,6 +43,8 @@ var (
 	}
 
 	helmProviders = getter.All(cli.New())
+
+	ErrStrategyNotFound = errors.New("strategy not found")
 )
 
 type Strategy interface {
@@ -58,7 +60,7 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	for _, name := range names {
 		s, ok := nameToStrategy[name]
 		if !ok {
-			return nil, fmt.Errorf("strategy not found: %s", name)
+			return nil, fmt.Errorf("%w: %s", ErrStrategyNotFound, name)
 		}
 
 		sts[name] = s

@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+var ErrSSHOnBothSrcAndDest = fmt.Errorf("cannot use ssh on both source and destination")
+
 type Cmd struct {
 	Command     string
 	Port        int
@@ -23,7 +25,7 @@ type Cmd struct {
 
 func (c *Cmd) Build() (string, error) {
 	if c.SrcUseSSH && c.DestUseSSH {
-		return "", fmt.Errorf("cannot use ssh on both source and destination")
+		return "", ErrSSHOnBothSrcAndDest
 	}
 
 	cmd := "rsync"

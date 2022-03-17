@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 const (
 	podWatchTimeout = 2 * time.Minute
 )
+
+var ErrUnexpectedTypePodWatch = errors.New("unexpected type while watching pods")
 
 func WaitForPod(cli kubernetes.Interface, namespace, labelSelector string) (*corev1.Pod, error) {
 	var result *corev1.Pod
@@ -44,8 +47,8 @@ func WaitForPod(cli kubernetes.Interface, namespace, labelSelector string) (*cor
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing pods "+
-					"in ns %s with label selector %s", namespace, labelSelector)
+				return false, fmt.Errorf("%w: ns: %s, labelSelector: %s",
+					ErrUnexpectedTypePodWatch, namespace, labelSelector)
 			}
 
 			phase := res.Status.Phase
@@ -84,7 +87,7 @@ func waitForPodTermination(cli kubernetes.Interface, namespace string, name stri
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", namespace, name)
+				return false, fmt.Errorf("%w: %s/%s", ErrUnexpectedTypePodWatch, namespace, name)
 			}
 
 			phase := res.Status.Phase

@@ -26,7 +26,7 @@ linters:
     - gocyclo
     - godot
     - godox
-#    - goerr113
+    - goerr113
     - gofumpt
     - goheader
 #    - goimports # inconsistent with gci

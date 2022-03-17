@@ -16,8 +16,14 @@ import (
 	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
-//go:embed helm-chart.tgz
-var chartBytes []byte
+var (
+	//go:embed helm-chart.tgz
+	chartBytes []byte
+
+	ErrMounted             = errors.New("PVC is mounted to a node and ignore-mounted is not requested")
+	ErrDestPVCNotWritable  = errors.New("destination PVC is not writable")
+	ErrAllStrategiesFailed = errors.New("all strategies failed")
+)
 
 const (
 	attemptIDLength = 5
@@ -90,7 +96,7 @@ func (m *Migrator) Run(request *migration.Request) error {
 				"will try with the remaining strategies")
 	}
 
-	return errors.New("all strategies have failed")
+	return ErrAllStrategiesFailed
 }
 
 func (m *Migrator) buildMigration(request *migration.Request) (*migration.Migration, error) {
@@ -140,7 +146,7 @@ func (m *Migrator) buildMigration(request *migration.Request) (*migration.Migrat
 	}
 
 	if !(destPvcInfo.SupportsRWO || destPvcInfo.SupportsRWX) {
-		return nil, errors.New("destination pvc is not writeable")
+		return nil, ErrDestPVCNotWritable
 	}
 
 	mig := migration.Migration{
@@ -188,7 +194,7 @@ func handleMountedPVCs(logger *log.Entry, r *migration.Request, sourcePvcInfo, d
 	}
 
 	if !(destPvcInfo.SupportsRWO || destPvcInfo.SupportsRWX) {
-		return errors.New("destination pvc is not writeable")
+		return ErrDestPVCNotWritable
 	}
 
 	return nil
@@ -206,6 +212,5 @@ func handleMounted(logger *log.Entry, info *pvc.Info, ignoreMounted bool) error 
 		return nil
 	}
 
-	return fmt.Errorf("PVC %s is mounted to node %s and ignore-mounted is not requested",
-		info.Claim.Name, info.MountedNode)
+	return fmt.Errorf("%w: node: %s claim %s", ErrMounted, info.MountedNode, info.Claim.Name)
 }

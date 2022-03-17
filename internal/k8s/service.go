@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,6 +19,8 @@ import (
 const (
 	serviceLbCheckTimeout = 120 * time.Second
 )
+
+var ErrUnexpectedTypeServiceWatch = errors.New("unexpected type while watching service")
 
 func GetServiceAddress(cli kubernetes.Interface, namespace string, name string) (string, error) {
 	var result string
@@ -45,7 +48,7 @@ func GetServiceAddress(cli kubernetes.Interface, namespace string, name string) 
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Service)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing service %s/%s", namespace, name)
+				return false, fmt.Errorf("%w: %s/%s", ErrUnexpectedTypeServiceWatch, namespace, name)
 			}
 
 			if res.Spec.Type == corev1.ServiceTypeClusterIP {

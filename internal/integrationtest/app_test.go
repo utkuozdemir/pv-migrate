@@ -69,6 +69,10 @@ var (
 		dataFilePath, dataFilePath, dataFilePath)
 	checkExtraDataShellCommand = "ls " + extraDataFilePath
 	clearDataShellCommand      = "find /volume -mindepth 1 -delete"
+
+	ErrPodExecStderr          = errors.New("pod exec stderr")
+	ErrUnexpectedTypePVCWatch = errors.New("unexpected type while watching PVC")
+	ErrUnexpectedTypePodWatch = errors.New("unexpected type while watching pod")
 )
 
 func TestMain(m *testing.M) {
@@ -719,7 +723,7 @@ func waitUntilPodIsRunning(cli *k8s.ClusterClient, namespace string, name string
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", namespace, name)
+				return false, fmt.Errorf("%w: %s/%s", ErrUnexpectedTypePodWatch, namespace, name)
 			}
 
 			return res.Status.Phase == corev1.PodRunning, nil
@@ -753,7 +757,7 @@ func waitUntilPVCIsBound(cli *k8s.ClusterClient, namespace string, name string) 
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.PersistentVolumeClaim)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing pvc %s/%s", namespace, name)
+				return false, fmt.Errorf("%w: %s/%s", ErrUnexpectedTypePVCWatch, namespace, name)
 			}
 
 			return res.Status.Phase == corev1.ClaimBound, nil
@@ -802,7 +806,7 @@ func execInPod(cli *k8s.ClusterClient, ns string, name string, cmd string) (stri
 	stderr := stderrBuffer.String()
 
 	if stderr != "" {
-		result = multierror.Append(result, errors.New(stderr))
+		result = multierror.Append(result, fmt.Errorf("%w: %s", ErrPodExecStderr, stderr))
 	}
 
 	return stdout, result.ErrorOrNil()

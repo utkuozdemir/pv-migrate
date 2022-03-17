@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -32,6 +33,9 @@ var (
 		LevelTrace, LevelDebug, LevelInfo, LevelWarn,
 		LevelError, LevelFatal, LevelPanic,
 	}
+
+	ErrUnknownLogLevel  = errors.New("unknown log level")
+	ErrUnknownLogFormat = errors.New("unknown log format")
 )
 
 func New() (*log.Entry, error) {
@@ -80,7 +84,7 @@ func getLogFormatter(format string) (log.Formatter, error) {
 		return &fancyFormatter{}, nil
 	}
 
-	return nil, fmt.Errorf("unknown log format: %s", format)
+	return nil, fmt.Errorf("%w: %s", ErrUnknownLogFormat, format)
 }
 
 func getLogLevel(level string) (log.Level, error) {
@@ -101,7 +105,7 @@ func getLogLevel(level string) (log.Level, error) {
 		return log.PanicLevel, nil
 	}
 
-	return 0, fmt.Errorf("unknown log level: %s", level)
+	return 0, fmt.Errorf("%w: %s", ErrUnknownLogLevel, level)
 }
 
 type fancyFormatter struct{}

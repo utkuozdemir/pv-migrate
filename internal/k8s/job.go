@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -11,6 +12,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )
+
+var ErrJobFailed = errors.New("job failed")
 
 func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 	namespace string, name string, progressBarRequested bool,
@@ -49,7 +52,7 @@ func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 	if *terminatedPod != corev1.PodSucceeded {
 		successCh <- false
 
-		err := fmt.Errorf("job %s failed", name)
+		err := fmt.Errorf("%w: %s", ErrJobFailed, name)
 
 		return err
 	}
