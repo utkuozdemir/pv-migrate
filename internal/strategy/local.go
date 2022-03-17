@@ -28,6 +28,9 @@ const (
 
 	localSrcMountPath  = "/source"
 	localDestMountPath = "/dest"
+
+	localSSHPort       = 22
+	privateKeyFileMode = 0o600
 )
 
 type Local struct{}
@@ -231,7 +234,7 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 
 	name := file.Name()
 
-	err = os.Chmod(name, 0o600)
+	err = os.Chmod(name, privateKeyFileMode)
 	if err != nil {
 		return "", err
 	}
@@ -258,7 +261,7 @@ func portForwardForPod(logger *log.Entry, restConfig *rest.Config,
 			PodNs:      ns,
 			PodName:    name,
 			LocalPort:  port,
-			PodPort:    22,
+			PodPort:    localSSHPort,
 			StopCh:     stopChan,
 			ReadyCh:    readyChan,
 		})

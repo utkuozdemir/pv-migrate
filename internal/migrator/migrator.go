@@ -19,6 +19,10 @@ import (
 //go:embed helm-chart.tgz
 var chartBytes []byte
 
+const (
+	attemptIDLength = 5
+)
+
 type (
 	strategyMapGetter   func(names []string) (map[string]strategy.Strategy, error)
 	clusterClientGetter func(kubeconfigPath string, context string) (*k8s.ClusterClient, error)
@@ -55,7 +59,7 @@ func (m *migrator) Run(mig *migration.Request) error {
 			len(nameToStrategyMap), strs)
 
 	for _, name := range mig.Strategies {
-		id := util.RandomHexadecimalString(5)
+		id := util.RandomHexadecimalString(attemptIDLength)
 		e := migration.Attempt{
 			ID:                    id,
 			HelmReleaseNamePrefix: "pv-migrate-" + id,

@@ -1,3 +1,4 @@
+# https://golangci-lint.run/usage/linters/
 linters:
   enable:
     - asciicheck
@@ -29,4 +30,5 @@ linters:
     - gofumpt
     - goheader
 #    - goimports # inconsistent with gci
+    - gomnd
     - lll

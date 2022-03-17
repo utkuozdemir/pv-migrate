@@ -146,7 +146,7 @@ func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command,
 func buildPVCsCompletionFunc() func(cmd *cobra.Command, args []string,
 	toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) >= 2 {
+		if len(args) >= migrateCmdNumArgs {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 

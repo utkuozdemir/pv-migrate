@@ -27,6 +27,8 @@ const (
 	SvcStrategy   = "svc"
 	LbSvcStrategy = "lbsvc"
 	LocalStrategy = "local"
+
+	helmValuesYAMLIndent = 2
 )
 
 var (
@@ -187,7 +189,7 @@ func writeHelmValuesToTempFile(id string, vals map[string]interface{}) (string, 
 	defer func() { _ = f.Close() }()
 
 	encoder := yaml.NewEncoder(f)
-	encoder.SetIndent(2)
+	encoder.SetIndent(helmValuesYAMLIndent)
 	err = encoder.Encode(vals)
 	if err != nil {
 		return "", err

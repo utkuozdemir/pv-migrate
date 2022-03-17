@@ -18,6 +18,13 @@ var (
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
 
+const (
+	percentHundred = 100
+
+	bytesTransferredIntBase   = 10
+	bytesTransferredInt64Bits = 64
+)
+
 type LogTail struct {
 	LogReaderFunc   func() (io.ReadCloser, error)
 	SuccessCh       <-chan bool
@@ -65,7 +72,7 @@ func (l *LogTail) tailWithProgressBar() {
 		if pr != nil {
 			bar.ChangeMax64(pr.total)
 			_ = bar.Set64(pr.transferred)
-			completed = pr.percentage == 100
+			completed = pr.percentage == percentHundred
 		}
 	}, func() {
 		if bar == nil {
@@ -128,7 +135,7 @@ func parseLine(l *string) (*progress, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &progress{percentage: 100, transferred: total, total: total}, nil
+		return &progress{percentage: percentHundred, transferred: total, total: total}, nil
 	}
 
 	prMatches := findNamedMatches(progressRegex, l)
@@ -150,7 +157,7 @@ func parseLine(l *string) (*progress, error) {
 	if err != nil {
 		return nil, err
 	}
-	total := int64((float64(transferred) / float64(percentage)) * 100)
+	total := int64((float64(transferred) / float64(percentage)) * percentHundred)
 
 	if transferred > total {
 		// in case of a rounding error, update total, since transferred is more accurate
@@ -161,7 +168,8 @@ func parseLine(l *string) (*progress, error) {
 }
 
 func parseNumBytes(numBytes string) (int64, error) {
-	return strconv.ParseInt(strings.ReplaceAll(numBytes, ",", ""), 10, 64)
+	return strconv.ParseInt(strings.ReplaceAll(numBytes, ",", ""),
+		bytesTransferredIntBase, bytesTransferredInt64Bits)
 }
 
 func findNamedMatches(r *regexp.Regexp, str *string) map[string]string {

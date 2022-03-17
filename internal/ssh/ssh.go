@@ -19,6 +19,8 @@ type KeyAlgorithm string
 const (
 	RSAKeyAlgorithm     = "rsa"
 	Ed25519KeyAlgorithm = "ed25519"
+
+	RSAKeyLengthBits = 2048
 )
 
 var KeyAlgorithms = []string{RSAKeyAlgorithm, Ed25519KeyAlgorithm}
@@ -35,7 +37,7 @@ func CreateSSHKeyPair(keyAlgorithm string) (string, string, error) {
 }
 
 func createSSHRSAKeyPair() (string, string, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := rsa.GenerateKey(rand.Reader, RSAKeyLengthBits)
 	if err != nil {
 		return "", "", err
 	}

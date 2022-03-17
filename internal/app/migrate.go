@@ -37,6 +37,8 @@ const (
 	FlagHelmSet       = "helm-set"
 	FlagHelmSetString = "helm-set-string"
 	FlagHelmSetFile   = "helm-set-file"
+
+	migrateCmdNumArgs = 2
 )
 
 var completionFuncNoFileComplete = func(cmd *cobra.Command, args []string,
@@ -50,7 +52,7 @@ func buildMigrateCmd() *cobra.Command {
 		Use:               CommandMigrate + " <source-pvc> <dest-pvc>",
 		Aliases:           []string{"m"},
 		Short:             "Migrate data from one Kubernetes PersistentVolumeClaim to another",
-		Args:              cobra.ExactArgs(2),
+		Args:              cobra.ExactArgs(migrateCmdNumArgs),
 		ValidArgsFunction: buildPVCsCompletionFunc(),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			f := cmd.Flags()
