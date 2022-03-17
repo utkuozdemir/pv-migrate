@@ -62,6 +62,7 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 
 		sts[name] = s
 	}
+
 	return sts, nil
 }
 
@@ -79,6 +80,7 @@ func registerCleanupHook(a *migration.Attempt, releaseNames []string) chan<- boo
 			return
 		}
 	}()
+
 	return doneCh
 }
 
@@ -102,10 +104,10 @@ func cleanup(a *migration.Attempt, releaseNames []string) {
 		}
 	}
 
-	err := result.ErrorOrNil()
-	if err != nil {
+	if err := result.ErrorOrNil(); err != nil {
 		logger.WithError(err).
 			Warn(":large_orange_diamond: Cleanup failed, you might want to clean up manually")
+
 		return
 	}
 
@@ -126,6 +128,7 @@ func cleanupForPVC(logger *log.Entry, helmReleaseName string, pvcInfo *pvc.Info)
 	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) && !apierrors.IsNotFound(err) {
 		return err
 	}
+
 	return nil
 }
 
@@ -136,6 +139,7 @@ func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configu
 	if err != nil {
 		return nil, err
 	}
+
 	return actionConfig, nil
 }
 
@@ -178,6 +182,7 @@ func installHelmChart(a *migration.Attempt, pvcInfo *pvc.Info, name string,
 	}
 
 	_, err = install.Run(mig.Chart, vals)
+
 	return err
 }
 

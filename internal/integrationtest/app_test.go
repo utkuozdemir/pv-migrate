@@ -446,6 +446,7 @@ func setup() error {
 	}
 
 	_, err = execInPod(mainClusterCli, ns1, "source", generateDataShellCommand)
+
 	return err
 }
 
@@ -461,6 +462,7 @@ func setupNSs() error {
 	}
 
 	_, err = createNS(extraClusterCli, ns3)
+
 	return err
 }
 
@@ -519,6 +521,7 @@ func setupPods() error {
 	}
 
 	_, err = createPod(extraClusterCli, ns3, "dest", "dest")
+
 	return err
 }
 
@@ -544,6 +547,7 @@ func setupPVCs() error {
 	}
 
 	_, err = createPVC(extraClusterCli, ns3, "dest")
+
 	return err
 }
 
@@ -579,6 +583,7 @@ func setupPVCsWithLongName() error {
 	}
 
 	_, err = execInPod(mainClusterCli, ns1, "long-source", generateDataShellCommand)
+
 	return err
 }
 
@@ -596,6 +601,7 @@ func teardown() error {
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
+
 	return result.ErrorOrNil()
 }
 
@@ -604,6 +610,7 @@ func userHomeDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return usr.HomeDir, nil
 }
 
@@ -641,6 +648,7 @@ func createPod(cli *k8s.ClusterClient, ns string, name string, pvc string) (*cor
 			},
 		},
 	}
+
 	return cli.KubeClient.CoreV1().
 		Pods(ns).Create(context.TODO(), &p, metav1.CreateOptions{})
 }
@@ -676,10 +684,12 @@ func waitUntilPodIsRunning(cli *k8s.ClusterClient, ns string, name string) error
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.Watch(ctx, options)
 		},
 	}
@@ -706,10 +716,12 @@ func waitUntilPVCIsBound(cli *k8s.ClusterClient, ns string, name string) error {
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.Watch(ctx, options)
 		},
 	}
@@ -783,6 +795,7 @@ func clearDests() error {
 	}
 
 	_, err = execInPod(extraClusterCli, ns3, "dest", clearDataShellCommand)
+
 	return err
 }
 
@@ -797,6 +810,7 @@ func createNS(cli *k8s.ClusterClient, name string) (*corev1.Namespace, error) {
 
 func deleteNs(cli *k8s.ClusterClient, name string) error {
 	namespaces := cli.KubeClient.CoreV1().Namespaces()
+
 	return namespaces.Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
@@ -810,5 +824,6 @@ func runCliApp(cmd string) error {
 
 	cliApp := app.New(logger, "", "", "")
 	cliApp.SetArgs(strings.Fields(cmd))
+
 	return cliApp.Execute()
 }

@@ -76,6 +76,7 @@ func getLogFormatter(format string) (log.Formatter, error) {
 	case FormatFancy:
 		return &fancyFormatter{}, nil
 	}
+
 	return nil, fmt.Errorf("unknown log format: %s", format)
 }
 
@@ -105,6 +106,7 @@ type fancyFormatter struct{}
 func (f *fancyFormatter) Format(e *log.Entry) ([]byte, error) {
 	msg := emoji.Sprintf("%s\n", e.Message)
 	bytes := []byte(msg)
+
 	return bytes, nil
 }
 

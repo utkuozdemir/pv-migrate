@@ -60,5 +60,6 @@ func TestBuildK8sConfig(t *testing.T) {
 func prepareKubeconfig() string {
 	testConfig, _ := ioutil.TempFile("", "pv-migrate-testconfig-*.yaml")
 	_, _ = testConfig.WriteString(kubeconfig)
+
 	return testConfig.Name()
 }

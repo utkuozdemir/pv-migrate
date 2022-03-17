@@ -22,6 +22,7 @@ func (r *Mnt2) canDo(t *migration.Migration) bool {
 	}
 
 	sameNode := s.MountedNode == d.MountedNode
+
 	return sameNode || s.SupportsROX || s.SupportsRWX || d.SupportsRWX
 }
 
@@ -89,6 +90,7 @@ func (r *Mnt2) Run(a *migration.Attempt) (bool, error) {
 	kubeClient := m.SourceInfo.ClusterClient.KubeClient
 	jobName := a.HelmReleaseNamePrefix + "-rsync"
 	err = k8s.WaitForJobCompletion(a.Logger, kubeClient, ns, jobName, showProgressBar)
+
 	return true, err
 }
 
@@ -101,5 +103,6 @@ func determineTargetNode(t *migration.Migration) string {
 	if !s.SupportsROX && !s.SupportsRWX {
 		return s.MountedNode
 	}
+
 	return d.MountedNode
 }

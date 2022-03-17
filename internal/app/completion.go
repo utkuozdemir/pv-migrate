@@ -68,6 +68,7 @@ func buildCompletionCmd() *cobra.Command {
 			case "powershell":
 				return cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
 			}
+
 			return nil
 		},
 	}
@@ -80,8 +81,10 @@ func buildKubeContextCompletionFunc(kubeconfigFlag string) func(cmd *cobra.Comma
 		contexts, err := k8s.GetContexts(srcKubeconfig)
 		if err != nil {
 			logger.Tracef("error: %v", err)
+
 			return nil, cobra.ShellCompDirectiveError
 		}
+
 		return contexts, cobra.ShellCompDirectiveDefault
 	}
 }
@@ -94,8 +97,10 @@ func buildKubeNSCompletionFunc(kubeconfigFlag string, contextFlag string) func(c
 		contexts, err := k8s.GetNamespaces(srcKubeconfig, srcContext)
 		if err != nil {
 			logger.Tracef("error: %v", err)
+
 			return nil, cobra.ShellCompDirectiveError
 		}
+
 		return contexts, cobra.ShellCompDirectiveDefault
 	}
 }
@@ -162,6 +167,7 @@ func buildPVCsCompletionFunc() func(cmd *cobra.Command, args []string,
 		pvcs, err := k8s.GetPVCs(kubeconfig, context, ns)
 		if err != nil {
 			logger.Tracef("error: %v", err)
+
 			return nil, cobra.ShellCompDirectiveError
 		}
 

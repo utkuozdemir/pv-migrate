@@ -25,6 +25,7 @@ func GetContexts(kubeconfigPath string) ([]string, error) {
 		contextNames[index] = name
 		index++
 	}
+
 	return contextNames, nil
 }
 
@@ -43,6 +44,7 @@ func GetNamespaces(kubeconfigPath string, ctx string) ([]string, error) {
 	for i, ns := range nss.Items {
 		nsNames[i] = ns.Name
 	}
+
 	return nsNames, nil
 }
 
@@ -61,5 +63,6 @@ func GetPVCs(kubeconfigPath string, ctx string, ns string) ([]string, error) {
 	for i, pvc := range pvcs.Items {
 		pvcNames[i] = pvc.Name
 	}
+
 	return pvcNames, nil
 }

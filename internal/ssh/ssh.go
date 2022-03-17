@@ -153,5 +153,6 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 	w.PrivKeyBlock = ssh.Marshal(pk1)
 
 	magic = append(magic, ssh.Marshal(w)...)
+
 	return magic, nil
 }

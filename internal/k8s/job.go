@@ -41,15 +41,18 @@ func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 	p, err := waitForPodTermination(cli, pod.Namespace, pod.Name)
 	if err != nil {
 		successCh <- false
+
 		return err
 	}
 
 	if *p != corev1.PodSucceeded {
 		successCh <- false
 		err := fmt.Errorf("job %s failed", name)
+
 		return err
 	}
 
 	successCh <- true
+
 	return nil
 }

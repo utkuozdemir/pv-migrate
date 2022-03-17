@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -16,6 +17,8 @@ import (
 var (
 	progressRegex = regexp.MustCompile(`\s*(?P<bytes>[0-9]+(,[0-9]+)*)\s+(?P<percentage>[0-9]{1,3})%`)
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
+
+	errNoMatch = errors.New("no match")
 )
 
 const (
@@ -41,6 +44,7 @@ type progress struct {
 func (l *LogTail) Start() {
 	if l.ShowProgressBar {
 		l.tailWithProgressBar()
+
 		return
 	}
 	l.tailNoProgressBar()
@@ -118,6 +122,7 @@ func (l *LogTail) tail(beforeFunc func(),
 			if success {
 				successFunc()
 			}
+
 			return true, nil
 		default:
 			if !sc.Scan() {
@@ -135,12 +140,13 @@ func parseLine(l *string) (*progress, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		return &progress{percentage: percentHundred, transferred: total, total: total}, nil
 	}
 
 	prMatches := findNamedMatches(progressRegex, l)
 	if len(prMatches) == 0 {
-		return nil, nil
+		return nil, errNoMatch
 	}
 
 	percentage, err := strconv.Atoi(prMatches["percentage"])
@@ -178,5 +184,6 @@ func findNamedMatches(r *regexp.Regexp, str *string) map[string]string {
 	for i, name := range match {
 		results[r.SubexpNames()[i]] = name
 	}
+
 	return results
 }

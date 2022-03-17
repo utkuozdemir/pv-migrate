@@ -65,6 +65,7 @@ func (r *LbSvc) Run(a *migration.Attempt) (bool, error) {
 	kubeClient := d.ClusterClient.KubeClient
 	jobName := destReleaseName + "-rsync"
 	err = k8s.WaitForJobCompletion(a.Logger, kubeClient, destNs, jobName, showProgressBar)
+
 	return true, err
 }
 
@@ -141,5 +142,6 @@ func formatSSHTargetHost(host string) string {
 	if util.IsIPv6(host) {
 		return fmt.Sprintf("[%s]", host)
 	}
+
 	return host
 }

@@ -28,10 +28,12 @@ func WaitForPod(cli kubernetes.Interface, ns, labelSelector string) (*corev1.Pod
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.LabelSelector = labelSelector
+
 			return resCli.List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.LabelSelector = labelSelector
+
 			return resCli.Watch(ctx, options)
 		},
 	}
@@ -47,6 +49,7 @@ func WaitForPod(cli kubernetes.Interface, ns, labelSelector string) (*corev1.Pod
 			phase := res.Status.Phase
 			if phase != corev1.PodPending {
 				result = res
+
 				return true, nil
 			}
 
@@ -65,10 +68,12 @@ func waitForPodTermination(cli kubernetes.Interface, ns string, name string) (*c
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.Watch(ctx, options)
 		},
 	}
@@ -83,6 +88,7 @@ func waitForPodTermination(cli kubernetes.Interface, ns string, name string) (*c
 			phase := res.Status.Phase
 			if phase != corev1.PodRunning {
 				result = &phase
+
 				return true, nil
 			}
 

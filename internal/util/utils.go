@@ -20,6 +20,7 @@ func RandomHexadecimalString(length int) string {
 		}
 		b[i] = letters[rnd.Int64()]
 	}
+
 	return string(b)
 }
 
@@ -28,5 +29,6 @@ func IsIPv6(host string) bool {
 	if ip == nil {
 		return false
 	}
+
 	return ip.To4() == nil
 }

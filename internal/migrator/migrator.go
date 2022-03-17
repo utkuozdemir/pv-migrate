@@ -74,11 +74,13 @@ func (m *migrator) Run(mig *migration.Request) error {
 		if !accepted {
 			sLogger.Infof(":fox: Strategy '%s' cannot handle this migration, "+
 				"will try the next one", name)
+
 			continue
 		}
 
 		if runErr == nil {
 			sLogger.Info(":check_mark_button: Migration succeeded")
+
 			return nil
 		}
 
@@ -197,8 +199,10 @@ func handleMounted(logger *log.Entry, info *pvc.Info, ignoreMounted bool) error 
 	if ignoreMounted {
 		logger.Infof(":bulb: PVC %s is mounted to node %s, ignoring...",
 			info.Claim.Name, info.MountedNode)
+
 		return nil
 	}
+
 	return fmt.Errorf("PVC %s is mounted to node %s and ignore-mounted is not requested",
 		info.Claim.Name, info.MountedNode)
 }

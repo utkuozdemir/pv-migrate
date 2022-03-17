@@ -60,6 +60,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	str1 := mockStrategy{
 		runFunc: func(_ *migration.Attempt) (bool, error) {
 			result = append(result, 1)
+
 			return false, nil
 		},
 	}
@@ -67,6 +68,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	str2 := mockStrategy{
 		runFunc: func(_ *migration.Attempt) (bool, error) {
 			result = append(result, 2)
+
 			return true, nil
 		},
 	}
@@ -74,6 +76,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	str3 := mockStrategy{
 		runFunc: func(_ *migration.Attempt) (bool, error) {
 			result = append(result, 3)
+
 			return false, nil
 		},
 	}

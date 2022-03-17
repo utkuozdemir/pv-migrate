@@ -133,6 +133,7 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 
 	err = <-errorCh
 	successCh <- err == nil
+
 	return true, err
 }
 
@@ -158,11 +159,13 @@ func (r *Local) installLocalReleases(a *migration.Attempt) (srcReleaseName, dest
 	}
 
 	err = installLocalOnDest(a, destReleaseName, publicKey, localDestMountPath)
+
 	return
 }
 
 func getSshdPodForHelmRelease(pvcInfo *pvc.Info, name string) (*corev1.Pod, error) {
 	labelSelector := "app.kubernetes.io/component=sshd,app.kubernetes.io/instance=" + name
+
 	return k8s.WaitForPod(pvcInfo.ClusterClient.KubeClient, pvcInfo.Claim.Namespace, labelSelector)
 }
 
@@ -240,6 +243,7 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 	}
 
 	defer func() { _ = file.Close() }()
+
 	return name, nil
 }
 

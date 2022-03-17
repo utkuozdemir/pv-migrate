@@ -35,6 +35,7 @@ func (c *HelmRESTClientGetter) ToDiscoveryClient() (discovery.CachedDiscoveryInt
 
 	config.Burst = 100
 	discoveryClient, _ := discovery.NewDiscoveryClientForConfig(config)
+
 	return memory.NewMemCacheClient(discoveryClient), nil
 }
 
@@ -46,6 +47,7 @@ func (c *HelmRESTClientGetter) ToRESTMapper() (meta.RESTMapper, error) {
 
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
 	expander := restmapper.NewShortcutExpander(mapper, discoveryClient)
+
 	return expander, nil
 }
 

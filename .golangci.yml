@@ -35,4 +35,16 @@ linters:
 #    - gomodguard # no need
     - goprintffuncname
     - gosec
+    - grouper
+    - ifshort
+    - importas
+#    - ireturn # TODO revisit
     - lll
+    - maintidx
+    - makezero
+    - misspell
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnil
+    - nlreturn

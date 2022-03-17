@@ -29,10 +29,12 @@ func GetServiceAddress(cli kubernetes.Interface, ns string, name string) (string
 	lw := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.Watch(ctx, options)
 		},
 	}
@@ -46,15 +48,18 @@ func GetServiceAddress(cli kubernetes.Interface, ns string, name string) (string
 
 			if res.Spec.Type == corev1.ServiceTypeClusterIP {
 				result = res.Name + "." + res.Namespace
+
 				return true, nil
 			}
 
 			if len(res.Status.LoadBalancer.Ingress) > 0 {
 				result = res.Status.LoadBalancer.Ingress[0].IP
+
 				return true, nil
 			}
 
 			return false, nil
 		})
+
 	return result, err
 }

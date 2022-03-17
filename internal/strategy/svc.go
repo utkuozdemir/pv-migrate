@@ -13,6 +13,7 @@ func (r *Svc) canDo(t *migration.Migration) bool {
 	s := t.SourceInfo
 	d := t.DestInfo
 	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
+
 	return sameCluster
 }
 
@@ -102,5 +103,6 @@ func (r *Svc) Run(a *migration.Attempt) (bool, error) {
 	kubeClient := m.SourceInfo.ClusterClient.KubeClient
 	jobName := releaseName + "-rsync"
 	err = k8s.WaitForJobCompletion(a.Logger, kubeClient, destNs, jobName, showProgressBar)
+
 	return true, err
 }
