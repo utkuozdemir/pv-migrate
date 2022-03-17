@@ -65,6 +65,7 @@ func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 	if err != nil {
 		return true, err
 	}
+
 	defer func() { srcStopChan <- struct{}{} }()
 
 	destSshdPod, err := getSshdPodForHelmRelease(destInfo, destReleaseName)
@@ -99,6 +100,7 @@ func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 		DestUseSSH:  true,
 		DestSSHHost: "localhost",
 	}
+
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
 		return true, err
@@ -116,6 +118,7 @@ func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 	cmd.Stderr = writer
 
 	errorCh := make(chan error)
+
 	go func() { errorCh <- cmd.Run() }()
 
 	showProgressBar := !attempt.Migration.Request.NoProgressBar &&
@@ -142,6 +145,7 @@ func (r *Local) installLocalReleases(attempt *migration.Attempt) (srcReleaseName
 ) {
 	attempt.Migration.Logger.Info(":key: Generating SSH key pair")
 	keyAlgorithm := attempt.Migration.Request.KeyAlgorithm
+
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return
@@ -220,6 +224,7 @@ func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey, dest
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = os.Remove(valsFile) }()
 
 	return installHelmChart(attempt, destInfo, releaseName, vals)
@@ -230,6 +235,7 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	_, err = file.WriteString(privateKey)
 	if err != nil {
 		return "", err
@@ -294,6 +300,7 @@ func getFreePort() (int, error) {
 	if err != nil {
 		return 0, err
 	}
+
 	defer func() { _ = listener.Close() }()
 
 	tcpAddr, ok := listener.Addr().(*net.TCPAddr)

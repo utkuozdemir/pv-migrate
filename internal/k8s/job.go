@@ -16,6 +16,7 @@ func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 	namespace string, name string, progressBarRequested bool,
 ) error {
 	s := fmt.Sprintf("job-name=%s", name)
+
 	pod, err := WaitForPod(cli, namespace, s)
 	if err != nil {
 		return err
@@ -47,6 +48,7 @@ func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 
 	if *terminatedPod != corev1.PodSucceeded {
 		successCh <- false
+
 		err := fmt.Errorf("job %s failed", name)
 
 		return err

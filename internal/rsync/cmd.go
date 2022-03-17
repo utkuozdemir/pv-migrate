@@ -45,9 +45,11 @@ func (c *Cmd) Build() (string, error) {
 		"-azv", "--info=progress2,misc0,flist0",
 		"--no-inc-recursive", "-e", sshArgsStr,
 	}
+
 	if c.NoChown {
 		rsyncArgs = append(rsyncArgs, "--no-o", "--no-g")
 	}
+
 	if c.Delete {
 		rsyncArgs = append(rsyncArgs, "--delete")
 	}
@@ -62,13 +64,16 @@ func (c *Cmd) Build() (string, error) {
 
 func (c *Cmd) buildSrc() string {
 	var src strings.Builder
+
 	if c.SrcUseSSH {
 		sshDestUser := "root"
 		if c.SrcSSHUser != "" {
 			sshDestUser = c.SrcSSHUser
 		}
+
 		src.WriteString(fmt.Sprintf("%s@%s:", sshDestUser, c.SrcSSHHost))
 	}
+
 	src.WriteString(c.SrcPath)
 
 	return src.String()
@@ -76,13 +81,16 @@ func (c *Cmd) buildSrc() string {
 
 func (c *Cmd) buildDest() string {
 	var dest strings.Builder
+
 	if c.DestUseSSH {
 		sshDestUser := "root"
 		if c.DestSSHUser != "" {
 			sshDestUser = c.DestSSHUser
 		}
+
 		dest.WriteString(fmt.Sprintf("%s@%s:", sshDestUser, c.DestSSHHost))
 	}
+
 	dest.WriteString(c.DestPath)
 
 	return dest.String()

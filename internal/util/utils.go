@@ -12,13 +12,15 @@ var letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 // RandomHexadecimalString returns a random lowercase hexadecimal string of given length.
 func RandomHexadecimalString(length int) string {
 	lengthBigInt := big.NewInt(int64(length))
+
 	runes := make([]rune, length)
-	for i := range runes {
+	for rune := range runes {
 		rnd, err := rand.Int(rand.Reader, lengthBigInt)
 		if err != nil {
 			panic(fmt.Sprintf("failed to generate random number: %v", err))
 		}
-		runes[i] = letters[rnd.Int64()]
+
+		runes[rune] = letters[rnd.Int64()]
 	}
 
 	return string(runes)

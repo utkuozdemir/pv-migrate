@@ -65,3 +65,7 @@ linters:
     - unconvert
     - unparam
     - varnamelen
+    - wastedassign
+    - whitespace
+#    - wrapcheck # TODO: visit
+    - wsl

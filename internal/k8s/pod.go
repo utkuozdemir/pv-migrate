@@ -23,8 +23,10 @@ func WaitForPod(cli kubernetes.Interface, namespace, labelSelector string) (*cor
 	var result *corev1.Pod
 
 	resCli := cli.CoreV1().Pods(namespace)
+
 	ctx, cancel := context.WithTimeout(context.TODO(), podWatchTimeout)
 	defer cancel()
+
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.LabelSelector = labelSelector

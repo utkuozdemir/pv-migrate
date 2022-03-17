@@ -24,8 +24,10 @@ func GetServiceAddress(cli kubernetes.Interface, namespace string, name string) 
 
 	resCli := cli.CoreV1().Services(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+
 	ctx, cancel := context.WithTimeout(context.TODO(), serviceLbCheckTimeout)
 	defer cancel()
+
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector

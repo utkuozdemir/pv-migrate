@@ -70,6 +70,7 @@ func (m *Migrator) Run(request *migration.Request) error {
 		sLogger := attempt.Logger.WithField("strategy", name)
 		sLogger.Infof(":helicopter: Attempting strategy: %s", name)
 		s := nameToStrategyMap[name]
+
 		accepted, runErr := s.Run(&attempt)
 		if !accepted {
 			sLogger.Infof(":fox: Strategy '%s' cannot handle this migration, "+
@@ -175,10 +176,12 @@ func (m *Migrator) getClusterClients(r *migration.Request) (*k8s.ClusterClient, 
 
 func handleMountedPVCs(logger *log.Entry, r *migration.Request, sourcePvcInfo, destPvcInfo *pvc.Info) error {
 	ignoreMounted := r.IgnoreMounted
+
 	err := handleMounted(logger, sourcePvcInfo, ignoreMounted)
 	if err != nil {
 		return err
 	}
+
 	err = handleMounted(logger, destPvcInfo, ignoreMounted)
 	if err != nil {
 		return err

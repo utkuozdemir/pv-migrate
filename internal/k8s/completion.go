@@ -20,7 +20,9 @@ func GetContexts(kubeconfigPath string) ([]string, error) {
 	ctxs := rawConfig.Contexts
 
 	contextNames := make([]string, len(ctxs))
+
 	index := 0
+
 	for name := range ctxs {
 		contextNames[index] = name
 		index++
@@ -34,6 +36,7 @@ func GetNamespaces(kubeconfigPath string, ctx string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	nss, err := client.KubeClient.CoreV1().
 		Namespaces().List(context.Background(), metav1.ListOptions{})
 	if err != nil {
@@ -53,6 +56,7 @@ func GetPVCs(kubeconfigPath string, ctx string, namespace string) ([]string, err
 	if err != nil {
 		return nil, err
 	}
+
 	pvcs, err := client.KubeClient.CoreV1().
 		PersistentVolumeClaims(namespace).List(context.Background(), metav1.ListOptions{})
 	if err != nil {

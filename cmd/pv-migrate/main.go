@@ -20,12 +20,14 @@ var (
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
+
 	logger, err := applog.New()
 	if err != nil {
 		log.Fatalf("Error: %s", err.Error())
 	}
 
 	rootCmd := app.New(logger, version, commit, date)
+
 	err = rootCmd.Execute()
 	if err != nil {
 		logger.Fatalf(":cross_mark: Error: %s", err.Error())

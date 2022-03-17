@@ -78,6 +78,7 @@ func buildKubeContextCompletionFunc(kubeconfigFlag string) func(cmd *cobra.Comma
 	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		srcKubeconfig, _ := cmd.Flags().GetString(kubeconfigFlag)
+
 		contexts, err := k8s.GetContexts(srcKubeconfig)
 		if err != nil {
 			logger.Tracef("error: %v", err)
@@ -94,6 +95,7 @@ func buildKubeNSCompletionFunc(kubeconfigFlag string, contextFlag string) func(c
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		srcKubeconfig, _ := cmd.Flags().GetString(kubeconfigFlag)
 		srcContext, _ := cmd.Flags().GetString(contextFlag)
+
 		contexts, err := k8s.GetNamespaces(srcKubeconfig, srcContext)
 		if err != nil {
 			logger.Tracef("error: %v", err)
@@ -121,6 +123,7 @@ func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command,
 		}
 
 		var provided []string
+
 		split := strings.Split(toComplete, ",")
 		for _, s := range split {
 			val := strings.TrimSpace(s)
@@ -129,6 +132,7 @@ func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command,
 		}
 
 		var suggestions []string
+
 		lastPart := provided[len(provided)-1]
 		for value := range remaining {
 			if !strings.HasPrefix(value, lastPart) {
@@ -158,6 +162,7 @@ func buildPVCsCompletionFunc() func(cmd *cobra.Command, args []string,
 		kubeconfig, _ := cmd.Flags().GetString(FlagSourceKubeconfig)
 		context, _ := cmd.Flags().GetString(FlagSourceContext)
 		namespace, _ := cmd.Flags().GetString(FlagSourceNamespace)
+
 		if len(args) == 1 {
 			kubeconfig, _ = cmd.Flags().GetString(FlagDestKubeconfig)
 			context, _ = cmd.Flags().GetString(FlagDestContext)

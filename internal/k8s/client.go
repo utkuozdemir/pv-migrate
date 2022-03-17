@@ -19,6 +19,7 @@ func GetClusterClient(kubeconfigPath string, context string) (*ClusterClient, er
 	if err != nil {
 		return nil, err
 	}
+
 	kubeClient, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, err

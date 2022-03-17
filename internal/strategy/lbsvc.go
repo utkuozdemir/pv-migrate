@@ -22,10 +22,12 @@ func (r *LbSvc) Run(attempt *migration.Attempt) (bool, error) {
 
 	mig.Logger.Info(":key: Generating SSH key pair")
 	keyAlgorithm := mig.Request.KeyAlgorithm
+
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return true, err
 	}
+
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
@@ -45,6 +47,7 @@ func (r *LbSvc) Run(attempt *migration.Attempt) (bool, error) {
 
 	sourceKubeClient := attempt.Migration.SourceInfo.ClusterClient.KubeClient
 	svcName := srcReleaseName + "-sshd"
+
 	lbSvcAddress, err := k8s.GetServiceAddress(sourceKubeClient, sourceNs, svcName)
 	if err != nil {
 		return true, err
@@ -112,6 +115,7 @@ func installOnDest(attempt *migration.Attempt, releaseName, privateKey,
 		SrcUseSSH:  true,
 		SrcSSHHost: sshHost,
 	}
+
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
 		return err

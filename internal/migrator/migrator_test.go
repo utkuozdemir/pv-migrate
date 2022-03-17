@@ -35,6 +35,7 @@ func TestBuildTask(t *testing.T) {
 
 	sourceInfo := tsk.SourceInfo
 	destInfo := tsk.DestInfo
+
 	assert.Equal(t, "namespace1", sourceInfo.Claim.Namespace)
 	assert.Equal(t, "pvc1", sourceInfo.Claim.Name)
 	assert.Equal(t, "node1", sourceInfo.MountedNode)
@@ -63,6 +64,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	t.Parallel()
 
 	var result []int
+
 	str1 := mockStrategy{
 		runFunc: func(_ *migration.Attempt) (bool, error) {
 			result = append(result, 1)

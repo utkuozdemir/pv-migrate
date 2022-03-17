@@ -11,6 +11,7 @@ type Mnt2 struct{}
 func (r *Mnt2) canDo(t *migration.Migration) bool {
 	sourceInfo := t.SourceInfo
 	destInfo := t.DestInfo
+
 	sameCluster := sourceInfo.ClusterClient.RestConfig.Host == destInfo.ClusterClient.RestConfig.Host
 	if !sameCluster {
 		return false
@@ -50,6 +51,7 @@ func (r *Mnt2) Run(attempt *migration.Attempt) (bool, error) {
 		SrcPath:  srcPath,
 		DestPath: destPath,
 	}
+
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
 		return true, err
@@ -97,9 +99,11 @@ func (r *Mnt2) Run(attempt *migration.Attempt) (bool, error) {
 func determineTargetNode(t *migration.Migration) string {
 	sourceInfo := t.SourceInfo
 	destInfo := t.DestInfo
+
 	if (sourceInfo.SupportsROX || sourceInfo.SupportsRWX) && destInfo.SupportsRWX {
 		return ""
 	}
+
 	if !sourceInfo.SupportsROX && !sourceInfo.SupportsRWX {
 		return sourceInfo.MountedNode
 	}

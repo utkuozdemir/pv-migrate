@@ -77,9 +77,12 @@ func TestMain(m *testing.M) {
 		if teardownErr := teardown(); teardownErr != nil {
 			log.Errorf("failed to tearddown after test context init failure: %v", teardownErr)
 		}
+
 		log.Fatalf("failed to initialize test context: %v", err)
 	}
+
 	code := m.Run()
+
 	err = teardown()
 	if err != nil {
 		log.Errorf("failed to teardown after tests: %v", err)
@@ -102,6 +105,7 @@ func TestSameNS(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -128,6 +132,7 @@ func TestSameNSLbSvc(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -154,6 +159,7 @@ func TestNoChown(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -180,6 +186,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -219,6 +226,7 @@ func TestDifferentNS(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -279,6 +287,7 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -305,6 +314,7 @@ func TestRSA(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -332,6 +342,7 @@ func TestDifferentCluster(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -359,6 +370,7 @@ func TestLocal(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -384,6 +396,7 @@ func TestLongPVCNames(t *testing.T) {
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -405,12 +418,14 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+
 	mainClusterCli = mainCli
 
 	extraCli, err := k8s.GetClusterClient(extraClusterKubeconfig, "")
 	if err != nil {
 		return err
 	}
+
 	extraClusterCli = extraCli
 
 	if mainCli.RestConfig.Host == extraCli.RestConfig.Host {
@@ -590,14 +605,17 @@ func setupPVCsWithLongName() error {
 
 func teardown() error {
 	var result *multierror.Error
+
 	err := deleteNs(mainClusterCli, ns1)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
+
 	err = deleteNs(mainClusterCli, ns2)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
+
 	err = deleteNs(extraClusterCli, ns3)
 	if err != nil {
 		result = multierror.Append(result, err)
@@ -680,8 +698,10 @@ func createPVC(cli *k8s.ClusterClient, namespace string, name string) (*corev1.P
 func waitUntilPodIsRunning(cli *k8s.ClusterClient, namespace string, name string) error {
 	resCli := cli.KubeClient.CoreV1().Pods(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
+
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
@@ -712,8 +732,10 @@ func waitUntilPodIsRunning(cli *k8s.ClusterClient, namespace string, name string
 func waitUntilPVCIsBound(cli *k8s.ClusterClient, namespace string, name string) error {
 	resCli := cli.KubeClient.CoreV1().PersistentVolumeClaims(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
+
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
@@ -770,6 +792,7 @@ func execInPod(cli *k8s.ClusterClient, ns string, name string, cmd string) (stri
 	}
 
 	var result *multierror.Error
+
 	err = exec.Stream(remotecommand.StreamOptions{Stdout: stdoutBuffer, Stderr: stderrBuffer})
 	if err != nil {
 		result = multierror.Append(result, err)
@@ -790,6 +813,7 @@ func clearDests() error {
 	if err != nil {
 		return err
 	}
+
 	_, err = execInPod(mainClusterCli, ns2, "dest", clearDataShellCommand)
 	if err != nil {
 		return err

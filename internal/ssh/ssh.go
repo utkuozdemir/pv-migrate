@@ -57,6 +57,7 @@ func createSSHRSAKeyPair() (string, string, error) {
 	}
 
 	var pubKeyBuf strings.Builder
+
 	pubKeyBuf.Write(ssh.MarshalAuthorizedKey(pub))
 
 	return pubKeyBuf.String(), privKeyBuf.String(), nil
@@ -82,7 +83,9 @@ func createSSHEd25519KeyPair() (string, string, error) {
 	}
 
 	pub, _ := ssh.NewPublicKey(pubKey)
+
 	var pubKeyBuf strings.Builder
+
 	pubKeyBuf.Write(ssh.MarshalAuthorizedKey(pub))
 
 	return pubKeyBuf.String(), privKeyBuf.String(), nil
@@ -120,12 +123,13 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 	pk1.Check2 = uint32(rnd.Uint64())
 	pk1.Keytype = ssh.KeyAlgoED25519
 
-	pk, ok := key.Public().(ed25519.PublicKey)
+	publicKey, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
 		return nil, fmt.Errorf("ed25519.PublicKey type assertion failed on an " +
 			"ed25519 public key, this should never happen")
 	}
-	pubKey := []byte(pk)
+
+	pubKey := []byte(publicKey)
 
 	pk1.Pub = pubKey
 	pk1.Priv = key

@@ -17,7 +17,9 @@ func TestGetClusterClient(t *testing.T) {
 
 	c := prepareKubeconfig()
 	defer func() { _ = os.Remove(c) }()
+
 	clusterClient, err := GetClusterClient(c, "context-1")
+
 	assert.NoError(t, err)
 
 	rcGetter := clusterClient.RESTClientGetter

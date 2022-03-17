@@ -47,6 +47,7 @@ func (l *LogTail) Start() {
 
 		return
 	}
+
 	l.tailNoProgressBar()
 }
 
@@ -56,7 +57,9 @@ func (l *LogTail) tailNoProgressBar() {
 
 func (l *LogTail) tailWithProgressBar() {
 	completed := false
+
 	var bar *progressbar.ProgressBar
+
 	l.tailWithRetry(func() {
 		bar = progressbar.NewOptions64(
 			1,
@@ -90,11 +93,13 @@ func (l *LogTail) tailWithProgressBar() {
 // tailWithRetry will restart the log tailing if it times out.
 func (l *LogTail) tailWithRetry(beforeFunc func(), logFunc func(string), successFunc func()) {
 	failedOnce := false
+
 	for {
 		done, err := l.tail(beforeFunc, logFunc, successFunc)
 		if err != nil && !failedOnce {
 			l.Logger.WithError(err).
 				Debug(":large_orange_diamond: Cannot tail logs to display progress")
+
 			failedOnce = true
 		}
 
@@ -115,7 +120,9 @@ func (l *LogTail) tail(beforeFunc func(),
 	defer func() { _ = logReader.Close() }()
 
 	beforeFunc()
+
 	scanner := bufio.NewScanner(logReader)
+
 	for {
 		select {
 		case success := <-l.SuccessCh:
@@ -128,6 +135,7 @@ func (l *LogTail) tail(beforeFunc func(),
 			if !scanner.Scan() {
 				return false, nil
 			}
+
 			logFunc(scanner.Text())
 		}
 	}
@@ -163,6 +171,7 @@ func parseLine(line *string) (*progress, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	total := int64((float64(transferred) / float64(percentage)) * percentHundred)
 
 	if transferred > total {
@@ -179,8 +188,9 @@ func parseNumBytes(numBytes string) (int64, error) {
 }
 
 func findNamedMatches(r *regexp.Regexp, str *string) map[string]string {
-	match := r.FindStringSubmatch(*str)
 	results := map[string]string{}
+
+	match := r.FindStringSubmatch(*str)
 	for i, name := range match {
 		results[r.SubexpNames()[i]] = name
 	}

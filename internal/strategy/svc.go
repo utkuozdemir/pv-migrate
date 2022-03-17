@@ -30,10 +30,12 @@ func (r *Svc) Run(attempt *migration.Attempt) (bool, error) {
 
 	mig.Logger.Info(":key: Generating SSH key pair")
 	keyAlgorithm := mig.Request.KeyAlgorithm
+
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return true, err
 	}
+
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
 	releaseName := attempt.HelmReleaseNamePrefix
@@ -57,6 +59,7 @@ func (r *Svc) Run(attempt *migration.Attempt) (bool, error) {
 		SrcUseSSH:  true,
 		SrcSSHHost: sshTargetHost,
 	}
+
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
 		return true, err
