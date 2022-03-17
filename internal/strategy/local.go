@@ -96,8 +96,8 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 		Delete:      m.Request.DeleteExtraneousFiles,
 		SrcPath:     srcPath,
 		DestPath:    destPath,
-		DestUseSsh:  true,
-		DestSshHost: "localhost",
+		DestUseSSH:  true,
+		DestSSHHost: "localhost",
 	}
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 type LoggerContextKey string
 
 const (
-	FormatJson  = "json"
+	FormatJSON  = "json"
 	FormatFancy = "fancy"
 
 	LevelTrace = "trace"
@@ -27,7 +27,7 @@ const (
 )
 
 var (
-	Formats = []string{FormatJson, FormatFancy}
+	Formats = []string{FormatJSON, FormatFancy}
 	Levels  = []string{
 		LevelTrace, LevelDebug, LevelInfo, LevelWarn,
 		LevelError, LevelFatal, LevelPanic,
@@ -71,7 +71,7 @@ func Configure(e *log.Entry, level string, format string) error {
 
 func getLogFormatter(format string) (log.Formatter, error) {
 	switch format {
-	case FormatJson:
+	case FormatJSON:
 		return &log.JSONFormatter{}, nil
 	case FormatFancy:
 		return &fancyFormatter{}, nil

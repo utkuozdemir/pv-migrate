@@ -34,8 +34,8 @@ import (
 )
 
 const (
-	dataFileUid         = "12345"
-	dataFileGid         = "54321"
+	dataFileUID         = "12345"
+	dataFileGID         = "54321"
 	dataFilePath        = "/volume/file.txt"
 	extraDataFilePath   = "/volume/extra_file.txt"
 	generateDataContent = "DATA"
@@ -62,10 +62,10 @@ var (
 	extraClusterCli *k8s.ClusterClient
 
 	generateDataShellCommand = fmt.Sprintf("echo -n %s > %s && chown %s:%s %s",
-		generateDataContent, dataFilePath, dataFileUid, dataFileGid, dataFilePath)
+		generateDataContent, dataFilePath, dataFileUID, dataFileGID, dataFilePath)
 	generateExtraDataShellCommand = fmt.Sprintf("echo -n %s > %s",
 		generateDataContent, extraDataFilePath)
-	printDataUidGidContentShellCommand = fmt.Sprintf("stat -c '%%u' %s && stat -c '%%g' %s && cat %s",
+	printDataUIDGIDContentShellCommand = fmt.Sprintf("stat -c '%%u' %s && stat -c '%%g' %s && cat %s",
 		dataFilePath, dataFilePath, dataFilePath)
 	checkExtraDataShellCommand = "ls " + extraDataFilePath
 	clearDataShellCommand      = "find /volume -mindepth 1 -delete"
@@ -97,7 +97,7 @@ func TestSameNS(t *testing.T) {
 	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -106,8 +106,8 @@ func TestSameNS(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
@@ -123,7 +123,7 @@ func TestSameNSLbSvc(t *testing.T) {
 	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -132,8 +132,8 @@ func TestSameNSLbSvc(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
@@ -149,7 +149,7 @@ func TestNoChown(t *testing.T) {
 	cmd := fmt.Sprintf("%s -i -o -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -175,7 +175,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	cmd := fmt.Sprintf("%s -d -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -184,8 +184,8 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
@@ -214,7 +214,7 @@ func TestDifferentNS(t *testing.T) {
 	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -223,8 +223,8 @@ func TestDifferentNS(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
@@ -274,7 +274,7 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 		"%s -i -n %s -N %s -H %s source dest", migrateCmdlineWithNetpols, ns1, ns2, destHostOverride)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -283,8 +283,8 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
@@ -300,7 +300,7 @@ func TestRSA(t *testing.T) {
 	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -309,8 +309,8 @@ func TestRSA(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
@@ -327,7 +327,7 @@ func TestDifferentCluster(t *testing.T) {
 		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -336,8 +336,8 @@ func TestDifferentCluster(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
@@ -354,7 +354,7 @@ func TestLocal(t *testing.T) {
 		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -363,8 +363,8 @@ func TestLocal(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
@@ -379,7 +379,7 @@ func TestLongPVCNames(t *testing.T) {
 		migrateCmdlineWithNetpols, ns1, ns1, longSourcePvcName, longDestPvcName)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "long-dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "long-dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -388,8 +388,8 @@ func TestLongPVCNames(t *testing.T) {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 }
 

@@ -28,20 +28,20 @@ type (
 	clusterClientGetter func(kubeconfigPath string, context string) (*k8s.ClusterClient, error)
 )
 
-type migrator struct {
+type Migrator struct {
 	getKubeClient  clusterClientGetter
 	getStrategyMap strategyMapGetter
 }
 
 // New creates a new migrator.
-func New() *migrator {
-	return &migrator{
+func New() *Migrator {
+	return &Migrator{
 		getKubeClient:  k8s.GetClusterClient,
 		getStrategyMap: strategy.GetStrategiesMapForNames,
 	}
 }
 
-func (m *migrator) Run(mig *migration.Request) error {
+func (m *Migrator) Run(mig *migration.Request) error {
 	nameToStrategyMap, err := m.getStrategyMap(mig.Strategies)
 	if err != nil {
 		return err
@@ -92,7 +92,7 @@ func (m *migrator) Run(mig *migration.Request) error {
 	return errors.New("all strategies have failed")
 }
 
-func (m *migrator) buildMigration(r *migration.Request) (*migration.Migration, error) {
+func (m *Migrator) buildMigration(r *migration.Request) (*migration.Migration, error) {
 	chart, err := loader.LoadArchive(bytes.NewReader(chartBytes))
 	if err != nil {
 		return nil, err
@@ -153,7 +153,7 @@ func (m *migrator) buildMigration(r *migration.Request) (*migration.Migration, e
 	return &mig, nil
 }
 
-func (m *migrator) getClusterClients(r *migration.Request) (*k8s.ClusterClient, *k8s.ClusterClient, error) {
+func (m *Migrator) getClusterClients(r *migration.Request) (*k8s.ClusterClient, *k8s.ClusterClient, error) {
 	source := r.Source
 	dest := r.Dest
 

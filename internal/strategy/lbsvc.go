@@ -109,8 +109,8 @@ func installOnDest(a *migration.Attempt, releaseName, privateKey,
 		Delete:     t.Request.DeleteExtraneousFiles,
 		SrcPath:    srcPath,
 		DestPath:   destPath,
-		SrcUseSsh:  true,
-		SrcSshHost: sshHost,
+		SrcUseSSH:  true,
+		SrcSSHHost: sshHost,
 	}
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {

@@ -11,18 +11,18 @@ type Cmd struct {
 	Port        int
 	NoChown     bool
 	Delete      bool
-	SrcUseSsh   bool
-	SrcSshUser  string
-	SrcSshHost  string
+	SrcUseSSH   bool
+	SrcSSHUser  string
+	SrcSSHHost  string
 	SrcPath     string
-	DestUseSsh  bool
-	DestSshUser string
-	DestSshHost string
+	DestUseSSH  bool
+	DestSSHUser string
+	DestSSHHost string
 	DestPath    string
 }
 
 func (c *Cmd) Build() (string, error) {
-	if c.SrcUseSsh && c.DestUseSsh {
+	if c.SrcUseSSH && c.DestUseSSH {
 		return "", fmt.Errorf("cannot use ssh on both source and destination")
 	}
 
@@ -62,12 +62,12 @@ func (c *Cmd) Build() (string, error) {
 
 func (c *Cmd) buildSrc() string {
 	var src strings.Builder
-	if c.SrcUseSsh {
+	if c.SrcUseSSH {
 		sshDestUser := "root"
-		if c.SrcSshUser != "" {
-			sshDestUser = c.SrcSshUser
+		if c.SrcSSHUser != "" {
+			sshDestUser = c.SrcSSHUser
 		}
-		src.WriteString(fmt.Sprintf("%s@%s:", sshDestUser, c.SrcSshHost))
+		src.WriteString(fmt.Sprintf("%s@%s:", sshDestUser, c.SrcSSHHost))
 	}
 	src.WriteString(c.SrcPath)
 
@@ -76,12 +76,12 @@ func (c *Cmd) buildSrc() string {
 
 func (c *Cmd) buildDest() string {
 	var dest strings.Builder
-	if c.DestUseSsh {
+	if c.DestUseSSH {
 		sshDestUser := "root"
-		if c.DestSshUser != "" {
-			sshDestUser = c.DestSshUser
+		if c.DestSSHUser != "" {
+			sshDestUser = c.DestSSHUser
 		}
-		dest.WriteString(fmt.Sprintf("%s@%s:", sshDestUser, c.DestSshHost))
+		dest.WriteString(fmt.Sprintf("%s@%s:", sshDestUser, c.DestSSHHost))
 	}
 	dest.WriteString(c.DestPath)
 

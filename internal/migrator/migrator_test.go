@@ -28,7 +28,7 @@ const (
 func TestBuildTask(t *testing.T) {
 	t.Parallel()
 
-	m := migrator{getKubeClient: fakeClusterClientGetter()}
+	m := Migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(true)
 	tsk, err := m.buildMigration(mig)
 	assert.Nil(t, err)
@@ -52,7 +52,7 @@ func TestBuildTask(t *testing.T) {
 func TestBuildTaskMounted(t *testing.T) {
 	t.Parallel()
 
-	m := migrator{getKubeClient: fakeClusterClientGetter()}
+	m := Migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(false)
 	tsk, err := m.buildMigration(mig)
 	assert.Nil(t, tsk)
@@ -87,7 +87,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 		},
 	}
 
-	m := migrator{
+	m := Migrator{
 		getKubeClient: fakeClusterClientGetter(),
 		getStrategyMap: func(names []string) (map[string]strategy.Strategy, error) {
 			return map[string]strategy.Strategy{

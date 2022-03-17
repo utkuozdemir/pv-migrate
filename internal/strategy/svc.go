@@ -54,8 +54,8 @@ func (r *Svc) Run(a *migration.Attempt) (bool, error) {
 		Delete:     m.Request.DeleteExtraneousFiles,
 		SrcPath:    srcPath,
 		DestPath:   destPath,
-		SrcUseSsh:  true,
-		SrcSshHost: sshTargetHost,
+		SrcUseSSH:  true,
+		SrcSSHHost: sshTargetHost,
 	}
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
