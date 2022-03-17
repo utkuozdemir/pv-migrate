@@ -54,3 +54,13 @@ linters:
     - prealloc
     - predeclared
     - revive
+    - rowserrcheck
+#    - sqlclosecheck
+    - stylecheck
+    - tagliatelle
+    - tenv
+#    - testpackage # TODO: visit
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
