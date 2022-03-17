@@ -29,7 +29,7 @@ type migrator struct {
 	getStrategyMap strategyMapGetter
 }
 
-// New creates a new migrator
+// New creates a new migrator.
 func New() *migrator {
 	return &migrator{
 		getKubeClient:  k8s.GetClusterClient,

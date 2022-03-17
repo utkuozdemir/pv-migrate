@@ -138,15 +138,16 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 		pk1.Pad[i] = byte(i + 1)
 	}
 
-	prefix := []byte{0x0, 0x0, 0x0, 0x0b}
-	prefix = append(prefix, []byte(ssh.KeyAlgoED25519)...)
-	prefix = append(prefix, []byte{0x0, 0x0, 0x0, 0x20}...)
+	pubkeyFull := []byte{0x0, 0x0, 0x0, 0x0b}
+	pubkeyFull = append(pubkeyFull, []byte(ssh.KeyAlgoED25519)...)
+	pubkeyFull = append(pubkeyFull, []byte{0x0, 0x0, 0x0, 0x20}...)
+	pubkeyFull = append(pubkeyFull, pubKey...)
 
 	w.CipherName = "none"
 	w.KdfName = "none"
 	w.KdfOpts = ""
 	w.NumKeys = 1
-	w.PubKey = append(prefix, pubKey...)
+	w.PubKey = pubkeyFull
 	w.PrivKeyBlock = ssh.Marshal(pk1)
 
 	magic = append(magic, ssh.Marshal(w)...)

@@ -76,7 +76,7 @@ func (l *LogTail) tailWithProgressBar() {
 	})
 }
 
-// tailWithRetry will restart the log tailing if it times out
+// tailWithRetry will restart the log tailing if it times out.
 func (l *LogTail) tailWithRetry(beforeFunc func(), logFunc func(string), successFunc func()) {
 	failedOnce := false
 	for {
@@ -161,7 +161,7 @@ func parseLine(l *string) (*progress, error) {
 }
 
 func parseNumBytes(numBytes string) (int64, error) {
-	return strconv.ParseInt(strings.Replace(numBytes, ",", "", -1), 10, 64)
+	return strconv.ParseInt(strings.ReplaceAll(numBytes, ",", ""), 10, 64)
 }
 
 func findNamedMatches(r *regexp.Regexp, str *string) map[string]string {

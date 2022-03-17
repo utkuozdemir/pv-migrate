@@ -15,4 +15,18 @@ linters:
     - exportloopref
     - forbidigo
     - forcetypeassert
+#    - funlen
+    - gci
+#    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+#    - goconst
+    - gocritic
+    - gocyclo
+    - godot
+    - godox
+#    - goerr113
+    - gofumpt
+    - goheader
+#    - goimports # inconsistent with gci
     - lll
