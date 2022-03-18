@@ -37,9 +37,6 @@ func (r *LbSvc) Run(attempt *migration.Attempt) (bool, error) {
 	doneCh := registerCleanupHook(attempt, releaseNames)
 	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
 
-	srcMountPath := "/source"
-	destMountPath := "/dest"
-
 	err = installOnSource(attempt, srcReleaseName, publicKey, srcMountPath)
 	if err != nil {
 		return true, err

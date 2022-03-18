@@ -23,8 +23,34 @@ func (r *Svc) Run(attempt *migration.Attempt) (bool, error) {
 		return false, nil
 	}
 
-	sourceInfo := attempt.Migration.SourceInfo
-	destInfo := attempt.Migration.DestInfo
+	releaseName := attempt.HelmReleaseNamePrefix
+	releaseNames := []string{releaseName}
+
+	helmVals, err := buildHelmVals(mig, releaseName)
+	if err != nil {
+		return false, err
+	}
+
+	doneCh := registerCleanupHook(attempt, releaseNames)
+	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
+
+	err = installHelmChart(attempt, mig.DestInfo, releaseName, helmVals)
+	if err != nil {
+		return true, err
+	}
+
+	showProgressBar := !mig.Request.NoProgressBar
+	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
+	jobName := releaseName + "-rsync"
+	err = k8s.WaitForJobCompletion(attempt.Logger, kubeClient, mig.DestInfo.Claim.Namespace, jobName, showProgressBar)
+
+	return true, err
+}
+
+//nolint:funlen
+func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string]interface{}, error) {
+	sourceInfo := mig.SourceInfo
+	destInfo := mig.DestInfo
 	sourceNs := sourceInfo.Claim.Namespace
 	destNs := destInfo.Claim.Namespace
 
@@ -33,21 +59,15 @@ func (r *Svc) Run(attempt *migration.Attempt) (bool, error) {
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
-		return true, err
+		return nil, err
 	}
 
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	releaseName := attempt.HelmReleaseNamePrefix
-	releaseNames := []string{releaseName}
-
-	sshTargetHost := releaseName + "-sshd." + sourceNs
+	sshTargetHost := helmReleaseName + "-sshd." + sourceNs
 	if mig.Request.DestHostOverride != "" {
 		sshTargetHost = mig.Request.DestHostOverride
 	}
-
-	srcMountPath := "/source"
-	destMountPath := "/dest"
 
 	srcPath := srcMountPath + "/" + mig.Request.Source.Path
 	destPath := destMountPath + "/" + mig.Request.Dest.Path
@@ -62,10 +82,10 @@ func (r *Svc) Run(attempt *migration.Attempt) (bool, error) {
 
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
-		return true, err
+		return nil, err
 	}
 
-	vals := map[string]interface{}{
+	return map[string]interface{}{
 		"rsync": map[string]interface{}{
 			"enabled":             true,
 			"namespace":           destNs,
@@ -92,20 +112,5 @@ func (r *Svc) Run(attempt *migration.Attempt) (bool, error) {
 				},
 			},
 		},
-	}
-
-	doneCh := registerCleanupHook(attempt, releaseNames)
-	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
-
-	err = installHelmChart(attempt, destInfo, releaseName, vals)
-	if err != nil {
-		return true, err
-	}
-
-	showProgressBar := !mig.Request.NoProgressBar
-	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
-	jobName := releaseName + "-rsync"
-	err = k8s.WaitForJobCompletion(attempt.Logger, kubeClient, destNs, jobName, showProgressBar)
-
-	return true, err
+	}, nil
 }

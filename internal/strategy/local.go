@@ -19,15 +19,11 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/rest"
 )
 
 const (
 	portForwardTimeout   = 30 * time.Second
 	sshReverseTunnelPort = 50000
-
-	localSrcMountPath  = "/source"
-	localDestMountPath = "/dest"
 
 	localSSHPort       = 22
 	privateKeyFileMode = 0o600
@@ -47,9 +43,9 @@ func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 		return false, ErrSSHBinaryNotFound
 	}
 
-	migration := attempt.Migration
-	sourceInfo := migration.SourceInfo
-	destInfo := migration.DestInfo
+	mig := attempt.Migration
+	sourceInfo := mig.SourceInfo
+	destInfo := mig.DestInfo
 
 	srcReleaseName, destReleaseName, privateKey, err := r.installLocalReleases(attempt)
 	if err != nil {
@@ -61,26 +57,14 @@ func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 	doneCh := registerCleanupHook(attempt, releaseNames)
 	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
 
-	sourceSshdPod, err := getSshdPodForHelmRelease(sourceInfo, srcReleaseName)
-	if err != nil {
-		return true, err
-	}
-
-	srcFwdPort, srcStopChan, err := portForwardForPod(migration.Logger, sourceInfo.ClusterClient.RestConfig,
-		sourceSshdPod.Namespace, sourceSshdPod.Name)
+	srcFwdPort, srcStopChan, err := portForwardToSshd(mig.Logger, sourceInfo, srcReleaseName)
 	if err != nil {
 		return true, err
 	}
 
 	defer func() { srcStopChan <- struct{}{} }()
 
-	destSshdPod, err := getSshdPodForHelmRelease(destInfo, destReleaseName)
-	if err != nil {
-		return true, err
-	}
-
-	destFwdPort, destStopChan, err := portForwardForPod(migration.Logger, destInfo.ClusterClient.RestConfig,
-		destSshdPod.Namespace, destSshdPod.Name)
+	destFwdPort, destStopChan, err := portForwardToSshd(mig.Logger, destInfo, destReleaseName)
 	if err != nil {
 		return true, err
 	}
@@ -94,20 +78,7 @@ func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 		return true, err
 	}
 
-	srcPath := localSrcMountPath + "/" + migration.Request.Source.Path
-	destPath := localDestMountPath + "/" + migration.Request.Dest.Path
-
-	rsyncCmd := rsync.Cmd{
-		Port:        sshReverseTunnelPort,
-		NoChown:     migration.Request.NoChown,
-		Delete:      migration.Request.DeleteExtraneousFiles,
-		SrcPath:     srcPath,
-		DestPath:    destPath,
-		DestUseSSH:  true,
-		DestSSHHost: "localhost",
-	}
-
-	rsyncCmdStr, err := rsyncCmd.Build()
+	rsyncCmd, err := buildRsyncCmdLocal(mig)
 	if err != nil {
 		return true, err
 	}
@@ -116,8 +87,16 @@ func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 		"-p", strconv.Itoa(srcFwdPort),
 		"-R", fmt.Sprintf("%d:localhost:%d", sshReverseTunnelPort, destFwdPort),
 		"-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "root@localhost",
-		rsyncCmdStr,
+		rsyncCmd,
 	)
+
+	err = runCmdLocal(attempt, cmd)
+
+	return true, err
+}
+
+func runCmdLocal(attempt *migration.Attempt, cmd *exec.Cmd) error {
+	mig := attempt.Migration
 
 	reader, writer := io.Pipe()
 	cmd.Stdout = writer
@@ -128,22 +107,39 @@ func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 	go func() { errorCh <- cmd.Run() }()
 
 	showProgressBar := !attempt.Migration.Request.NoProgressBar &&
-		migration.Logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
+		mig.Logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
 	successCh := make(chan bool, 1)
 
 	logTail := rsync.LogTail{
 		LogReaderFunc:   func() (io.ReadCloser, error) { return reader, nil },
 		SuccessCh:       successCh,
 		ShowProgressBar: showProgressBar,
-		Logger:          migration.Logger,
+		Logger:          mig.Logger,
 	}
 
 	go logTail.Start()
 
-	err = <-errorCh
+	err := <-errorCh
 	successCh <- err == nil
 
-	return true, err
+	return err
+}
+
+func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
+	srcPath := srcMountPath + "/" + mig.Request.Source.Path
+	destPath := destMountPath + "/" + mig.Request.Dest.Path
+
+	rsyncCmd := rsync.Cmd{
+		Port:        sshReverseTunnelPort,
+		NoChown:     mig.Request.NoChown,
+		Delete:      mig.Request.DeleteExtraneousFiles,
+		SrcPath:     srcPath,
+		DestPath:    destPath,
+		DestUseSSH:  true,
+		DestSSHHost: "localhost",
+	}
+
+	return rsyncCmd.Build()
 }
 
 func (r *Local) installLocalReleases(attempt *migration.Attempt) (srcReleaseName, destReleaseName,
@@ -163,12 +159,12 @@ func (r *Local) installLocalReleases(attempt *migration.Attempt) (srcReleaseName
 	destReleaseName = attempt.HelmReleaseNamePrefix + "-dest"
 
 	err = installLocalOnSource(attempt, srcReleaseName, publicKey,
-		privateKey, privateKeyMountPath, localSrcMountPath)
+		privateKey, privateKeyMountPath, srcMountPath)
 	if err != nil {
 		return
 	}
 
-	err = installLocalOnDest(attempt, destReleaseName, publicKey, localDestMountPath)
+	err = installLocalOnDest(attempt, destReleaseName, publicKey, destMountPath)
 
 	return
 }
@@ -208,8 +204,8 @@ func installLocalOnSource(attempt *migration.Attempt, releaseName,
 }
 
 func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey, destMountPath string) error {
-	migration := attempt.Migration
-	destInfo := migration.DestInfo
+	mig := attempt.Migration
+	destInfo := mig.DestInfo
 	namespace := destInfo.Claim.Namespace
 
 	vals := map[string]interface{}{
@@ -259,9 +255,16 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 	return name, nil
 }
 
-func portForwardForPod(logger *log.Entry, restConfig *rest.Config,
-	namespace, name string,
-) (int, chan<- struct{}, error) {
+func portForwardToSshd(logger *log.Entry, pvcInfo *pvc.Info, helmReleaseName string) (int, chan<- struct{}, error) {
+	sshdPod, err := getSshdPodForHelmRelease(pvcInfo, helmReleaseName)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	restConfig := pvcInfo.ClusterClient.RestConfig
+	namespace := sshdPod.Namespace
+	name := sshdPod.Name
+
 	port, err := getFreePort()
 	if err != nil {
 		return 0, nil, err

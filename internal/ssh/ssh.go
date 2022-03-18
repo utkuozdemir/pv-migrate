@@ -101,24 +101,8 @@ func createSSHEd25519KeyPair() (string, string, error) {
 func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 	magic := append([]byte("openssh-key-v1"), 0)
 
-	var message struct {
-		CipherName   string
-		KdfName      string
-		KdfOpts      string
-		NumKeys      uint32
-		PubKey       []byte
-		PrivKeyBlock []byte
-	}
-
-	pk1 := struct {
-		Check1  uint32
-		Check2  uint32
-		Keytype string
-		Pub     []byte
-		Priv    []byte
-		Comment string
-		Pad     []byte `ssh:"rest"`
-	}{}
+	message := ed25519message{}
+	pk1 := ed25519pk1{}
 
 	rnd, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
 	if err != nil {

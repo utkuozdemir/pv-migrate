@@ -16,12 +16,12 @@ linters:
     - exportloopref
     - forbidigo
     - forcetypeassert
-#    - funlen
+    - funlen
     - gci
 #    - gochecknoglobals
     - gochecknoinits
     - gocognit
-#    - goconst
+    - goconst
     - gocritic
     - gocyclo
     - godot
@@ -69,3 +69,7 @@ linters:
     - whitespace
 #    - wrapcheck # TODO: visit
     - wsl
+
+linters-settings:
+  goconst:
+    ignore-tests: true

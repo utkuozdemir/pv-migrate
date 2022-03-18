@@ -28,8 +28,8 @@ func (r *Mnt2) canDo(t *migration.Migration) bool {
 }
 
 func (r *Mnt2) Run(attempt *migration.Attempt) (bool, error) {
-	migration := attempt.Migration
-	if !r.canDo(migration) {
+	mig := attempt.Migration
+	if !r.canDo(mig) {
 		return false, nil
 	}
 
@@ -37,22 +37,9 @@ func (r *Mnt2) Run(attempt *migration.Attempt) (bool, error) {
 	destInfo := attempt.Migration.DestInfo
 	namespace := sourceInfo.Claim.Namespace
 
-	node := determineTargetNode(migration)
+	node := determineTargetNode(mig)
 
-	srcMountPath := "/source"
-	destMountPath := "/dest"
-
-	srcPath := srcMountPath + "/" + migration.Request.Source.Path
-	destPath := destMountPath + "/" + migration.Request.Dest.Path
-
-	rsyncCmd := rsync.Cmd{
-		NoChown:  migration.Request.NoChown,
-		Delete:   migration.Request.DeleteExtraneousFiles,
-		SrcPath:  srcPath,
-		DestPath: destPath,
-	}
-
-	rsyncCmdStr, err := rsyncCmd.Build()
+	rsyncCmd, err := buildRsyncCmdMnt2(mig)
 	if err != nil {
 		return true, err
 	}
@@ -66,14 +53,14 @@ func (r *Mnt2) Run(attempt *migration.Attempt) (bool, error) {
 				{
 					"name":      sourceInfo.Claim.Name,
 					"mountPath": srcMountPath,
-					"readOnly":  migration.Request.SourceMountReadOnly,
+					"readOnly":  mig.Request.SourceMountReadOnly,
 				},
 				{
 					"name":      destInfo.Claim.Name,
 					"mountPath": destMountPath,
 				},
 			},
-			"command": rsyncCmdStr,
+			"command": rsyncCmd,
 		},
 	}
 
@@ -88,12 +75,26 @@ func (r *Mnt2) Run(attempt *migration.Attempt) (bool, error) {
 		return true, err
 	}
 
-	showProgressBar := !migration.Request.NoProgressBar
-	kubeClient := migration.SourceInfo.ClusterClient.KubeClient
+	showProgressBar := !mig.Request.NoProgressBar
+	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
 	jobName := attempt.HelmReleaseNamePrefix + "-rsync"
 	err = k8s.WaitForJobCompletion(attempt.Logger, kubeClient, namespace, jobName, showProgressBar)
 
 	return true, err
+}
+
+func buildRsyncCmdMnt2(mig *migration.Migration) (string, error) {
+	srcPath := srcMountPath + "/" + mig.Request.Source.Path
+	destPath := destMountPath + "/" + mig.Request.Dest.Path
+
+	rsyncCmd := rsync.Cmd{
+		NoChown:  mig.Request.NoChown,
+		Delete:   mig.Request.DeleteExtraneousFiles,
+		SrcPath:  srcPath,
+		DestPath: destPath,
+	}
+
+	return rsyncCmd.Build()
 }
 
 func determineTargetNode(t *migration.Migration) string {

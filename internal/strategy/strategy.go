@@ -29,6 +29,9 @@ const (
 	LocalStrategy = "local"
 
 	helmValuesYAMLIndent = 2
+
+	srcMountPath  = "/source"
+	destMountPath = "/dest"
 )
 
 var (
