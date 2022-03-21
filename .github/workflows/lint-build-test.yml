@@ -107,7 +107,7 @@ jobs:
           --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
           helm -n metallb-system get values metallb
       - name: kind-1 - Wait for all pods in the cluster to be ready
-        run: kubectl wait pod --for=condition=Ready --all --all-namespaces
+        run: kubectl wait pod --timeout=5m --for=condition=Ready --all --all-namespaces
 
       - name: kind-2 - Create cluster
         uses: helm/kind-action@v1.2.0
@@ -129,7 +129,7 @@ jobs:
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: kind-2 - Wait for all pods in the cluster to be ready
-        run: kubectl wait pod --for=condition=Ready --all --all-namespaces
+        run: kubectl wait pod --timeout=5m --for=condition=Ready --all --all-namespaces
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
 
