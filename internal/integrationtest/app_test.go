@@ -1,3 +1,4 @@
+//nolint:paralleltest
 package integrationtest
 
 import (
@@ -11,8 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/intstr"
-
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -25,6 +24,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/cache"
@@ -34,8 +34,8 @@ import (
 )
 
 const (
-	dataFileUid         = "12345"
-	dataFileGid         = "54321"
+	dataFileUID         = "12345"
+	dataFileGID         = "54321"
 	dataFilePath        = "/volume/file.txt"
 	extraDataFilePath   = "/volume/extra_file.txt"
 	generateDataContent = "DATA"
@@ -62,13 +62,17 @@ var (
 	extraClusterCli *k8s.ClusterClient
 
 	generateDataShellCommand = fmt.Sprintf("echo -n %s > %s && chown %s:%s %s",
-		generateDataContent, dataFilePath, dataFileUid, dataFileGid, dataFilePath)
+		generateDataContent, dataFilePath, dataFileUID, dataFileGID, dataFilePath)
 	generateExtraDataShellCommand = fmt.Sprintf("echo -n %s > %s",
 		generateDataContent, extraDataFilePath)
-	printDataUidGidContentShellCommand = fmt.Sprintf("stat -c '%%u' %s && stat -c '%%g' %s && cat %s",
+	printDataUIDGIDContentShellCommand = fmt.Sprintf("stat -c '%%u' %s && stat -c '%%g' %s && cat %s",
 		dataFilePath, dataFilePath, dataFilePath)
 	checkExtraDataShellCommand = "ls " + extraDataFilePath
 	clearDataShellCommand      = "find /volume -mindepth 1 -delete"
+
+	ErrPodExecStderr          = errors.New("pod exec stderr")
+	ErrUnexpectedTypePVCWatch = errors.New("unexpected type while watching PVC")
+	ErrUnexpectedTypePodWatch = errors.New("unexpected type while watching pod")
 )
 
 func TestMain(m *testing.M) {
@@ -77,9 +81,12 @@ func TestMain(m *testing.M) {
 		if teardownErr := teardown(); teardownErr != nil {
 			log.Errorf("failed to tearddown after test context init failure: %v", teardownErr)
 		}
+
 		log.Fatalf("failed to initialize test context: %v", err)
 	}
+
 	code := m.Run()
+
 	err = teardown()
 	if err != nil {
 		log.Errorf("failed to teardown after tests: %v", err)
@@ -97,17 +104,18 @@ func TestSameNS(t *testing.T) {
 	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
@@ -123,17 +131,18 @@ func TestSameNSLbSvc(t *testing.T) {
 	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
@@ -149,11 +158,12 @@ func TestNoChown(t *testing.T) {
 	cmd := fmt.Sprintf("%s -i -o -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
@@ -175,17 +185,18 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	cmd := fmt.Sprintf("%s -d -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
@@ -214,17 +225,18 @@ func TestDifferentNS(t *testing.T) {
 	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
@@ -274,17 +286,18 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 		"%s -i -n %s -N %s -H %s source dest", migrateCmdlineWithNetpols, ns1, ns2, destHostOverride)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
@@ -300,17 +313,18 @@ func TestRSA(t *testing.T) {
 	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
@@ -327,17 +341,18 @@ func TestDifferentCluster(t *testing.T) {
 		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
@@ -354,17 +369,18 @@ func TestLocal(t *testing.T) {
 		extraClusterKubeconfig, ns1, ns3)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
@@ -379,17 +395,18 @@ func TestLongPVCNames(t *testing.T) {
 		migrateCmdlineWithNetpols, ns1, ns1, longSourcePvcName, longDestPvcName)
 	assert.NoError(t, runCliApp(cmd))
 
-	stdout, err := execInPod(mainClusterCli, ns1, "long-dest", printDataUidGidContentShellCommand)
+	stdout, err := execInPod(mainClusterCli, ns1, "long-dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
+
 	if len(parts) < 3 {
 		return
 	}
 
-	assert.Equal(t, dataFileUid, parts[0])
-	assert.Equal(t, dataFileGid, parts[1])
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 }
 
@@ -405,12 +422,14 @@ func setup() error {
 	if err != nil {
 		return err
 	}
+
 	mainClusterCli = mainCli
 
 	extraCli, err := k8s.GetClusterClient(extraClusterKubeconfig, "")
 	if err != nil {
 		return err
 	}
+
 	extraClusterCli = extraCli
 
 	if mainCli.RestConfig.Host == extraCli.RestConfig.Host {
@@ -421,22 +440,113 @@ func setup() error {
 	ns2 = "pv-migrate-test-2-" + util.RandomHexadecimalString(5)
 	ns3 = "pv-migrate-test-3-" + util.RandomHexadecimalString(5)
 
-	_, err = createNs(mainClusterCli, ns1)
+	err = setupNSs()
 	if err != nil {
 		return err
 	}
 
-	_, err = createNs(mainClusterCli, ns2)
+	err = setupPVCs()
 	if err != nil {
 		return err
 	}
 
-	_, err = createNs(extraClusterCli, ns3)
+	err = setupPods()
 	if err != nil {
 		return err
 	}
 
-	err = setupPVCsWithLongName()
+	err = setupWaitForPVCs()
+	if err != nil {
+		return err
+	}
+
+	err = setupWaitForPods()
+	if err != nil {
+		return err
+	}
+
+	_, err = execInPod(mainClusterCli, ns1, "source", generateDataShellCommand)
+
+	return err
+}
+
+func setupNSs() error {
+	_, err := createNS(mainClusterCli, ns1)
+	if err != nil {
+		return err
+	}
+
+	_, err = createNS(mainClusterCli, ns2)
+	if err != nil {
+		return err
+	}
+
+	_, err = createNS(extraClusterCli, ns3)
+
+	return err
+}
+
+func setupWaitForPVCs() error {
+	err := waitUntilPVCIsBound(mainClusterCli, ns1, "source")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPVCIsBound(mainClusterCli, ns1, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPVCIsBound(mainClusterCli, ns2, "dest")
+	if err != nil {
+		return err
+	}
+
+	return waitUntilPVCIsBound(extraClusterCli, ns3, "dest")
+}
+
+func setupWaitForPods() error {
+	err := waitUntilPodIsRunning(mainClusterCli, ns1, "source")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(mainClusterCli, ns1, "dest")
+	if err != nil {
+		return err
+	}
+
+	err = waitUntilPodIsRunning(mainClusterCli, ns2, "dest")
+	if err != nil {
+		return err
+	}
+
+	return waitUntilPodIsRunning(extraClusterCli, ns3, "dest")
+}
+
+func setupPods() error {
+	_, err := createPod(mainClusterCli, ns1, "source", "source")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(mainClusterCli, ns1, "dest", "dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(mainClusterCli, ns2, "dest", "dest")
+	if err != nil {
+		return err
+	}
+
+	_, err = createPod(extraClusterCli, ns3, "dest", "dest")
+
+	return err
+}
+
+func setupPVCs() error {
+	err := setupPVCsWithLongName()
 	if err != nil {
 		return err
 	}
@@ -457,71 +567,7 @@ func setup() error {
 	}
 
 	_, err = createPVC(extraClusterCli, ns3, "dest")
-	if err != nil {
-		return err
-	}
 
-	_, err = createPod(mainClusterCli, ns1, "source", "source")
-	if err != nil {
-		return err
-	}
-
-	_, err = createPod(mainClusterCli, ns1, "dest", "dest")
-	if err != nil {
-		return err
-	}
-
-	_, err = createPod(mainClusterCli, ns2, "dest", "dest")
-	if err != nil {
-		return err
-	}
-
-	_, err = createPod(extraClusterCli, ns3, "dest", "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(mainClusterCli, ns1, "source")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(mainClusterCli, ns1, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(mainClusterCli, ns2, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(extraClusterCli, ns3, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(mainClusterCli, ns1, "source")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(mainClusterCli, ns1, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(mainClusterCli, ns2, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(extraClusterCli, ns3, "dest")
-	if err != nil {
-		return err
-	}
-
-	_, err = execInPod(mainClusterCli, ns1, "source", generateDataShellCommand)
 	return err
 }
 
@@ -557,23 +603,28 @@ func setupPVCsWithLongName() error {
 	}
 
 	_, err = execInPod(mainClusterCli, ns1, "long-source", generateDataShellCommand)
+
 	return err
 }
 
 func teardown() error {
 	var result *multierror.Error
+
 	err := deleteNs(mainClusterCli, ns1)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
+
 	err = deleteNs(mainClusterCli, ns2)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
+
 	err = deleteNs(extraClusterCli, ns3)
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
+
 	return result.ErrorOrNil()
 }
 
@@ -582,15 +633,16 @@ func userHomeDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	return usr.HomeDir, nil
 }
 
-func createPod(cli *k8s.ClusterClient, ns string, name string, pvc string) (*corev1.Pod, error) {
+func createPod(cli *k8s.ClusterClient, namespace string, name string, pvc string) (*corev1.Pod, error) {
 	terminationGracePeriodSeconds := int64(0)
-	p := corev1.Pod{
+	pod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: ns,
+			Namespace: namespace,
 		},
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
@@ -619,15 +671,16 @@ func createPod(cli *k8s.ClusterClient, ns string, name string, pvc string) (*cor
 			},
 		},
 	}
+
 	return cli.KubeClient.CoreV1().
-		Pods(ns).Create(context.TODO(), &p, metav1.CreateOptions{})
+		Pods(namespace).Create(context.TODO(), &pod, metav1.CreateOptions{})
 }
 
-func createPVC(cli *k8s.ClusterClient, ns string, name string) (*corev1.PersistentVolumeClaim, error) {
+func createPVC(cli *k8s.ClusterClient, namespace string, name string) (*corev1.PersistentVolumeClaim, error) {
 	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: ns,
+			Namespace: namespace,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -641,31 +694,36 @@ func createPVC(cli *k8s.ClusterClient, ns string, name string) (*corev1.Persiste
 		},
 	}
 
-	return cli.KubeClient.CoreV1().PersistentVolumeClaims(ns).
+	return cli.KubeClient.CoreV1().PersistentVolumeClaims(namespace).
 		Create(context.TODO(), &pvc, metav1.CreateOptions{})
 }
 
-func waitUntilPodIsRunning(cli *k8s.ClusterClient, ns string, name string) error {
-	resCli := cli.KubeClient.CoreV1().Pods(ns)
+//nolint:dupl
+func waitUntilPodIsRunning(cli *k8s.ClusterClient, namespace string, name string) error {
+	resCli := cli.KubeClient.CoreV1().Pods(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	lw := &cache.ListWatch{
+
+	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.Watch(ctx, options)
 		},
 	}
 
-	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Pod{}, nil,
+	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing pod %s/%s", ns, name)
+				return false, fmt.Errorf("%w: %s/%s", ErrUnexpectedTypePodWatch, namespace, name)
 			}
 
 			return res.Status.Phase == corev1.PodRunning, nil
@@ -674,27 +732,32 @@ func waitUntilPodIsRunning(cli *k8s.ClusterClient, ns string, name string) error
 	return err
 }
 
-func waitUntilPVCIsBound(cli *k8s.ClusterClient, ns string, name string) error {
-	resCli := cli.KubeClient.CoreV1().PersistentVolumeClaims(ns)
+//nolint:dupl
+func waitUntilPVCIsBound(cli *k8s.ClusterClient, namespace string, name string) error {
+	resCli := cli.KubeClient.CoreV1().PersistentVolumeClaims(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
-	lw := &cache.ListWatch{
+
+	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.Watch(ctx, options)
 		},
 	}
 
-	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.PersistentVolumeClaim{}, nil,
+	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.PersistentVolumeClaim{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.PersistentVolumeClaim)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing pvc %s/%s", ns, name)
+				return false, fmt.Errorf("%w: %s/%s", ErrUnexpectedTypePVCWatch, namespace, name)
 			}
 
 			return res.Status.Phase == corev1.ClaimBound, nil
@@ -733,6 +796,7 @@ func execInPod(cli *k8s.ClusterClient, ns string, name string, cmd string) (stri
 	}
 
 	var result *multierror.Error
+
 	err = exec.Stream(remotecommand.StreamOptions{Stdout: stdoutBuffer, Stderr: stderrBuffer})
 	if err != nil {
 		result = multierror.Append(result, err)
@@ -742,7 +806,7 @@ func execInPod(cli *k8s.ClusterClient, ns string, name string, cmd string) (stri
 	stderr := stderrBuffer.String()
 
 	if stderr != "" {
-		result = multierror.Append(result, errors.New(stderr))
+		result = multierror.Append(result, fmt.Errorf("%w: %s", ErrPodExecStderr, stderr))
 	}
 
 	return stdout, result.ErrorOrNil()
@@ -753,16 +817,18 @@ func clearDests() error {
 	if err != nil {
 		return err
 	}
+
 	_, err = execInPod(mainClusterCli, ns2, "dest", clearDataShellCommand)
 	if err != nil {
 		return err
 	}
 
 	_, err = execInPod(extraClusterCli, ns3, "dest", clearDataShellCommand)
+
 	return err
 }
 
-func createNs(cli *k8s.ClusterClient, name string) (*corev1.Namespace, error) {
+func createNS(cli *k8s.ClusterClient, name string) (*corev1.Namespace, error) {
 	return cli.KubeClient.CoreV1().
 		Namespaces().Create(context.TODO(), &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -773,6 +839,7 @@ func createNs(cli *k8s.ClusterClient, name string) (*corev1.Namespace, error) {
 
 func deleteNs(cli *k8s.ClusterClient, name string) error {
 	namespaces := cli.KubeClient.CoreV1().Namespaces()
+
 	return namespaces.Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
@@ -786,5 +853,6 @@ func runCliApp(cmd string) error {
 
 	cliApp := app.New(logger, "", "", "")
 	cliApp.SetArgs(strings.Fields(cmd))
+
 	return cliApp.Execute()
 }

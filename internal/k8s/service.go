@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -19,42 +20,51 @@ const (
 	serviceLbCheckTimeout = 120 * time.Second
 )
 
-func GetServiceAddress(cli kubernetes.Interface, ns string, name string) (string, error) {
+var ErrUnexpectedTypeServiceWatch = errors.New("unexpected type while watching service")
+
+func GetServiceAddress(cli kubernetes.Interface, namespace string, name string) (string, error) {
 	var result string
 
-	resCli := cli.CoreV1().Services(ns)
+	resCli := cli.CoreV1().Services(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+
 	ctx, cancel := context.WithTimeout(context.TODO(), serviceLbCheckTimeout)
 	defer cancel()
-	lw := &cache.ListWatch{
+
+	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.List(ctx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
+
 			return resCli.Watch(ctx, options)
 		},
 	}
 
-	_, err := watchtools.UntilWithSync(ctx, lw, &corev1.Service{}, nil,
+	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Service{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Service)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watcing service %s/%s", ns, name)
+				return false, fmt.Errorf("%w: %s/%s", ErrUnexpectedTypeServiceWatch, namespace, name)
 			}
 
 			if res.Spec.Type == corev1.ServiceTypeClusterIP {
 				result = res.Name + "." + res.Namespace
+
 				return true, nil
 			}
 
 			if len(res.Status.LoadBalancer.Ingress) > 0 {
 				result = res.Status.LoadBalancer.Ingress[0].IP
+
 				return true, nil
 			}
 
 			return false, nil
 		})
+
 	return result, err
 }

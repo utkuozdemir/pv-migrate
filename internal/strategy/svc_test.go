@@ -10,6 +10,8 @@ import (
 )
 
 func TestSvcCanDoSameCluster(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"

@@ -14,6 +14,8 @@ import (
 )
 
 func TestCanDoSameNode(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -45,6 +47,8 @@ func TestCanDoSameNode(t *testing.T) {
 }
 
 func TestCanDoDestRWX(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -76,6 +80,8 @@ func TestCanDoDestRWX(t *testing.T) {
 }
 
 func TestCanDoSourceROX(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -107,6 +113,8 @@ func TestCanDoSourceROX(t *testing.T) {
 }
 
 func TestCannotDoSameClusterDifferentNS(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -138,6 +146,8 @@ func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 }
 
 func TestMnt2CannotDoDifferentCluster(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -155,7 +165,7 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c1 := buildTestClient(pvcA, pvcB, podA, podB)
-	c2 := buildTestClientWithApiServerHost("https://127.0.0.2:6443", pvcA, pvcB, podA, podB)
+	c2 := buildTestClientWithAPIServerHost("https://127.0.0.2:6443", pvcA, pvcB, podA, podB)
 	src, _ := pvc.New(c1, sourceNS, sourcePVC)
 	dst, _ := pvc.New(c2, destNS, destPvc)
 
@@ -170,6 +180,8 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 }
 
 func TestDetermineTargetNodeROXToTWO(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -200,6 +212,8 @@ func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 }
 
 func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
+	t.Parallel()
+
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
 	sourcePod := "pod1"
@@ -230,10 +244,10 @@ func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 }
 
 func buildTestClient(objects ...runtime.Object) *k8s.ClusterClient {
-	return buildTestClientWithApiServerHost("https://127.0.0.1:6443", objects...)
+	return buildTestClientWithAPIServerHost("https://127.0.0.1:6443", objects...)
 }
 
-func buildTestClientWithApiServerHost(apiServerHost string,
+func buildTestClientWithAPIServerHost(apiServerHost string,
 	objects ...runtime.Object,
 ) *k8s.ClusterClient {
 	return &k8s.ClusterClient{

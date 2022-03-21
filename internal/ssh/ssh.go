@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -19,9 +20,16 @@ type KeyAlgorithm string
 const (
 	RSAKeyAlgorithm     = "rsa"
 	Ed25519KeyAlgorithm = "ed25519"
+
+	RSAKeyLengthBits = 2048
 )
 
-var KeyAlgorithms = []string{RSAKeyAlgorithm, Ed25519KeyAlgorithm}
+var (
+	KeyAlgorithms = []string{RSAKeyAlgorithm, Ed25519KeyAlgorithm}
+
+	ErrUnexpectedKeyAlgorithm         = errors.New("unexpected key algorithm")
+	ErrUnexpectedTypeEd25519PublicKey = errors.New("unexpected type for ed25519 public key")
+)
 
 func CreateSSHKeyPair(keyAlgorithm string) (string, string, error) {
 	switch keyAlgorithm {
@@ -30,12 +38,12 @@ func CreateSSHKeyPair(keyAlgorithm string) (string, string, error) {
 	case Ed25519KeyAlgorithm:
 		return createSSHEd25519KeyPair()
 	default:
-		return "", "", fmt.Errorf("unexpected key algorithm: %v", keyAlgorithm)
+		return "", "", fmt.Errorf("%w: %v", ErrUnexpectedKeyAlgorithm, keyAlgorithm)
 	}
 }
 
 func createSSHRSAKeyPair() (string, string, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := rsa.GenerateKey(rand.Reader, RSAKeyLengthBits)
 	if err != nil {
 		return "", "", err
 	}
@@ -55,6 +63,7 @@ func createSSHRSAKeyPair() (string, string, error) {
 	}
 
 	var pubKeyBuf strings.Builder
+
 	pubKeyBuf.Write(ssh.MarshalAuthorizedKey(pub))
 
 	return pubKeyBuf.String(), privKeyBuf.String(), nil
@@ -80,7 +89,9 @@ func createSSHEd25519KeyPair() (string, string, error) {
 	}
 
 	pub, _ := ssh.NewPublicKey(pubKey)
+
 	var pubKeyBuf strings.Builder
+
 	pubKeyBuf.Write(ssh.MarshalAuthorizedKey(pub))
 
 	return pubKeyBuf.String(), privKeyBuf.String(), nil
@@ -90,40 +101,24 @@ func createSSHEd25519KeyPair() (string, string, error) {
 func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 	magic := append([]byte("openssh-key-v1"), 0)
 
-	var w struct {
-		CipherName   string
-		KdfName      string
-		KdfOpts      string
-		NumKeys      uint32
-		PubKey       []byte
-		PrivKeyBlock []byte
-	}
+	message := ed25519message{}
+	pk1 := ed25519pk1{}
 
-	pk1 := struct {
-		Check1  uint32
-		Check2  uint32
-		Keytype string
-		Pub     []byte
-		Priv    []byte
-		Comment string
-		Pad     []byte `ssh:"rest"`
-	}{}
-
-	ci, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
+	rnd, err := rand.Int(rand.Reader, big.NewInt(math.MaxUint32))
 	if err != nil {
 		return nil, err
 	}
 
-	pk1.Check1 = uint32(ci.Uint64())
-	pk1.Check2 = uint32(ci.Uint64())
+	pk1.Check1 = uint32(rnd.Uint64())
+	pk1.Check2 = uint32(rnd.Uint64())
 	pk1.Keytype = ssh.KeyAlgoED25519
 
-	pk, ok := key.Public().(ed25519.PublicKey)
+	publicKey, ok := key.Public().(ed25519.PublicKey)
 	if !ok {
-		return nil, fmt.Errorf("ed25519.PublicKey type assertion failed on an " +
-			"ed25519 public key, this should never happen")
+		return nil, ErrUnexpectedTypeEd25519PublicKey
 	}
-	pubKey := []byte(pk)
+
+	pubKey := []byte(publicKey)
 
 	pk1.Pub = pubKey
 	pk1.Priv = key
@@ -138,17 +133,19 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 		pk1.Pad[i] = byte(i + 1)
 	}
 
-	prefix := []byte{0x0, 0x0, 0x0, 0x0b}
-	prefix = append(prefix, []byte(ssh.KeyAlgoED25519)...)
-	prefix = append(prefix, []byte{0x0, 0x0, 0x0, 0x20}...)
+	pubkeyFull := []byte{0x0, 0x0, 0x0, 0x0b}
+	pubkeyFull = append(pubkeyFull, []byte(ssh.KeyAlgoED25519)...)
+	pubkeyFull = append(pubkeyFull, []byte{0x0, 0x0, 0x0, 0x20}...)
+	pubkeyFull = append(pubkeyFull, pubKey...)
 
-	w.CipherName = "none"
-	w.KdfName = "none"
-	w.KdfOpts = ""
-	w.NumKeys = 1
-	w.PubKey = append(prefix, pubKey...)
-	w.PrivKeyBlock = ssh.Marshal(pk1)
+	message.CipherName = "none"
+	message.KdfName = "none"
+	message.KdfOpts = ""
+	message.NumKeys = 1
+	message.PubKey = pubkeyFull
+	message.PrivKeyBlock = ssh.Marshal(pk1)
 
-	magic = append(magic, ssh.Marshal(w)...)
+	magic = append(magic, ssh.Marshal(message)...)
+
 	return magic, nil
 }

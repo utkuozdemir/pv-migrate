@@ -13,5 +13,6 @@ var logger *log.Entry
 
 func New(rootLogger *log.Entry, version string, commit string, date string) *cobra.Command {
 	logger = rootLogger
+
 	return buildRootCmd(version, commit, date)
 }

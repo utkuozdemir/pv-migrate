@@ -9,47 +9,37 @@ import (
 type Mnt2 struct{}
 
 func (r *Mnt2) canDo(t *migration.Migration) bool {
-	s := t.SourceInfo
-	d := t.DestInfo
-	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
+	sourceInfo := t.SourceInfo
+	destInfo := t.DestInfo
+
+	sameCluster := sourceInfo.ClusterClient.RestConfig.Host == destInfo.ClusterClient.RestConfig.Host
 	if !sameCluster {
 		return false
 	}
 
-	sameNamespace := s.Claim.Namespace == d.Claim.Namespace
+	sameNamespace := sourceInfo.Claim.Namespace == destInfo.Claim.Namespace
 	if !sameNamespace {
 		return false
 	}
 
-	sameNode := s.MountedNode == d.MountedNode
-	return sameNode || s.SupportsROX || s.SupportsRWX || d.SupportsRWX
+	sameNode := sourceInfo.MountedNode == destInfo.MountedNode
+
+	return sameNode || sourceInfo.SupportsROX || sourceInfo.SupportsRWX || destInfo.SupportsRWX
 }
 
-func (r *Mnt2) Run(a *migration.Attempt) (bool, error) {
-	m := a.Migration
-	if !r.canDo(m) {
+func (r *Mnt2) Run(attempt *migration.Attempt) (bool, error) {
+	mig := attempt.Migration
+	if !r.canDo(mig) {
 		return false, nil
 	}
 
-	s := a.Migration.SourceInfo
-	d := a.Migration.DestInfo
-	ns := s.Claim.Namespace
+	sourceInfo := attempt.Migration.SourceInfo
+	destInfo := attempt.Migration.DestInfo
+	namespace := sourceInfo.Claim.Namespace
 
-	node := determineTargetNode(m)
+	node := determineTargetNode(mig)
 
-	srcMountPath := "/source"
-	destMountPath := "/dest"
-
-	srcPath := srcMountPath + "/" + m.Request.Source.Path
-	destPath := destMountPath + "/" + m.Request.Dest.Path
-
-	rsyncCmd := rsync.Cmd{
-		NoChown:  m.Request.NoChown,
-		Delete:   m.Request.DeleteExtraneousFiles,
-		SrcPath:  srcPath,
-		DestPath: destPath,
-	}
-	rsyncCmdStr, err := rsyncCmd.Build()
+	rsyncCmd, err := buildRsyncCmdMnt2(mig)
 	if err != nil {
 		return true, err
 	}
@@ -57,49 +47,67 @@ func (r *Mnt2) Run(a *migration.Attempt) (bool, error) {
 	vals := map[string]interface{}{
 		"rsync": map[string]interface{}{
 			"enabled":   true,
-			"namespace": ns,
+			"namespace": namespace,
 			"nodeName":  node,
 			"pvcMounts": []map[string]interface{}{
 				{
-					"name":      s.Claim.Name,
+					"name":      sourceInfo.Claim.Name,
 					"mountPath": srcMountPath,
-					"readOnly":  m.Request.SourceMountReadOnly,
+					"readOnly":  mig.Request.SourceMountReadOnly,
 				},
 				{
-					"name":      d.Claim.Name,
+					"name":      destInfo.Claim.Name,
 					"mountPath": destMountPath,
 				},
 			},
-			"command": rsyncCmdStr,
+			"command": rsyncCmd,
 		},
 	}
 
-	releaseName := a.HelmReleaseNamePrefix
+	releaseName := attempt.HelmReleaseNamePrefix
 	releaseNames := []string{releaseName}
 
-	doneCh := registerCleanupHook(a, releaseNames)
-	defer cleanupAndReleaseHook(a, releaseNames, doneCh)
+	doneCh := registerCleanupHook(attempt, releaseNames)
+	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
 
-	err = installHelmChart(a, s, releaseName, vals)
+	err = installHelmChart(attempt, sourceInfo, releaseName, vals)
 	if err != nil {
 		return true, err
 	}
 
-	showProgressBar := !m.Request.NoProgressBar
-	kubeClient := m.SourceInfo.ClusterClient.KubeClient
-	jobName := a.HelmReleaseNamePrefix + "-rsync"
-	err = k8s.WaitForJobCompletion(a.Logger, kubeClient, ns, jobName, showProgressBar)
+	showProgressBar := !mig.Request.NoProgressBar
+	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
+	jobName := attempt.HelmReleaseNamePrefix + "-rsync"
+	err = k8s.WaitForJobCompletion(attempt.Logger, kubeClient, namespace, jobName, showProgressBar)
+
 	return true, err
 }
 
+func buildRsyncCmdMnt2(mig *migration.Migration) (string, error) {
+	srcPath := srcMountPath + "/" + mig.Request.Source.Path
+	destPath := destMountPath + "/" + mig.Request.Dest.Path
+
+	rsyncCmd := rsync.Cmd{
+		NoChown:  mig.Request.NoChown,
+		Delete:   mig.Request.DeleteExtraneousFiles,
+		SrcPath:  srcPath,
+		DestPath: destPath,
+	}
+
+	return rsyncCmd.Build()
+}
+
 func determineTargetNode(t *migration.Migration) string {
-	s := t.SourceInfo
-	d := t.DestInfo
-	if (s.SupportsROX || s.SupportsRWX) && d.SupportsRWX {
+	sourceInfo := t.SourceInfo
+	destInfo := t.DestInfo
+
+	if (sourceInfo.SupportsROX || sourceInfo.SupportsRWX) && destInfo.SupportsRWX {
 		return ""
 	}
-	if !s.SupportsROX && !s.SupportsRWX {
-		return s.MountedNode
+
+	if !sourceInfo.SupportsROX && !sourceInfo.SupportsRWX {
+		return sourceInfo.MountedNode
 	}
-	return d.MountedNode
+
+	return destInfo.MountedNode
 }

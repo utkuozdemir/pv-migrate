@@ -13,55 +13,79 @@ func (r *Svc) canDo(t *migration.Migration) bool {
 	s := t.SourceInfo
 	d := t.DestInfo
 	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
+
 	return sameCluster
 }
 
-func (r *Svc) Run(a *migration.Attempt) (bool, error) {
-	m := a.Migration
-	if !r.canDo(m) {
+func (r *Svc) Run(attempt *migration.Attempt) (bool, error) {
+	mig := attempt.Migration
+	if !r.canDo(mig) {
 		return false, nil
 	}
 
-	s := a.Migration.SourceInfo
-	d := a.Migration.DestInfo
-	sourceNs := s.Claim.Namespace
-	destNs := d.Claim.Namespace
-
-	m.Logger.Info(":key: Generating SSH key pair")
-	keyAlgorithm := m.Request.KeyAlgorithm
-	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
-	if err != nil {
-		return true, err
-	}
-	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
-
-	releaseName := a.HelmReleaseNamePrefix
+	releaseName := attempt.HelmReleaseNamePrefix
 	releaseNames := []string{releaseName}
 
-	sshTargetHost := releaseName + "-sshd." + sourceNs
-	if m.Request.DestHostOverride != "" {
-		sshTargetHost = m.Request.DestHostOverride
+	helmVals, err := buildHelmVals(mig, releaseName)
+	if err != nil {
+		return false, err
 	}
 
-	srcMountPath := "/source"
-	destMountPath := "/dest"
+	doneCh := registerCleanupHook(attempt, releaseNames)
+	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
 
-	srcPath := srcMountPath + "/" + m.Request.Source.Path
-	destPath := destMountPath + "/" + m.Request.Dest.Path
-	rsyncCmd := rsync.Cmd{
-		NoChown:    m.Request.NoChown,
-		Delete:     m.Request.DeleteExtraneousFiles,
-		SrcPath:    srcPath,
-		DestPath:   destPath,
-		SrcUseSsh:  true,
-		SrcSshHost: sshTargetHost,
-	}
-	rsyncCmdStr, err := rsyncCmd.Build()
+	err = installHelmChart(attempt, mig.DestInfo, releaseName, helmVals)
 	if err != nil {
 		return true, err
 	}
 
-	vals := map[string]interface{}{
+	showProgressBar := !mig.Request.NoProgressBar
+	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
+	jobName := releaseName + "-rsync"
+	err = k8s.WaitForJobCompletion(attempt.Logger, kubeClient, mig.DestInfo.Claim.Namespace, jobName, showProgressBar)
+
+	return true, err
+}
+
+//nolint:funlen
+func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string]interface{}, error) {
+	sourceInfo := mig.SourceInfo
+	destInfo := mig.DestInfo
+	sourceNs := sourceInfo.Claim.Namespace
+	destNs := destInfo.Claim.Namespace
+
+	mig.Logger.Info(":key: Generating SSH key pair")
+	keyAlgorithm := mig.Request.KeyAlgorithm
+
+	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
+
+	sshTargetHost := helmReleaseName + "-sshd." + sourceNs
+	if mig.Request.DestHostOverride != "" {
+		sshTargetHost = mig.Request.DestHostOverride
+	}
+
+	srcPath := srcMountPath + "/" + mig.Request.Source.Path
+	destPath := destMountPath + "/" + mig.Request.Dest.Path
+	rsyncCmd := rsync.Cmd{
+		NoChown:    mig.Request.NoChown,
+		Delete:     mig.Request.DeleteExtraneousFiles,
+		SrcPath:    srcPath,
+		DestPath:   destPath,
+		SrcUseSSH:  true,
+		SrcSSHHost: sshTargetHost,
+	}
+
+	rsyncCmdStr, err := rsyncCmd.Build()
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]interface{}{
 		"rsync": map[string]interface{}{
 			"enabled":             true,
 			"namespace":           destNs,
@@ -70,7 +94,7 @@ func (r *Svc) Run(a *migration.Attempt) (bool, error) {
 			"privateKeyMountPath": privateKeyMountPath,
 			"pvcMounts": []map[string]interface{}{
 				{
-					"name":      d.Claim.Name,
+					"name":      destInfo.Claim.Name,
 					"mountPath": destMountPath,
 				},
 			},
@@ -82,25 +106,11 @@ func (r *Svc) Run(a *migration.Attempt) (bool, error) {
 			"publicKey": publicKey,
 			"pvcMounts": []map[string]interface{}{
 				{
-					"name":      s.Claim.Name,
+					"name":      sourceInfo.Claim.Name,
 					"mountPath": srcMountPath,
-					"readOnly":  m.Request.SourceMountReadOnly,
+					"readOnly":  mig.Request.SourceMountReadOnly,
 				},
 			},
 		},
-	}
-
-	doneCh := registerCleanupHook(a, releaseNames)
-	defer cleanupAndReleaseHook(a, releaseNames, doneCh)
-
-	err = installHelmChart(a, d, releaseName, vals)
-	if err != nil {
-		return true, err
-	}
-
-	showProgressBar := !m.Request.NoProgressBar
-	kubeClient := m.SourceInfo.ClusterClient.KubeClient
-	jobName := releaseName + "-rsync"
-	err = k8s.WaitForJobCompletion(a.Logger, kubeClient, destNs, jobName, showProgressBar)
-	return true, err
+	}, nil
 }

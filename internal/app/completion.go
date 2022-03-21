@@ -68,43 +68,54 @@ func buildCompletionCmd() *cobra.Command {
 			case "powershell":
 				return cmd.Root().GenPowerShellCompletionWithDesc(os.Stdout)
 			}
+
 			return nil
 		},
 	}
 }
 
-func buildKubeContextCompletionFunc(kubeconfigFlag string) func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildKubeContextCompletionFunc(kubeconfigFlag string) func(cmd *cobra.Command,
+	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		srcKubeconfig, _ := cmd.Flags().GetString(kubeconfigFlag)
+
 		contexts, err := k8s.GetContexts(srcKubeconfig)
 		if err != nil {
 			logger.Tracef("error: %v", err)
+
 			return nil, cobra.ShellCompDirectiveError
 		}
+
 		return contexts, cobra.ShellCompDirectiveDefault
 	}
 }
 
-func buildKubeNSCompletionFunc(kubeconfigFlag string, contextFlag string) func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildKubeNSCompletionFunc(kubeconfigFlag string, contextFlag string) func(cmd *cobra.Command,
+	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		srcKubeconfig, _ := cmd.Flags().GetString(kubeconfigFlag)
 		srcContext, _ := cmd.Flags().GetString(contextFlag)
+
 		contexts, err := k8s.GetNamespaces(srcKubeconfig, srcContext)
 		if err != nil {
 			logger.Tracef("error: %v", err)
+
 			return nil, cobra.ShellCompDirectiveError
 		}
+
 		return contexts, cobra.ShellCompDirectiveDefault
 	}
 }
 
-func buildStaticSliceCompletionFunc(values []string) func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildStaticSliceCompletionFunc(values []string) func(cmd *cobra.Command,
+	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return values, cobra.ShellCompDirectiveNoFileComp
 	}
 }
 
-func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command,
+	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		remaining := make(map[string]struct{}, len(values))
 		for _, value := range values {
@@ -112,6 +123,7 @@ func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command, args []s
 		}
 
 		var provided []string
+
 		split := strings.Split(toComplete, ",")
 		for _, s := range split {
 			val := strings.TrimSpace(s)
@@ -120,6 +132,7 @@ func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command, args []s
 		}
 
 		var suggestions []string
+
 		lastPart := provided[len(provided)-1]
 		for value := range remaining {
 			if !strings.HasPrefix(value, lastPart) {
@@ -139,24 +152,27 @@ func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command, args []s
 	}
 }
 
-func buildPVCsCompletionFunc() func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildPVCsCompletionFunc() func(cmd *cobra.Command, args []string,
+	toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) >= 2 {
+		if len(args) >= migrateCmdNumArgs {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
 		kubeconfig, _ := cmd.Flags().GetString(FlagSourceKubeconfig)
 		context, _ := cmd.Flags().GetString(FlagSourceContext)
-		ns, _ := cmd.Flags().GetString(FlagSourceNamespace)
+		namespace, _ := cmd.Flags().GetString(FlagSourceNamespace)
+
 		if len(args) == 1 {
 			kubeconfig, _ = cmd.Flags().GetString(FlagDestKubeconfig)
 			context, _ = cmd.Flags().GetString(FlagDestContext)
-			ns, _ = cmd.Flags().GetString(FlagDestNamespace)
+			namespace, _ = cmd.Flags().GetString(FlagDestNamespace)
 		}
 
-		pvcs, err := k8s.GetPVCs(kubeconfig, context, ns)
+		pvcs, err := k8s.GetPVCs(kubeconfig, context, namespace)
 		if err != nil {
 			logger.Tracef("error: %v", err)
+
 			return nil, cobra.ShellCompDirectiveError
 		}
 

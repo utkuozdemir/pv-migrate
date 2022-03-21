@@ -18,76 +18,53 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/migration"
-
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/rest"
 )
 
 const (
 	portForwardTimeout   = 30 * time.Second
 	sshReverseTunnelPort = 50000
+
+	localSSHPort       = 22
+	privateKeyFileMode = 0o600
+)
+
+var (
+	ErrNoTCPAddress       = errors.New("could not get TCP address from listener")
+	ErrPortForwardTimeout = errors.New("timed out waiting for port-forward to be ready")
+	ErrSSHBinaryNotFound  = errors.New("ssh binary not found")
 )
 
 type Local struct{}
 
-func (r *Local) Run(a *migration.Attempt) (bool, error) {
+func (r *Local) Run(attempt *migration.Attempt) (bool, error) {
 	_, err := exec.LookPath("ssh")
 	if err != nil {
-		return false, fmt.Errorf(":cross_mark: Error: binary not found in path: %s", "ssh")
+		return false, ErrSSHBinaryNotFound
 	}
 
-	m := a.Migration
-	s := m.SourceInfo
-	d := m.DestInfo
+	mig := attempt.Migration
+	sourceInfo := mig.SourceInfo
+	destInfo := mig.DestInfo
 
-	m.Logger.Info(":key: Generating SSH key pair")
-	keyAlgorithm := m.Request.KeyAlgorithm
-	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
+	srcReleaseName, destReleaseName, privateKey, err := r.installLocalReleases(attempt)
 	if err != nil {
 		return true, err
 	}
-	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	srcReleaseName := a.HelmReleaseNamePrefix + "-src"
-	destReleaseName := a.HelmReleaseNamePrefix + "-dest"
 	releaseNames := []string{srcReleaseName, destReleaseName}
 
-	doneCh := registerCleanupHook(a, releaseNames)
-	defer cleanupAndReleaseHook(a, releaseNames, doneCh)
+	doneCh := registerCleanupHook(attempt, releaseNames)
+	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
 
-	srcMountPath := "/source"
-	destMountPath := "/dest"
-
-	err = installLocalOnSource(a, srcReleaseName, publicKey,
-		privateKey, privateKeyMountPath, srcMountPath)
+	srcFwdPort, srcStopChan, err := portForwardToSshd(mig.Logger, sourceInfo, srcReleaseName)
 	if err != nil {
 		return true, err
 	}
 
-	err = installLocalOnDest(a, destReleaseName, publicKey, destMountPath)
-	if err != nil {
-		return true, err
-	}
-
-	sourceSshdPod, err := getSshdPodForHelmRelease(s, srcReleaseName)
-	if err != nil {
-		return true, err
-	}
-
-	srcFwdPort, srcStopChan, err := portForwardForPod(m.Logger, s.ClusterClient.RestConfig,
-		sourceSshdPod.Namespace, sourceSshdPod.Name)
-	if err != nil {
-		return true, err
-	}
 	defer func() { srcStopChan <- struct{}{} }()
 
-	destSshdPod, err := getSshdPodForHelmRelease(d, destReleaseName)
-	if err != nil {
-		return true, err
-	}
-
-	destFwdPort, destStopChan, err := portForwardForPod(m.Logger, d.ClusterClient.RestConfig,
-		destSshdPod.Namespace, destSshdPod.Name)
+	destFwdPort, destStopChan, err := portForwardToSshd(mig.Logger, destInfo, destReleaseName)
 	if err != nil {
 		return true, err
 	}
@@ -101,19 +78,7 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 		return true, err
 	}
 
-	srcPath := srcMountPath + "/" + m.Request.Source.Path
-	destPath := destMountPath + "/" + m.Request.Dest.Path
-
-	rsyncCmd := rsync.Cmd{
-		Port:        sshReverseTunnelPort,
-		NoChown:     m.Request.NoChown,
-		Delete:      m.Request.DeleteExtraneousFiles,
-		SrcPath:     srcPath,
-		DestPath:    destPath,
-		DestUseSsh:  true,
-		DestSshHost: "localhost",
-	}
-	rsyncCmdStr, err := rsyncCmd.Build()
+	rsyncCmd, err := buildRsyncCmdLocal(mig)
 	if err != nil {
 		return true, err
 	}
@@ -122,80 +87,135 @@ func (r *Local) Run(a *migration.Attempt) (bool, error) {
 		"-p", strconv.Itoa(srcFwdPort),
 		"-R", fmt.Sprintf("%d:localhost:%d", sshReverseTunnelPort, destFwdPort),
 		"-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "root@localhost",
-		rsyncCmdStr,
+		rsyncCmd,
 	)
+
+	err = runCmdLocal(attempt, cmd)
+
+	return true, err
+}
+
+func runCmdLocal(attempt *migration.Attempt, cmd *exec.Cmd) error {
+	mig := attempt.Migration
 
 	reader, writer := io.Pipe()
 	cmd.Stdout = writer
 	cmd.Stderr = writer
 
 	errorCh := make(chan error)
+
 	go func() { errorCh <- cmd.Run() }()
 
-	showProgressBar := !a.Migration.Request.NoProgressBar &&
-		m.Logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
+	showProgressBar := !attempt.Migration.Request.NoProgressBar &&
+		mig.Logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
 	successCh := make(chan bool, 1)
 
 	logTail := rsync.LogTail{
 		LogReaderFunc:   func() (io.ReadCloser, error) { return reader, nil },
 		SuccessCh:       successCh,
 		ShowProgressBar: showProgressBar,
-		Logger:          m.Logger,
+		Logger:          mig.Logger,
 	}
 
 	go logTail.Start()
 
-	err = <-errorCh
+	err := <-errorCh
 	successCh <- err == nil
-	return true, err
+
+	return err
+}
+
+func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
+	srcPath := srcMountPath + "/" + mig.Request.Source.Path
+	destPath := destMountPath + "/" + mig.Request.Dest.Path
+
+	rsyncCmd := rsync.Cmd{
+		Port:        sshReverseTunnelPort,
+		NoChown:     mig.Request.NoChown,
+		Delete:      mig.Request.DeleteExtraneousFiles,
+		SrcPath:     srcPath,
+		DestPath:    destPath,
+		DestUseSSH:  true,
+		DestSSHHost: "localhost",
+	}
+
+	return rsyncCmd.Build()
+}
+
+func (r *Local) installLocalReleases(attempt *migration.Attempt) (srcReleaseName, destReleaseName,
+	privateKey string, err error,
+) {
+	attempt.Migration.Logger.Info(":key: Generating SSH key pair")
+	keyAlgorithm := attempt.Migration.Request.KeyAlgorithm
+
+	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
+	if err != nil {
+		return
+	}
+
+	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
+
+	srcReleaseName = attempt.HelmReleaseNamePrefix + "-src"
+	destReleaseName = attempt.HelmReleaseNamePrefix + "-dest"
+
+	err = installLocalOnSource(attempt, srcReleaseName, publicKey,
+		privateKey, privateKeyMountPath, srcMountPath)
+	if err != nil {
+		return
+	}
+
+	err = installLocalOnDest(attempt, destReleaseName, publicKey, destMountPath)
+
+	return
 }
 
 func getSshdPodForHelmRelease(pvcInfo *pvc.Info, name string) (*corev1.Pod, error) {
 	labelSelector := "app.kubernetes.io/component=sshd,app.kubernetes.io/instance=" + name
+
 	return k8s.WaitForPod(pvcInfo.ClusterClient.KubeClient, pvcInfo.Claim.Namespace, labelSelector)
 }
 
-func installLocalOnSource(a *migration.Attempt, releaseName,
+func installLocalOnSource(attempt *migration.Attempt, releaseName,
 	publicKey, privateKey, privateKeyMountPath, srcMountPath string,
 ) error {
-	t := a.Migration
-	s := t.SourceInfo
-	ns := s.Claim.Namespace
+	mig := attempt.Migration
+	sourceInfo := mig.SourceInfo
+	namespace := sourceInfo.Claim.Namespace
 
 	vals := map[string]interface{}{
 		"sshd": map[string]interface{}{
 			"enabled":             true,
-			"namespace":           ns,
+			"namespace":           namespace,
 			"publicKey":           publicKey,
 			"privateKeyMount":     true,
 			"privateKey":          privateKey,
 			"privateKeyMountPath": privateKeyMountPath,
 			"pvcMounts": []map[string]interface{}{
 				{
-					"name":      s.Claim.Name,
-					"readOnly":  t.Request.SourceMountReadOnly,
+					"name":      sourceInfo.Claim.Name,
+					"readOnly":  mig.Request.SourceMountReadOnly,
 					"mountPath": srcMountPath,
 				},
 			},
 		},
 	}
 
-	return installHelmChart(a, s, releaseName, vals)
+	return installHelmChart(attempt, sourceInfo, releaseName, vals)
 }
 
-func installLocalOnDest(a *migration.Attempt, releaseName, publicKey, destMountPath string) error {
-	t := a.Migration
-	d := t.DestInfo
-	ns := d.Claim.Namespace
+func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey, destMountPath string) error {
+	mig := attempt.Migration
+	destInfo := mig.DestInfo
+	namespace := destInfo.Claim.Namespace
 
 	vals := map[string]interface{}{
 		"sshd": map[string]interface{}{
 			"enabled":   true,
-			"namespace": ns,
+			"namespace": namespace,
 			"publicKey": publicKey,
 			"pvcMounts": []map[string]interface{}{
 				{
-					"name":      d.Claim.Name,
+					"name":      destInfo.Claim.Name,
 					"mountPath": destMountPath,
 				},
 			},
@@ -206,9 +226,10 @@ func installLocalOnDest(a *migration.Attempt, releaseName, publicKey, destMountP
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = os.Remove(valsFile) }()
 
-	return installHelmChart(a, d, releaseName, vals)
+	return installHelmChart(attempt, destInfo, releaseName, vals)
 }
 
 func writePrivateKeyToTempFile(privateKey string) (string, error) {
@@ -216,6 +237,7 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	_, err = file.WriteString(privateKey)
 	if err != nil {
 		return "", err
@@ -223,18 +245,26 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 
 	name := file.Name()
 
-	err = os.Chmod(name, 0o600)
+	err = os.Chmod(name, privateKeyFileMode)
 	if err != nil {
 		return "", err
 	}
 
 	defer func() { _ = file.Close() }()
+
 	return name, nil
 }
 
-func portForwardForPod(logger *log.Entry, restConfig *rest.Config,
-	ns, name string,
-) (int, chan<- struct{}, error) {
+func portForwardToSshd(logger *log.Entry, pvcInfo *pvc.Info, helmReleaseName string) (int, chan<- struct{}, error) {
+	sshdPod, err := getSshdPodForHelmRelease(pvcInfo, helmReleaseName)
+	if err != nil {
+		return 0, nil, err
+	}
+
+	restConfig := pvcInfo.ClusterClient.RestConfig
+	namespace := sshdPod.Namespace
+	name := sshdPod.Name
+
 	port, err := getFreePort()
 	if err != nil {
 		return 0, nil, err
@@ -247,15 +277,15 @@ func portForwardForPod(logger *log.Entry, restConfig *rest.Config,
 		err := k8s.PortForward(&k8s.PortForwardRequest{
 			RestConfig: restConfig,
 			Logger:     logger,
-			PodNs:      ns,
+			PodNs:      namespace,
 			PodName:    name,
 			LocalPort:  port,
-			PodPort:    22,
+			PodPort:    localSSHPort,
 			StopCh:     stopChan,
 			ReadyCh:    readyChan,
 		})
 		if err != nil {
-			logger.WithError(err).WithField("ns", ns).WithField("name", name).
+			logger.WithError(err).WithField("ns", namespace).WithField("name", name).
 				WithField("port", port).Error(":cross_mark: Error on port-forward")
 		}
 	}()
@@ -264,7 +294,7 @@ func portForwardForPod(logger *log.Entry, restConfig *rest.Config,
 	case <-readyChan:
 		return port, stopChan, nil
 	case <-time.After(portForwardTimeout):
-		return 0, nil, errors.New("timed out waiting for port-forward to be ready")
+		return 0, nil, ErrPortForwardTimeout
 	}
 }
 
@@ -275,10 +305,17 @@ func getFreePort() (int, error) {
 		return 0, err
 	}
 
-	l, err := net.ListenTCP("tcp", addr)
+	listener, err := net.ListenTCP("tcp", addr)
 	if err != nil {
 		return 0, err
 	}
-	defer func() { _ = l.Close() }()
-	return l.Addr().(*net.TCPAddr).Port, nil
+
+	defer func() { _ = listener.Close() }()
+
+	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0, ErrNoTCPAddress
+	}
+
+	return tcpAddr.Port, nil
 }

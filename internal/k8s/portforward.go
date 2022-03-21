@@ -8,7 +8,6 @@ import (
 	"path"
 
 	log "github.com/sirupsen/logrus"
-
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
@@ -42,26 +41,27 @@ func PortForward(req *PortForwardRequest) error {
 	}
 
 	logger := req.Logger
+
 	outWriter := logger.WriterLevel(log.DebugLevel)
 	defer tryClose(logger, outWriter)
 
 	errWriter := logger.WriterLevel(log.DebugLevel)
-	defer tryClose(logger, outWriter)
+	defer tryClose(logger, errWriter)
 
 	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, targetURL)
 
 	ports := []string{fmt.Sprintf("%d:%d", req.LocalPort, req.PodPort)}
-	fw, err := portforward.New(dialer, ports, req.StopCh, req.ReadyCh, outWriter, errWriter)
+
+	forwarder, err := portforward.New(dialer, ports, req.StopCh, req.ReadyCh, outWriter, errWriter)
 	if err != nil {
 		return err
 	}
 
-	return fw.ForwardPorts()
+	return forwarder.ForwardPorts()
 }
 
 func tryClose(logger *log.Entry, w io.WriteCloser) {
-	err := w.Close()
-	if err != nil {
+	if err := w.Close(); err != nil {
 		logger.Debug("failed to close port-forward output stream")
 	}
 }

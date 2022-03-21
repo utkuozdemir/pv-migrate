@@ -19,7 +19,6 @@ import (
 	"helm.sh/helm/v3/pkg/cli/values"
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/storage/driver"
-
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -28,6 +27,11 @@ const (
 	SvcStrategy   = "svc"
 	LbSvcStrategy = "lbsvc"
 	LocalStrategy = "local"
+
+	helmValuesYAMLIndent = 2
+
+	srcMountPath  = "/source"
+	destMountPath = "/dest"
 )
 
 var (
@@ -42,6 +46,8 @@ var (
 	}
 
 	helmProviders = getter.All(cli.New())
+
+	ErrStrategyNotFound = errors.New("strategy not found")
 )
 
 type Strategy interface {
@@ -53,31 +59,36 @@ type Strategy interface {
 
 func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	sts := make(map[string]Strategy)
+
 	for _, name := range names {
 		s, ok := nameToStrategy[name]
 		if !ok {
-			return nil, fmt.Errorf("strategy not found: %s", name)
+			return nil, fmt.Errorf("%w: %s", ErrStrategyNotFound, name)
 		}
 
 		sts[name] = s
 	}
+
 	return sts, nil
 }
 
-func registerCleanupHook(a *migration.Attempt, releaseNames []string) chan<- bool {
+func registerCleanupHook(attempt *migration.Attempt, releaseNames []string) chan<- bool {
 	doneCh := make(chan bool)
 	signalCh := make(chan os.Signal, 1)
+
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
+
 	go func() {
 		select {
 		case <-signalCh:
-			a.Logger.Warn(":large_orange_diamond: Received termination signal")
-			cleanup(a, releaseNames)
+			attempt.Logger.Warn(":large_orange_diamond: Received termination signal")
+			cleanup(attempt, releaseNames)
 			os.Exit(1)
 		case <-doneCh:
 			return
 		}
 	}()
+
 	return doneCh
 }
 
@@ -90,6 +101,7 @@ func cleanup(a *migration.Attempt, releaseNames []string) {
 	mig := a.Migration
 	logger := a.Logger
 	logger.Info(":broom: Cleaning up")
+
 	var result *multierror.Error
 
 	for _, info := range []*pvc.Info{mig.SourceInfo, mig.DestInfo} {
@@ -101,11 +113,10 @@ func cleanup(a *migration.Attempt, releaseNames []string) {
 		}
 	}
 
-	err := result.ErrorOrNil()
-	if err != nil {
-		fmt.Println(err.Error())
+	if err := result.ErrorOrNil(); err != nil {
 		logger.WithError(err).
 			Warn(":large_orange_diamond: Cleanup failed, you might want to clean up manually")
+
 		return
 	}
 
@@ -126,41 +137,45 @@ func cleanupForPVC(logger *log.Entry, helmReleaseName string, pvcInfo *pvc.Info)
 	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) && !apierrors.IsNotFound(err) {
 		return err
 	}
+
 	return nil
 }
 
 func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configuration, error) {
 	actionConfig := new(action.Configuration)
+
 	err := actionConfig.Init(pvcInfo.ClusterClient.RESTClientGetter,
 		pvcInfo.Claim.Namespace, os.Getenv("HELM_DRIVER"), logger.Debugf)
 	if err != nil {
 		return nil, err
 	}
+
 	return actionConfig, nil
 }
 
-func getMergedHelmValues(helmValuesFile string, r *migration.Request) (map[string]interface{}, error) {
-	allValuesFiles := append([]string{helmValuesFile}, r.HelmValuesFiles...)
+func getMergedHelmValues(helmValuesFile string, request *migration.Request) (map[string]interface{}, error) {
+	allValuesFiles := append([]string{helmValuesFile}, request.HelmValuesFiles...)
 	valsOptions := values.Options{
-		Values:       r.HelmValues,
+		Values:       request.HelmValues,
 		ValueFiles:   allValuesFiles,
-		StringValues: r.HelmStringValues,
-		FileValues:   r.HelmFileValues,
+		StringValues: request.HelmStringValues,
+		FileValues:   request.HelmFileValues,
 	}
 
 	return valsOptions.MergeValues(helmProviders)
 }
 
-func installHelmChart(a *migration.Attempt, pvcInfo *pvc.Info, name string,
+func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string,
 	values map[string]interface{},
 ) error {
-	helmValuesFile, err := writeHelmValuesToTempFile(a.ID, values)
+	helmValuesFile, err := writeHelmValuesToTempFile(attempt.ID, values)
 	if err != nil {
 		return err
 	}
+
 	defer func() { _ = os.Remove(helmValuesFile) }()
 
-	helmActionConfig, err := initHelmActionConfig(a.Logger, pvcInfo)
+	helmActionConfig, err := initHelmActionConfig(attempt.Logger, pvcInfo)
 	if err != nil {
 		return err
 	}
@@ -171,29 +186,33 @@ func installHelmChart(a *migration.Attempt, pvcInfo *pvc.Info, name string,
 	install.Wait = true
 	install.Timeout = 1 * time.Minute
 
-	mig := a.Migration
+	mig := attempt.Migration
+
 	vals, err := getMergedHelmValues(helmValuesFile, mig.Request)
 	if err != nil {
 		return err
 	}
 
 	_, err = install.Run(mig.Chart, vals)
+
 	return err
 }
 
 func writeHelmValuesToTempFile(id string, vals map[string]interface{}) (string, error) {
-	f, err := ioutil.TempFile("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
+	file, err := ioutil.TempFile("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = f.Close() }()
 
-	encoder := yaml.NewEncoder(f)
-	encoder.SetIndent(2)
+	defer func() { _ = file.Close() }()
+
+	encoder := yaml.NewEncoder(file)
+	encoder.SetIndent(helmValuesYAMLIndent)
+
 	err = encoder.Encode(vals)
 	if err != nil {
 		return "", err
 	}
 
-	return f.Name(), nil
+	return file.Name(), nil
 }

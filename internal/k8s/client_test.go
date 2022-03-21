@@ -13,9 +13,13 @@ import (
 var kubeconfig string
 
 func TestGetClusterClient(t *testing.T) {
+	t.Parallel()
+
 	c := prepareKubeconfig()
 	defer func() { _ = os.Remove(c) }()
+
 	clusterClient, err := GetClusterClient(c, "context-1")
+
 	assert.NoError(t, err)
 
 	rcGetter := clusterClient.RESTClientGetter
@@ -38,27 +42,30 @@ func TestGetClusterClient(t *testing.T) {
 }
 
 func TestBuildK8sConfig(t *testing.T) {
-	c := prepareKubeconfig()
+	t.Parallel()
+
+	conf := prepareKubeconfig()
 	defer func() {
-		_ = os.Remove(c)
+		_ = os.Remove(conf)
 	}()
 
-	config, _, ns, err := buildK8sConfig(c, "")
+	config, _, namespace, err := buildK8sConfig(conf, "")
 	assert.NotNil(t, config)
-	assert.Equal(t, "namespace1", ns)
+	assert.Equal(t, "namespace1", namespace)
 	assert.Nil(t, err)
-	config, _, ns, err = buildK8sConfig(c, "context-2")
+	config, _, namespace, err = buildK8sConfig(conf, "context-2")
 	assert.Nil(t, err)
-	assert.Equal(t, "namespace2", ns)
+	assert.Equal(t, "namespace2", namespace)
 	assert.NotNil(t, config)
-	config, _, ns, err = buildK8sConfig(c, "context-nonexistent")
+	config, _, namespace, err = buildK8sConfig(conf, "context-nonexistent")
 	assert.Nil(t, config)
-	assert.Equal(t, "", ns)
+	assert.Equal(t, "", namespace)
 	assert.NotNil(t, err)
 }
 
 func prepareKubeconfig() string {
 	testConfig, _ := ioutil.TempFile("", "pv-migrate-testconfig-*.yaml")
 	_, _ = testConfig.WriteString(kubeconfig)
+
 	return testConfig.Name()
 }

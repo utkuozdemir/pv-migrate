@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -12,7 +13,7 @@ import (
 type LoggerContextKey string
 
 const (
-	FormatJson  = "json"
+	FormatJSON  = "json"
 	FormatFancy = "fancy"
 
 	LevelTrace = "trace"
@@ -27,11 +28,14 @@ const (
 )
 
 var (
-	Formats = []string{FormatJson, FormatFancy}
+	Formats = []string{FormatJSON, FormatFancy}
 	Levels  = []string{
 		LevelTrace, LevelDebug, LevelInfo, LevelWarn,
 		LevelError, LevelFatal, LevelPanic,
 	}
+
+	ErrUnknownLogLevel  = errors.New("unknown log level")
+	ErrUnknownLogFormat = errors.New("unknown log format")
 )
 
 func New() (*log.Entry, error) {
@@ -40,18 +44,20 @@ func New() (*log.Entry, error) {
 	l := log.New()
 	l.SetOutput(os.Stdout)
 
-	e := l.WithContext(context.Background())
-	err := Configure(e, LevelInfo, FormatFancy)
+	entry := l.WithContext(context.Background())
+
+	err := Configure(entry, LevelInfo, FormatFancy)
 	if err != nil {
 		return nil, err
 	}
 
-	return e, nil
+	return entry, nil
 }
 
-func Configure(e *log.Entry, level string, format string) error {
-	l := e.Logger
-	l.SetOutput(os.Stdout)
+func Configure(entry *log.Entry, level string, format string) error {
+	logger := entry.Logger
+	logger.SetOutput(os.Stdout)
+
 	formatter, err := getLogFormatter(format)
 	if err != nil {
 		return err
@@ -62,21 +68,23 @@ func Configure(e *log.Entry, level string, format string) error {
 		return err
 	}
 
-	l.SetFormatter(formatter)
-	l.SetLevel(logLevel)
-	e.Context = context.WithValue(e.Context, FormatContextKey, format)
+	logger.SetFormatter(formatter)
+	logger.SetLevel(logLevel)
+
+	entry.Context = context.WithValue(entry.Context, FormatContextKey, format)
 
 	return nil
 }
 
 func getLogFormatter(format string) (log.Formatter, error) {
 	switch format {
-	case FormatJson:
+	case FormatJSON:
 		return &log.JSONFormatter{}, nil
 	case FormatFancy:
 		return &fancyFormatter{}, nil
 	}
-	return nil, fmt.Errorf("unknown log format: %s", format)
+
+	return nil, fmt.Errorf("%w: %s", ErrUnknownLogFormat, format)
 }
 
 func getLogLevel(level string) (log.Level, error) {
@@ -97,7 +105,7 @@ func getLogLevel(level string) (log.Level, error) {
 		return log.PanicLevel, nil
 	}
 
-	return 0, fmt.Errorf("unknown log level: %s", level)
+	return 0, fmt.Errorf("%w: %s", ErrUnknownLogLevel, level)
 }
 
 type fancyFormatter struct{}
@@ -105,6 +113,7 @@ type fancyFormatter struct{}
 func (f *fancyFormatter) Format(e *log.Entry) ([]byte, error) {
 	msg := emoji.Sprintf("%s\n", e.Message)
 	bytes := []byte(msg)
+
 	return bytes, nil
 }
 
