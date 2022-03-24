@@ -48,7 +48,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3.1.0
         with:
           # renovate: golangci-lint
-          version: v1.45.0
+          version: v1.45.2
           skip-go-installation: true
           args: --timeout=3m0s
       - name: Build with Goreleaser
