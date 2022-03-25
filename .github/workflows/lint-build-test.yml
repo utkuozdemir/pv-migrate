@@ -112,7 +112,12 @@ jobs:
           --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
           helm -n metallb-system get values metallb
       - name: kind-1 - Wait for all pods in the cluster to be ready
-        run: kubectl wait pod --timeout=5m --for=condition=Ready --all --all-namespaces
+        run: |
+          for i in $(seq 1 10); do
+            echo "Attempt: $i"
+            kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
+            sleep 5;
+          done
 
       - name: kind-2 - Create cluster
         uses: helm/kind-action@v1.2.0
@@ -124,34 +129,24 @@ jobs:
           version: v0.11.1
           config: test/kind-config.yaml
       - name: kind-2 - Install allow-all network policies on system namespaces
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: |
           kubectl -n kube-system apply -f test/netpol-allow-all.yaml
           kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: kind-2 - Install Cilium with default-deny policy
-        run: cilium install --config enable-policy=always
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
+        run: cilium install --config enable-policy=always
       - name: kind-2 - Wait for all pods in the cluster to be ready
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: |
           for i in $(seq 1 10); do
             echo "Attempt: $i"
             kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
             sleep 5;
           done
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-      - name: Debug
-        if: ${{ always() }}
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: |
-          kubectl get pod --no-headers -A --field-selector="status.phase!=Succeeded,status.phase!=Running" | awk '{print "--namespace " $1 " " $2}' | xargs -I{} -L 1 sh -c 'echo \\n------\\n; set -x; kubectl describe pod {}'
-          echo "--------------------"
-          echo "--------------------"
-          echo "--------------------"
-          kubectl get pod --no-headers -A --field-selector="status.phase!=Succeeded,status.phase!=Running" | awk '{print "--namespace " $1 " " $2}' | xargs -I{} -L 1 sh -c 'echo \\n------\\n; set -x; kubectl logs {}'
 
       - name: Run tests
         env:
