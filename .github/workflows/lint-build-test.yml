@@ -134,7 +134,12 @@ jobs:
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: kind-2 - Wait for all pods in the cluster to be ready
-        run: kubectl wait pod --timeout=5m --for=condition=Ready --all --all-namespaces
+        run: |
+          for i in $(seq 1 10); do
+            echo "Attempt: $i"
+            kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
+            sleep 5;
+          done
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
       - name: Debug
