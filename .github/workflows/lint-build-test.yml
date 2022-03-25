@@ -137,6 +137,16 @@ jobs:
         run: kubectl wait pod --timeout=5m --for=condition=Ready --all --all-namespaces
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
+      - name: Debug
+        if: ${{ always() }}
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
+        run: |
+          kubectl get pod --no-headers -A --field-selector="status.phase!=Succeeded,status.phase!=Running" | awk '{print "--namespace " $1 " " $2}' | xargs -I{} -L 1 sh -c 'echo \\n------\\n; set -x; kubectl describe pod {}'
+          echo "--------------------"
+          echo "--------------------"
+          echo "--------------------"
+          kubectl get pod --no-headers -A --field-selector="status.phase!=Succeeded,status.phase!=Running" | awk '{print "--namespace " $1 " " $2}' | xargs -I{} -L 1 sh -c 'echo \\n------\\n; set -x; kubectl logs {}'
 
       - name: Run tests
         env:
