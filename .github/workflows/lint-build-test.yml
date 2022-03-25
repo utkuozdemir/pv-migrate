@@ -40,14 +40,13 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v3.0.0
         with:
-          # renovate: go
           go-version: 1.17.5
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
       - name: Run linters
         uses: golangci/golangci-lint-action@v3.1.0
         with:
-          # renovate: golangci-lint
+          # renovate: depName=golangci/golangci-lint
           version: v1.45.2
           skip-go-installation: true
           args: --timeout=3m0s
@@ -55,7 +54,7 @@ jobs:
         if: ${{ always() }}
         uses: goreleaser/goreleaser-action@v2.9.1
         with:
-          # renovate: goreleaser
+          # renovate: depName=goreleaser/goreleaser
           version: v1.7.0
           args: build --snapshot --rm-dist --single-target
   test:
@@ -66,15 +65,18 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v3.0.0
         with:
-          # renovate: go
           go-version: 1.17.5
       - name: Install richgo
+        # renovate: depName=kyoh86/richgo
         run: go install github.com/kyoh86/richgo@v0.3.10
       - name: Install helm
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install cilium-cli
+        env:
+          # renovate: depName=cilium/cilium-cli
+          CILIUM_CLI_VERSION: v0.10.4
         run: |
-          wget https://github.com/cilium/cilium-cli/releases/download/v0.10.4/cilium-linux-amd64.tar.gz
+          wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
@@ -82,8 +84,8 @@ jobs:
         uses: helm/kind-action@v1.2.0
         with:
           cluster_name: kind-1
+          # renovate: depName=kubernetes-sigs/kind
           version: v0.11.1
-          node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
           config: test/kind-config.yaml
       - name: kind-1 - Create metallb-system namespace
         run: kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
@@ -95,13 +97,16 @@ jobs:
       - name: kind-1 - Install Cilium with default-deny policy
         run: cilium install --config enable-policy=always
       - name: kind-1 - Install MetalLB
+        env:
+          # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
+          METALLB_CHART_VERSION: 2.5.14
         run: |
           IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm upgrade metallb \
           --install bitnami/metallb \
           --namespace metallb-system \
-          --version 2.5.14 \
+          --version ${METALLB_CHART_VERSION} \
           --atomic \
           --values test/metallb-values.yaml \
           --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
@@ -115,8 +120,8 @@ jobs:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
         with:
           cluster_name: kind-2
+          # renovate: depName=kubernetes-sigs/kind
           version: v0.11.1
-          node_image: docker.io/kindest/node:v1.21.1@sha256:69860bda5563ac81e3c0057d654b5253219618a22ec3a346306239bba8cfa1a6
           config: test/kind-config.yaml
       - name: kind-2 - Install allow-all network policies on system namespaces
         run: |
