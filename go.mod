@@ -1,5 +1,6 @@
 module github.com/utkuozdemir/pv-migrate
 
+// renovate: go
 go 1.18
 
 require (

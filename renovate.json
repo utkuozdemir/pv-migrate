@@ -38,10 +38,22 @@
         "\\.github\\/workflows\\/.*"
       ],
       "matchStrings": [
-        "# renovate: depName=(?<depName>[^\\s]+)( datasource=(?<datasource>[^\\s]+))?( registryUrl=(?<registryUrl>\\S+))?\\n[^\\n]*?(?<version>v?\\d+\\.\\d+\\.\\d+(-[\\S]+)?)"
+        "# renovate: depName=(?<depName>[^\\s]+)( datasource=(?<datasource>[^\\s]+))?( registryUrl=(?<registryUrl>\\S+))?\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+\\.\\d+(-[\\S]+)?)"
       ],
       "datasourceTemplate": "{{#if datasource}}{{{datasource}}}{{else}}github-tags{{/if}}",
       "versioningTemplate": "semver"
+    },
+    {
+      "fileMatch": [
+        "go.mod",
+        "\\.github\\/workflows\\/.*"
+      ],
+      "matchStrings": [
+        "(#|\\/\\/) renovate: go\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+(\\.\\d+(-[\\S]+)?)?)"
+      ],
+      "depNameTemplate": "golang/go",
+      "datasourceTemplate": "github-tags",
+      "extractVersionTemplate": "^go(?<version>\\d+\\.\\d+\\.\\d+)$"
     }
   ]
 }
