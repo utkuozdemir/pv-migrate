@@ -38,21 +38,9 @@
         "\\.github\\/workflows\\/.*"
       ],
       "matchStrings": [
-        "# renovate: golangci-lint\\s+version: (?<currentValue>v\\d+\\.\\d+\\.\\d+)"
+        "# renovate: depName=(?<depName>[^\\s]+)( datasource=(?<datasource>[^\\s]+))?( registryUrl=(?<registryUrl>\\S+))?\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+\\.\\d+(-[\\S]+)?)"
       ],
-      "depNameTemplate": "golangci/golangci-lint",
-      "datasourceTemplate": "github-tags",
-      "versioningTemplate": "semver"
-    },
-    {
-      "fileMatch": [
-        "\\.github\\/workflows\\/.*"
-      ],
-      "matchStrings": [
-        "# renovate: goreleaser\\s+version: (?<currentValue>v\\d+\\.\\d+\\.\\d+)"
-      ],
-      "depNameTemplate": "goreleaser/goreleaser",
-      "datasourceTemplate": "github-tags",
+      "datasourceTemplate": "{{#if datasource}}{{{datasource}}}{{else}}github-tags{{/if}}",
       "versioningTemplate": "semver"
     },
     {
@@ -61,8 +49,7 @@
         "\\.github\\/workflows\\/.*"
       ],
       "matchStrings": [
-        "// renovate: go\\s+go (?<currentValue>\\d+\\.\\d+)",
-        "# renovate: go\\s+go-version: (?<currentValue>\\d+\\.\\d+)"
+        "(#|\\/\\/) renovate: go\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+(\\.\\d+(-[\\S]+)?)?)"
       ],
       "depNameTemplate": "golang/go",
       "datasourceTemplate": "github-tags",

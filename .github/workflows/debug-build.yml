@@ -36,9 +36,8 @@ jobs:
         uses: actions/setup-go@v3.0.0
         with:
           # renovate: go
-          go-version: 1.17.5
+          go-version: 1.18
       - name: Install go-acc
-        # renovate: go-acc
         run: go install github.com/ory/go-acc@v0.2.6
       - name: Start SSH session
         uses: luchihoratiu/debug-via-ssh@main
