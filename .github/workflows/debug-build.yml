@@ -35,7 +35,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v3.0.0
         with:
-          go-version: 1.17.5
+          go-version: 1.18
       - name: Install go-acc
         run: go install github.com/ory/go-acc@v0.2.6
       - name: Start SSH session

@@ -40,7 +40,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v3.0.0
         with:
-          go-version: 1.17.5
+          go-version: 1.18
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
       - name: Run linters
@@ -65,7 +65,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v3.0.0
         with:
-          go-version: 1.17.5
+          go-version: 1.18
       - name: Install richgo
         # renovate: depName=kyoh86/richgo
         run: go install github.com/kyoh86/richgo@v0.3.10
