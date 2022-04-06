@@ -49,7 +49,6 @@ jobs:
         with:
           # renovate: depName=golangci/golangci-lint
           version: v1.45.2
-          skip-go-installation: true
           args: --timeout=3m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
