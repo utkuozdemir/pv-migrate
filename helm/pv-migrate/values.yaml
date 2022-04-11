@@ -30,7 +30,7 @@ sshd:
   securityContext:
     capabilities:
       add:
-      - CAP_SYS_CHROOT
+      - SYS_CHROOT
   service:
     # -- SSHD service type
     type: ClusterIP
