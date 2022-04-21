@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.0.1
+        uses: actions/checkout@v3.0.2
         with:
           # to be able to generate the full changelog:
           # https://github.com/goreleaser/goreleaser-action/issues/56#issuecomment-568718162
