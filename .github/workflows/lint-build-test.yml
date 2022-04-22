@@ -100,7 +100,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 2.6.14
+          METALLB_CHART_VERSION: 3.0.0
         run: |
           IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
           helm repo add bitnami https://charts.bitnami.com/bitnami
