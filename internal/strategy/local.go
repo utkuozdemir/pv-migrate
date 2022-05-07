@@ -182,15 +182,15 @@ func installLocalOnSource(attempt *migration.Attempt, releaseName,
 	sourceInfo := mig.SourceInfo
 	namespace := sourceInfo.Claim.Namespace
 
-	vals := map[string]interface{}{
-		"sshd": map[string]interface{}{
+	vals := map[string]any{
+		"sshd": map[string]any{
 			"enabled":             true,
 			"namespace":           namespace,
 			"publicKey":           publicKey,
 			"privateKeyMount":     true,
 			"privateKey":          privateKey,
 			"privateKeyMountPath": privateKeyMountPath,
-			"pvcMounts": []map[string]interface{}{
+			"pvcMounts": []map[string]any{
 				{
 					"name":      sourceInfo.Claim.Name,
 					"readOnly":  mig.Request.SourceMountReadOnly,
@@ -208,12 +208,12 @@ func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey, dest
 	destInfo := mig.DestInfo
 	namespace := destInfo.Claim.Namespace
 
-	vals := map[string]interface{}{
-		"sshd": map[string]interface{}{
+	vals := map[string]any{
+		"sshd": map[string]any{
 			"enabled":   true,
 			"namespace": namespace,
 			"publicKey": publicKey,
-			"pvcMounts": []map[string]interface{}{
+			"pvcMounts": []map[string]any{
 				{
 					"name":      destInfo.Claim.Name,
 					"mountPath": destMountPath,

@@ -153,7 +153,7 @@ func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configu
 	return actionConfig, nil
 }
 
-func getMergedHelmValues(helmValuesFile string, request *migration.Request) (map[string]interface{}, error) {
+func getMergedHelmValues(helmValuesFile string, request *migration.Request) (map[string]any, error) {
 	allValuesFiles := append([]string{helmValuesFile}, request.HelmValuesFiles...)
 	valsOptions := values.Options{
 		Values:       request.HelmValues,
@@ -166,7 +166,7 @@ func getMergedHelmValues(helmValuesFile string, request *migration.Request) (map
 }
 
 func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string,
-	values map[string]interface{},
+	values map[string]any,
 ) error {
 	helmValuesFile, err := writeHelmValuesToTempFile(attempt.ID, values)
 	if err != nil {
@@ -198,7 +198,7 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 	return err
 }
 
-func writeHelmValuesToTempFile(id string, vals map[string]interface{}) (string, error) {
+func writeHelmValuesToTempFile(id string, vals map[string]any) (string, error) {
 	file, err := ioutil.TempFile("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
 	if err != nil {
 		return "", err

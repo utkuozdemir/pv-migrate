@@ -44,12 +44,12 @@ func (r *Mnt2) Run(attempt *migration.Attempt) (bool, error) {
 		return true, err
 	}
 
-	vals := map[string]interface{}{
-		"rsync": map[string]interface{}{
+	vals := map[string]any{
+		"rsync": map[string]any{
 			"enabled":   true,
 			"namespace": namespace,
 			"nodeName":  node,
-			"pvcMounts": []map[string]interface{}{
+			"pvcMounts": []map[string]any{
 				{
 					"name":      sourceInfo.Claim.Name,
 					"mountPath": srcMountPath,
