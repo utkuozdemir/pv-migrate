@@ -74,15 +74,15 @@ func installOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMoun
 	sourceInfo := mig.SourceInfo
 	namespace := sourceInfo.Claim.Namespace
 
-	vals := map[string]interface{}{
-		"sshd": map[string]interface{}{
+	vals := map[string]any{
+		"sshd": map[string]any{
 			"enabled":   true,
 			"namespace": namespace,
 			"publicKey": publicKey,
-			"service": map[string]interface{}{
+			"service": map[string]any{
 				"type": "LoadBalancer",
 			},
-			"pvcMounts": []map[string]interface{}{
+			"pvcMounts": []map[string]any{
 				{
 					"name":      sourceInfo.Claim.Name,
 					"readOnly":  mig.Request.SourceMountReadOnly,
@@ -118,15 +118,15 @@ func installOnDest(attempt *migration.Attempt, releaseName, privateKey,
 		return err
 	}
 
-	vals := map[string]interface{}{
-		"rsync": map[string]interface{}{
+	vals := map[string]any{
+		"rsync": map[string]any{
 			"enabled":             true,
 			"namespace":           namespace,
 			"privateKeyMount":     true,
 			"privateKey":          privateKey,
 			"privateKeyMountPath": privateKeyMountPath,
 			"sshRemoteHost":       sshHost,
-			"pvcMounts": []map[string]interface{}{
+			"pvcMounts": []map[string]any{
 				{
 					"name":      destInfo.Claim.Name,
 					"mountPath": destMountPath,

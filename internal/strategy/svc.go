@@ -48,7 +48,7 @@ func (r *Svc) Run(attempt *migration.Attempt) (bool, error) {
 }
 
 //nolint:funlen
-func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string]interface{}, error) {
+func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string]any, error) {
 	sourceInfo := mig.SourceInfo
 	destInfo := mig.DestInfo
 	sourceNs := sourceInfo.Claim.Namespace
@@ -85,14 +85,14 @@ func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string
 		return nil, err
 	}
 
-	return map[string]interface{}{
-		"rsync": map[string]interface{}{
+	return map[string]any{
+		"rsync": map[string]any{
 			"enabled":             true,
 			"namespace":           destNs,
 			"privateKeyMount":     true,
 			"privateKey":          privateKey,
 			"privateKeyMountPath": privateKeyMountPath,
-			"pvcMounts": []map[string]interface{}{
+			"pvcMounts": []map[string]any{
 				{
 					"name":      destInfo.Claim.Name,
 					"mountPath": destMountPath,
@@ -100,11 +100,11 @@ func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string
 			},
 			"command": rsyncCmdStr,
 		},
-		"sshd": map[string]interface{}{
+		"sshd": map[string]any{
 			"enabled":   true,
 			"namespace": sourceNs,
 			"publicKey": publicKey,
-			"pvcMounts": []map[string]interface{}{
+			"pvcMounts": []map[string]any{
 				{
 					"name":      sourceInfo.Claim.Name,
 					"mountPath": srcMountPath,
