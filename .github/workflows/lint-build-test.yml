@@ -38,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.0.2
       - name: Install go
-        uses: actions/setup-go@v3.0.0
+        uses: actions/setup-go@v3.1.0
         with:
           # renovate: go
           go-version: 1.18
@@ -48,7 +48,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3.2.0
         with:
           # renovate: depName=golangci/golangci-lint
-          version: v1.46.0
+          version: v1.46.1
           args: --timeout=3m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
@@ -63,7 +63,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.0.2
       - name: Install go
-        uses: actions/setup-go@v3.0.0
+        uses: actions/setup-go@v3.1.0
         with:
           # renovate: go
           go-version: 1.18
