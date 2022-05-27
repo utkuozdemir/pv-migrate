@@ -99,6 +99,7 @@ func cleanupAndReleaseHook(a *migration.Attempt, releaseNames []string, doneCh c
 
 func cleanup(a *migration.Attempt, releaseNames []string) {
 	mig := a.Migration
+	req := mig.Request
 	logger := a.Logger
 	logger.Info(":broom: Cleaning up")
 
@@ -106,7 +107,7 @@ func cleanup(a *migration.Attempt, releaseNames []string) {
 
 	for _, info := range []*pvc.Info{mig.SourceInfo, mig.DestInfo} {
 		for _, name := range releaseNames {
-			err := cleanupForPVC(logger, name, info)
+			err := cleanupForPVC(logger, name, req.HelmTimeout, info)
 			if err != nil {
 				result = multierror.Append(result, err)
 			}
@@ -123,7 +124,9 @@ func cleanup(a *migration.Attempt, releaseNames []string) {
 	logger.Info(":sparkles: Cleanup done")
 }
 
-func cleanupForPVC(logger *log.Entry, helmReleaseName string, pvcInfo *pvc.Info) error {
+func cleanupForPVC(logger *log.Entry, helmReleaseName string,
+	helmUninstallTimeout time.Duration, pvcInfo *pvc.Info,
+) error {
 	ac, err := initHelmActionConfig(logger, pvcInfo)
 	if err != nil {
 		return err
@@ -131,7 +134,7 @@ func cleanupForPVC(logger *log.Entry, helmReleaseName string, pvcInfo *pvc.Info)
 
 	uninstall := action.NewUninstall(ac)
 	uninstall.Wait = true
-	uninstall.Timeout = 1 * time.Minute
+	uninstall.Timeout = helmUninstallTimeout
 	_, err = uninstall.Run(helmReleaseName)
 
 	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) && !apierrors.IsNotFound(err) {
@@ -180,13 +183,14 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 		return err
 	}
 
+	mig := attempt.Migration
+	req := mig.Request
+
 	install := action.NewInstall(helmActionConfig)
 	install.Namespace = pvcInfo.Claim.Namespace
 	install.ReleaseName = name
 	install.Wait = true
-	install.Timeout = 1 * time.Minute
-
-	mig := attempt.Migration
+	install.Timeout = req.HelmTimeout
 
 	vals, err := getMergedHelmValues(helmValuesFile, mig.Request)
 	if err != nil {

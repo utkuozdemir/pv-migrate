@@ -1,6 +1,8 @@
 package migration
 
 import (
+	"time"
+
 	log "github.com/sirupsen/logrus"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"helm.sh/helm/v3/pkg/chart"
@@ -23,6 +25,7 @@ type Request struct {
 	NoProgressBar         bool
 	SourceMountReadOnly   bool
 	KeyAlgorithm          string
+	HelmTimeout           time.Duration
 	HelmValuesFiles       []string
 	HelmValues            []string
 	HelmFileValues        []string

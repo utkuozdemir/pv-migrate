@@ -41,6 +41,7 @@ Flags:
       --helm-set-file strings          set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)
       --helm-set-string strings        set additional Helm STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
   -f, --helm-values strings            set additional Helm values by a YAML file or a URL (can specify multiple)
+  -t, --helm-timeout duration          install/uninstall timeout for helm releases (default 1m0s)
   -h, --help                           help for migrate
   -i, --ignore-mounted                 do not fail if the source or destination PVC is mounted
   -o, --no-chown                       omit chown on rsync
