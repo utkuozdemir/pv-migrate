@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
@@ -34,6 +35,7 @@ const (
 	FlagStrategies                = "strategies"
 	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
 
+	FlagHelmTimeout   = "helm-timeout"
 	FlagHelmValues    = "helm-values"
 	FlagHelmSet       = "helm-set"
 	FlagHelmSetString = "helm-set-string"
@@ -114,6 +116,7 @@ func setMigrateCmdFlags(cmd *cobra.Command) {
 			"By default, it is determined by used strategy and differs across strategies. "+
 			"Has no effect for mnt2 and local strategies")
 
+	flags.DurationP(FlagHelmTimeout, "t", 1*time.Minute, "install/uninstall timeout for helm releases")
 	flags.StringSliceP(FlagHelmValues, "f", nil,
 		"set additional Helm values by a YAML file or a URL (can specify multiple)")
 	flags.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify "+
@@ -132,6 +135,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 	noChown, _ := flags.GetBool(FlagNoChown)
 	noProgressBar, _ := flags.GetBool(FlagNoProgressBar)
 	sshKeyAlg, _ := flags.GetString(FlagSSHKeyAlgorithm)
+	helmTimeout, _ := flags.GetDuration(FlagHelmTimeout)
 	helmValues, _ := flags.GetStringSlice(FlagHelmValues)
 	helmSet, _ := flags.GetStringSlice(FlagHelmSet)
 	helmSetString, _ := flags.GetStringSlice(FlagHelmSetString)
@@ -149,6 +153,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		NoChown:               noChown,
 		NoProgressBar:         noProgressBar,
 		KeyAlgorithm:          sshKeyAlg,
+		HelmTimeout:           helmTimeout,
 		HelmValuesFiles:       helmValues,
 		HelmValues:            helmSet,
 		HelmStringValues:      helmSetString,
