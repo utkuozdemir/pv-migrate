@@ -15,11 +15,9 @@ That's it.
 
 ## Creating Releases
 
-- To make a release of `pv-migrate` itself, push an annotated tag. Example:
+- To make a release of `pv-migrate` itself, run the following command:
   ```bash
-  git tag -a v0.5.3 -m "Release v0.5.3"
-  git push
-  git push --tags
+  task release
   ```
 
 - To make a release of docker images, use their special tag prefixes, followed by the version. Example:
@@ -36,18 +34,13 @@ That's it.
   ```
 
 ## Editing the helm chart
-The `pv-migrate` helm chart is located at `helm/pv-migrate`. It is inserted into the go code during build. The source is a helm package located in `internal/migrator/pv-migrate-X.Y.Z.tgz`.
 
-If you want to tweak the helm chart, you must run the following commands before recompiling the code in order
-to update the chart (you need [helm-docs](https://github.com/norwoodj/helm-docs) installed):
+The `pv-migrate` helm chart is located at `helm/pv-migrate`. It is inserted into the go code during build. 
+The source is a helm package located in `internal/migrator/helm-chart.tgz`.
+
+If you want to tweak the helm chart, you must run the following command before recompiling the code in order
+to update the chart (you need [helm](https://helm.sh/docs/intro/install/) and [helm-docs](https://github.com/norwoodj/helm-docs) installed):
+
 ```bash
-helm-docs -c helm/pv-migrate/
-helm package helm/pv-migrate/
-mv pv-migrate-*.tgz  internal/migrator/helm-chart.tgz
+task update-chart
 ```
-
-When you change the helm chart, in order to release a new version, don't forget to:
-- bump the version in the `Chart.yml` file
-- remove the old `internal/migrator/pv-migrate-X.Y.Z.tgz` package
-- create the new one (as shown above)
-- update the `go:embed` reference in `internal/migrator/migrator.go`
