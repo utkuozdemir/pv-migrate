@@ -1,0 +1,31 @@
+version: "3"
+
+tasks:
+  fmt:
+    desc: gofumpt all code
+    cmds:
+      - gofumpt -w -l .
+      - gci -w .
+
+  lint:
+    desc: Lint the code with golangci-lint
+    cmds:
+      - golangci-lint run ./...
+      - helm lint helm/pv-migrate
+
+  update-chart:
+    desc: Update the Helm chart
+    cmds:
+      - helm-docs -c helm/pv-migrate/
+      - helm package helm/pv-migrate/
+      - mv pv-migrate-*.tgz internal/migrator/helm-chart.tgz
+
+  release:
+    desc: Create a new tag
+    vars:
+      NEXT:
+        sh: svu n
+    cmds:
+      - git tag {{.NEXT}}
+      - echo {{.NEXT}}
+      - git push origin {{.NEXT}}
