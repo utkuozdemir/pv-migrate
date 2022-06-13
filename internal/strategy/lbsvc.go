@@ -89,6 +89,7 @@ func installOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMoun
 					"mountPath": srcMountPath,
 				},
 			},
+			"affinity": sourceInfo.AffinityHelmValues,
 		},
 	}
 
@@ -132,7 +133,8 @@ func installOnDest(attempt *migration.Attempt, releaseName, privateKey,
 					"mountPath": destMountPath,
 				},
 			},
-			"command": rsyncCmdStr,
+			"command":  rsyncCmdStr,
+			"affinity": destInfo.AffinityHelmValues,
 		},
 	}
 

@@ -60,7 +60,8 @@ func (r *Mnt2) Run(attempt *migration.Attempt) (bool, error) {
 					"mountPath": destMountPath,
 				},
 			},
-			"command": rsyncCmd,
+			"command":  rsyncCmd,
+			"affinity": sourceInfo.AffinityHelmValues,
 		},
 	}
 

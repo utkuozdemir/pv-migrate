@@ -197,6 +197,7 @@ func installLocalOnSource(attempt *migration.Attempt, releaseName,
 					"mountPath": srcMountPath,
 				},
 			},
+			"affinity": sourceInfo.AffinityHelmValues,
 		},
 	}
 
@@ -219,6 +220,7 @@ func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey, dest
 					"mountPath": destMountPath,
 				},
 			},
+			"affinity": destInfo.AffinityHelmValues,
 		},
 	}
 
