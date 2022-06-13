@@ -1,5 +1,6 @@
 ---
-name: Build sshd image
+name: build sshd image
+
 on:
   push:
     branches:
@@ -12,8 +13,9 @@ on:
       - master
     paths:
       - docker/sshd/**
+
 jobs:
-  build-sshd-image:
+  build:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout

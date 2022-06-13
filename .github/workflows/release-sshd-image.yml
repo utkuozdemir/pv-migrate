@@ -1,11 +1,13 @@
 ---
-name: Release sshd image
+name: release sshd image
+
 on:
   push:
     tags:
       - docker-sshd-*
+
 jobs:
-  release-sshd-image:
+  release:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout

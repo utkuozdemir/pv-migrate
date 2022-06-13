@@ -1,11 +1,13 @@
 ---
-name: Release rsync image
+name: release rsync image
+
 on:
   push:
     tags:
       - docker-rsync-*
+
 jobs:
-  release-rsync-image:
+  release:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout

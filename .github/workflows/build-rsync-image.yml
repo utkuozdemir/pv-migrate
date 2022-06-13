@@ -1,5 +1,6 @@
 ---
-name: Build rsync image
+name: build rsync image
+
 on:
   push:
     branches:
@@ -12,8 +13,9 @@ on:
       - master
     paths:
       - docker/rsync/**
+
 jobs:
-  build-rsync-image:
+  build:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
