@@ -1,5 +1,6 @@
 ---
-name: Debug build
+name: (debug) build pv-migrate
+
 on:
   push:
     branches:
@@ -26,8 +27,9 @@ on:
       - "helm/**"
       - "renovate.json"
       - ".krew.yaml"
+
 jobs:
-  debug-build:
+  build:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout

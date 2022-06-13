@@ -1,9 +1,11 @@
 ---
-name: Release
+name: release
+
 on:
   push:
     tags:
       - 'v*.*.*'
+
 jobs:
   release:
     runs-on: ubuntu-20.04
