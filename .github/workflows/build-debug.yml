@@ -29,7 +29,7 @@ on:
       - ".krew.yaml"
 
 jobs:
-  build:
+  build-debug:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout

@@ -7,7 +7,7 @@ on:
       - docker-sshd-*
 
 jobs:
-  release:
+  release-sshd-image:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
