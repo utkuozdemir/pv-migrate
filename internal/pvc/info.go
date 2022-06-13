@@ -10,12 +10,13 @@ import (
 )
 
 type Info struct {
-	ClusterClient *k8s.ClusterClient
-	Claim         *corev1.PersistentVolumeClaim
-	MountedNode   string
-	SupportsRWO   bool
-	SupportsROX   bool
-	SupportsRWX   bool
+	ClusterClient      *k8s.ClusterClient
+	Claim              *corev1.PersistentVolumeClaim
+	MountedNode        string
+	AffinityHelmValues map[string]any
+	SupportsRWO        bool
+	SupportsROX        bool
+	SupportsRWX        bool
 }
 
 func New(client *k8s.ClusterClient, namespace string, name string) (*Info, error) {
@@ -31,6 +32,8 @@ func New(client *k8s.ClusterClient, namespace string, name string) (*Info, error
 	if err != nil {
 		return nil, err
 	}
+
+	affinityHelmValues := buildAffinityHelmValues(mountedNode)
 
 	supportsRWO := false
 	supportsROX := false
@@ -50,12 +53,13 @@ func New(client *k8s.ClusterClient, namespace string, name string) (*Info, error
 	}
 
 	return &Info{
-		ClusterClient: client,
-		Claim:         claim,
-		MountedNode:   mountedNode,
-		SupportsRWO:   supportsRWO,
-		SupportsROX:   supportsROX,
-		SupportsRWX:   supportsRWX,
+		ClusterClient:      client,
+		Claim:              claim,
+		MountedNode:        mountedNode,
+		AffinityHelmValues: affinityHelmValues,
+		SupportsRWO:        supportsRWO,
+		SupportsROX:        supportsROX,
+		SupportsRWX:        supportsRWX,
 	}, nil
 }
 
@@ -75,4 +79,29 @@ func findMountedNode(kubeClient kubernetes.Interface, pvc *corev1.PersistentVolu
 	}
 
 	return "", nil
+}
+
+func buildAffinityHelmValues(nodeName string) map[string]any {
+	if nodeName == "" {
+		return nil
+	}
+
+	return map[string]any{
+		"nodeAffinity": map[string]any{
+			"preferredDuringSchedulingIgnoredDuringExecution": []map[string]any{
+				{
+					"weight": 1,
+					"preference": map[string]any{
+						"matchFields": []map[string]any{
+							{
+								"key":      "metadata.name",
+								"operator": "In",
+								"values":   []string{nodeName},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
 }

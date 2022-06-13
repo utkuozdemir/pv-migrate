@@ -98,7 +98,8 @@ func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string
 					"mountPath": destMountPath,
 				},
 			},
-			"command": rsyncCmdStr,
+			"command":  rsyncCmdStr,
+			"affinity": destInfo.AffinityHelmValues,
 		},
 		"sshd": map[string]any{
 			"enabled":   true,
@@ -111,6 +112,7 @@ func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string
 					"readOnly":  mig.Request.SourceMountReadOnly,
 				},
 			},
+			"affinity": sourceInfo.AffinityHelmValues,
 		},
 	}, nil
 }
