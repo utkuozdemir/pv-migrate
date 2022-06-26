@@ -76,14 +76,14 @@ jobs:
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli
-          CILIUM_CLI_VERSION: v0.11.7
+          CILIUM_CLI_VERSION: v0.11.10
         run: |
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
       - name: kind-1 - Create cluster
-        uses: helm/kind-action@v1.2.0
+        uses: helm/kind-action@v1.3.0
         with:
           cluster_name: kind-1
           # renovate: depName=kubernetes-sigs/kind
@@ -122,7 +122,7 @@ jobs:
           done
 
       - name: kind-2 - Create cluster
-        uses: helm/kind-action@v1.2.0
+        uses: helm/kind-action@v1.3.0
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
         with:
