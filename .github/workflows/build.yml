@@ -154,9 +154,8 @@ jobs:
         env:
           RICHGO_FORCE_COLOR: "1"
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: richgo test -coverpkg=./... -coverprofile=profile.cov -covermode=count -timeout 20m -v ./...
+        run: richgo test -coverpkg=./... -coverprofile=coverage.txt -covermode=count -timeout 20m -v ./...
       - name: Send coverage
-        uses: shogo82148/actions-goveralls@v1.6.0
+        uses: codecov/codecov-action@v3.1.0
         with:
-          path-to-profile: profile.cov
-          shallow: true
+          files: coverage.txt
