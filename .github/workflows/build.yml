@@ -49,7 +49,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3.2.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v1.46.2
+          version: v1.47.1
           args: --timeout=3m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
@@ -76,7 +76,7 @@ jobs:
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
-          CILIUM_CLI_VERSION: v0.11.11
+          CILIUM_CLI_VERSION: v0.12.0
         run: |
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
@@ -101,7 +101,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 3.0.10
+          METALLB_CHART_VERSION: 3.0.11
         run: |
           IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
           helm repo add bitnami https://charts.bitnami.com/bitnami
