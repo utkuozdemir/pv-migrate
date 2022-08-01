@@ -20,7 +20,7 @@ jobs:
         uses: actions/setup-go@v3.2.1
         with:
           # renovate: go
-          go-version: 1.18.4
+          go-version: 1.18.5
       - name: Login to DockerHub
         uses: docker/login-action@v2.0.0
         with:
