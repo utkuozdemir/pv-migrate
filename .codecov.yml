@@ -1,6 +1,9 @@
 coverage:
+  range: 30..70
   status:
+    patch:
+      default:
+        informational: true
     project:
       default:
-        target: 50%
-  range: 30..70
+        informational: true
