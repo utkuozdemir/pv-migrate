@@ -3,7 +3,6 @@ package strategy
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"syscall"
@@ -11,8 +10,6 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/pvc"
-	"github.com/utkuozdemir/pv-migrate/migration"
 	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
@@ -20,6 +17,9 @@ import (
 	"helm.sh/helm/v3/pkg/getter"
 	"helm.sh/helm/v3/pkg/storage/driver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+
+	"github.com/utkuozdemir/pv-migrate/internal/pvc"
+	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
 const (
@@ -203,7 +203,7 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 }
 
 func writeHelmValuesToTempFile(id string, vals map[string]any) (string, error) {
-	file, err := ioutil.TempFile("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
+	file, err := os.CreateTemp("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
 	if err != nil {
 		return "", err
 	}

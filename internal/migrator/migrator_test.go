@@ -5,13 +5,14 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"github.com/utkuozdemir/pv-migrate/internal/k8s"
-	"github.com/utkuozdemir/pv-migrate/internal/strategy"
-	"github.com/utkuozdemir/pv-migrate/migration"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/strategy"
+	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
 const (

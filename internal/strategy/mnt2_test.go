@@ -4,13 +4,14 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/utkuozdemir/pv-migrate/internal/k8s"
-	"github.com/utkuozdemir/pv-migrate/internal/pvc"
-	"github.com/utkuozdemir/pv-migrate/migration"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/rest"
+
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/pvc"
+	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
 func TestCanDoSameNode(t *testing.T) {

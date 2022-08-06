@@ -4,9 +4,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	v1 "k8s.io/api/core/v1"
+
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/migration"
-	v1 "k8s.io/api/core/v1"
 )
 
 func TestSvcCanDoSameCluster(t *testing.T) {

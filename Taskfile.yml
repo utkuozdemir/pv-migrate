@@ -2,13 +2,14 @@ version: "3"
 
 tasks:
   fmt:
-    desc: gofumpt all code
+    desc: format code
     cmds:
+      - go mod tidy
+      - gci write -s standard -s default -s "prefix(github.com/utkuozdemir/pv-migrate)" .
       - gofumpt -w -l .
-      - gci -w .
 
   lint:
-    desc: Lint the code with golangci-lint
+    desc: lint code
     cmds:
       - golangci-lint run ./...
       - helm lint helm/pv-migrate

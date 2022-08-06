@@ -15,10 +15,6 @@ import (
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"github.com/utkuozdemir/pv-migrate/internal/app"
-	"github.com/utkuozdemir/pv-migrate/internal/k8s"
-	applog "github.com/utkuozdemir/pv-migrate/internal/log"
-	"github.com/utkuozdemir/pv-migrate/internal/util"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,6 +27,11 @@ import (
 	"k8s.io/client-go/tools/remotecommand"
 	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/utils/env"
+
+	"github.com/utkuozdemir/pv-migrate/internal/app"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	applog "github.com/utkuozdemir/pv-migrate/internal/log"
+	"github.com/utkuozdemir/pv-migrate/internal/util"
 )
 
 const (

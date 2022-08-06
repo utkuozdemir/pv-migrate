@@ -5,10 +5,11 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/app"
-	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	// load all auth plugins - needed for gcp, azure etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
+	"github.com/utkuozdemir/pv-migrate/internal/app"
+	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 )
 
 var (

@@ -1,2 +1,6 @@
 coverage:
+  status:
+    project:
+      default:
+        target: 50%
   range: 30..70
