@@ -8,12 +8,13 @@ import (
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"helm.sh/helm/v3/pkg/chart/loader"
+
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"github.com/utkuozdemir/pv-migrate/migration"
-	"helm.sh/helm/v3/pkg/chart/loader"
 )
 
 var (

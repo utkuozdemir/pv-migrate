@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
@@ -12,13 +11,14 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	applog "github.com/utkuozdemir/pv-migrate/internal/log"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/migration"
-	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -142,31 +142,32 @@ func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
 	return rsyncCmd.Build()
 }
 
-func (r *Local) installLocalReleases(attempt *migration.Attempt) (srcReleaseName, destReleaseName,
-	privateKey string, err error,
-) {
+func (r *Local) installLocalReleases(attempt *migration.Attempt) (string, string, string, error) {
 	attempt.Migration.Logger.Info(":key: Generating SSH key pair")
 	keyAlgorithm := attempt.Migration.Request.KeyAlgorithm
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
-		return
+		return "", "", "", err
 	}
 
 	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
 
-	srcReleaseName = attempt.HelmReleaseNamePrefix + "-src"
-	destReleaseName = attempt.HelmReleaseNamePrefix + "-dest"
+	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
+	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
 
 	err = installLocalOnSource(attempt, srcReleaseName, publicKey,
 		privateKey, privateKeyMountPath, srcMountPath)
 	if err != nil {
-		return
+		return "", "", "", err
 	}
 
 	err = installLocalOnDest(attempt, destReleaseName, publicKey, destMountPath)
+	if err != nil {
+		return "", "", "", err
+	}
 
-	return
+	return srcReleaseName, destReleaseName, privateKey, nil
 }
 
 func getSshdPodForHelmRelease(pvcInfo *pvc.Info, name string) (*corev1.Pod, error) {
@@ -235,7 +236,7 @@ func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey, dest
 }
 
 func writePrivateKeyToTempFile(privateKey string) (string, error) {
-	file, err := ioutil.TempFile("", "pv_migrate_private_key")
+	file, err := os.CreateTemp("", "pv_migrate_private_key")
 	if err != nil {
 		return "", err
 	}

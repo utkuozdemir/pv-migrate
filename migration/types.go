@@ -4,8 +4,9 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
-	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"helm.sh/helm/v3/pkg/chart"
+
+	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 )
 
 type PVCInfo struct {
