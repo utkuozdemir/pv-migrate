@@ -101,18 +101,30 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 3.0.12
+          METALLB_CHART_VERSION: 4.0.2
         run: |
-          IP_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
+          MANIFESTS_PATH=/tmp/metallb-manifests.yaml
+          
+          ADDRESS_RANGE_PREFIX=$(docker network inspect -f '{{(index .IPAM.Config 0).Subnet}}' kind | cut -d. -f1-3)
+          export ADDRESS_RANGE=${ADDRESS_RANGE_PREFIX}.240-${ADDRESS_RANGE_PREFIX}.255
+          
+          envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
+          
           helm repo add bitnami https://charts.bitnami.com/bitnami
           helm upgrade metallb \
           --install bitnami/metallb \
           --namespace metallb-system \
           --version ${METALLB_CHART_VERSION} \
           --atomic \
-          --values test/metallb-values.yaml \
-          --set configInline.address-pools[0].addresses[0]=${IP_RANGE_PREFIX}.240-${IP_RANGE_PREFIX}.255
+          --set networkPolicy.enabled=true
+          
           helm -n metallb-system get values metallb
+          
+          echo "MetalLB rendered manifests:"
+          cat $MANIFESTS_PATH
+          
+          kubectl apply -f $MANIFESTS_PATH
+
       - name: kind-1 - Wait for all pods in the cluster to be ready
         run: |
           for i in $(seq 1 10); do
