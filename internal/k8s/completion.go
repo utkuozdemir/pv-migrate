@@ -31,14 +31,13 @@ func GetContexts(kubeconfigPath string) ([]string, error) {
 	return contextNames, nil
 }
 
-func GetNamespaces(kubeconfigPath string, ctx string) ([]string, error) {
-	client, err := GetClusterClient(kubeconfigPath, ctx)
+func GetNamespaces(ctx context.Context, kubeconfigPath string, kubeContext string) ([]string, error) {
+	client, err := GetClusterClient(kubeconfigPath, kubeContext)
 	if err != nil {
 		return nil, err
 	}
 
-	nss, err := client.KubeClient.CoreV1().
-		Namespaces().List(context.Background(), metav1.ListOptions{})
+	nss, err := client.KubeClient.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -51,14 +50,14 @@ func GetNamespaces(kubeconfigPath string, ctx string) ([]string, error) {
 	return nsNames, nil
 }
 
-func GetPVCs(kubeconfigPath string, ctx string, namespace string) ([]string, error) {
-	client, err := GetClusterClient(kubeconfigPath, ctx)
+func GetPVCs(ctx context.Context, kubeconfigPath string, kubeContext string, namespace string) ([]string, error) {
+	client, err := GetClusterClient(kubeconfigPath, kubeContext)
 	if err != nil {
 		return nil, err
 	}
 
 	pvcs, err := client.KubeClient.CoreV1().
-		PersistentVolumeClaims(namespace).List(context.Background(), metav1.ListOptions{})
+		PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}

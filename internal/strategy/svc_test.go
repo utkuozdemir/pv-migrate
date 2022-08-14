@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,6 +11,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
+//nolint:dupl
 func TestSvcCanDoSameCluster(t *testing.T) {
 	t.Parallel()
 
@@ -30,8 +32,8 @@ func TestSvcCanDoSameCluster(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(context.Background(), c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(context.Background(), c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,

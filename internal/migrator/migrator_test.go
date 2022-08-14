@@ -1,6 +1,7 @@
 package migrator
 
 import (
+	"context"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -31,7 +32,7 @@ func TestBuildTask(t *testing.T) {
 
 	m := Migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(true)
-	tsk, err := m.buildMigration(mig)
+	tsk, err := m.buildMigration(context.Background(), mig)
 	assert.Nil(t, err)
 
 	sourceInfo := tsk.SourceInfo
@@ -56,7 +57,7 @@ func TestBuildTaskMounted(t *testing.T) {
 
 	m := Migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(false)
-	tsk, err := m.buildMigration(mig)
+	tsk, err := m.buildMigration(context.Background(), mig)
 	assert.Nil(t, tsk)
 	assert.Error(t, err)
 }
@@ -104,7 +105,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	strs := []string{"str3", "str1", "str2"}
 	mig := buildMigrationRequestWithStrategies(strs, true)
 
-	err := migrator.Run(mig)
+	err := migrator.Run(context.Background(), mig)
 	assert.NoError(t, err)
 	assert.Equal(t, []int{3, 1, 2}, result)
 }
@@ -184,6 +185,6 @@ type mockStrategy struct {
 	runFunc func(*migration.Attempt) (bool, error)
 }
 
-func (m *mockStrategy) Run(a *migration.Attempt) (bool, error) {
-	return m.runFunc(a)
+func (m *mockStrategy) Run(_ context.Context, attempt *migration.Attempt) (bool, error) {
+	return m.runFunc(attempt)
 }

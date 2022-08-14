@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"testing"
 
 	"github.com/sirupsen/logrus"
@@ -10,7 +11,7 @@ import (
 func TestConfigureFancy(t *testing.T) {
 	t.Parallel()
 
-	l, err := New()
+	l, err := New(context.Background())
 	assert.NoError(t, err)
 	err = Configure(l, "debug", "fancy")
 	assert.NoError(t, err)
@@ -20,7 +21,7 @@ func TestConfigureFancy(t *testing.T) {
 func TestConfigureJson(t *testing.T) {
 	t.Parallel()
 
-	l, err := New()
+	l, err := New(context.Background())
 	assert.NoError(t, err)
 	err = Configure(l, "info", "json")
 	assert.NoError(t, err)
@@ -30,7 +31,7 @@ func TestConfigureJson(t *testing.T) {
 func TestBuildInvalidLevel(t *testing.T) {
 	t.Parallel()
 
-	l, err := New()
+	l, err := New(context.Background())
 	assert.NoError(t, err)
 	err = Configure(l, "invalid", "json")
 	assert.Error(t, err)
@@ -39,7 +40,7 @@ func TestBuildInvalidLevel(t *testing.T) {
 func TestBuildInvalidFormat(t *testing.T) {
 	t.Parallel()
 
-	l, err := New()
+	l, err := New(context.Background())
 	assert.NoError(t, err)
 	err = Configure(l, "debug", "invalid")
 	assert.Error(t, err)

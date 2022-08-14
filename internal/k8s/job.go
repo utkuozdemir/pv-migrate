@@ -16,12 +16,18 @@ import (
 
 var ErrJobFailed = errors.New("job failed")
 
-func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
-	namespace string, name string, progressBarRequested bool,
+//nolint:cyclop
+func WaitForJobCompletion(
+	ctx context.Context,
+	logger *log.Entry,
+	cli kubernetes.Interface,
+	namespace string,
+	name string,
+	progressBarRequested bool,
 ) error {
 	s := fmt.Sprintf("job-name=%s", name)
 
-	pod, err := WaitForPod(cli, namespace, s)
+	pod, err := WaitForPod(ctx, cli, namespace, s)
 	if err != nil {
 		return err
 	}
@@ -34,31 +40,42 @@ func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 	logTail := rsync.LogTail{
 		LogReaderFunc: func() (io.ReadCloser, error) {
 			return cli.CoreV1().Pods(namespace).GetLogs(pod.Name,
-				&corev1.PodLogOptions{Follow: true}).Stream(context.TODO())
+				&corev1.PodLogOptions{Follow: true}).Stream(ctx)
 		},
 		SuccessCh:       successCh,
 		ShowProgressBar: showProgressBar,
 		Logger:          logger,
 	}
 
-	go logTail.Start()
+	go logTail.Start(ctx)
 
-	terminatedPod, err := waitForPodTermination(cli, pod.Namespace, pod.Name)
+	terminatedPod, err := waitForPodTermination(ctx, cli, pod.Namespace, pod.Name)
 	if err != nil {
-		successCh <- false
-
-		return err
+		select {
+		case successCh <- false:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
 	if *terminatedPod != corev1.PodSucceeded {
-		successCh <- false
+		select {
+		case successCh <- false:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 
 		err := fmt.Errorf("%w: %s", ErrJobFailed, name)
 
 		return err
 	}
 
-	successCh <- true
+	select {
+	case successCh <- true:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	return nil
 }

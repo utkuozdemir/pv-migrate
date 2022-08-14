@@ -38,13 +38,13 @@ var (
 	ErrUnknownLogFormat = errors.New("unknown log format")
 )
 
-func New() (*log.Entry, error) {
+func New(ctx context.Context) (*log.Entry, error) {
 	configureGlobalLogger()
 
 	l := log.New()
 	l.SetOutput(os.Stdout)
 
-	entry := l.WithContext(context.Background())
+	entry := l.WithContext(ctx)
 
 	err := Configure(entry, LevelInfo, FormatFancy)
 	if err != nil {

@@ -2,6 +2,7 @@ package migrator
 
 import (
 	"bytes"
+	"context"
 	_ "embed" // we embed the helm chart
 	"errors"
 	"fmt"
@@ -48,13 +49,13 @@ func New() *Migrator {
 	}
 }
 
-func (m *Migrator) Run(request *migration.Request) error {
+func (m *Migrator) Run(ctx context.Context, request *migration.Request) error {
 	nameToStrategyMap, err := m.getStrategyMap(request.Strategies)
 	if err != nil {
 		return err
 	}
 
-	mig, err := m.buildMigration(request)
+	mig, err := m.buildMigration(ctx, request)
 	if err != nil {
 		return err
 	}
@@ -78,7 +79,7 @@ func (m *Migrator) Run(request *migration.Request) error {
 		sLogger.Infof(":helicopter: Attempting strategy: %s", name)
 		s := nameToStrategyMap[name]
 
-		accepted, runErr := s.Run(&attempt)
+		accepted, runErr := s.Run(ctx, &attempt)
 		if !accepted {
 			sLogger.Infof(":fox: Strategy '%s' cannot handle this migration, "+
 				"will try the next one", name)
@@ -100,7 +101,7 @@ func (m *Migrator) Run(request *migration.Request) error {
 	return ErrAllStrategiesFailed
 }
 
-func (m *Migrator) buildMigration(request *migration.Request) (*migration.Migration, error) {
+func (m *Migrator) buildMigration(ctx context.Context, request *migration.Request) (*migration.Migration, error) {
 	chart, err := loader.LoadArchive(bytes.NewReader(chartBytes))
 	if err != nil {
 		return nil, err
@@ -124,12 +125,12 @@ func (m *Migrator) buildMigration(request *migration.Request) (*migration.Migrat
 		destNs = destClient.NsInContext
 	}
 
-	sourcePvcInfo, err := pvc.New(sourceClient, sourceNs, source.Name)
+	sourcePvcInfo, err := pvc.New(ctx, sourceClient, sourceNs, source.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	destPvcInfo, err := pvc.New(destClient, destNs, dest.Name)
+	destPvcInfo, err := pvc.New(ctx, destClient, destNs, dest.Name)
 	if err != nil {
 		return nil, err
 	}

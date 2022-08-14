@@ -57,6 +57,8 @@ func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config,
 		return nil, nil, "", err
 	}
 
+	clientConfig.Burst = 100
+
 	rcGetter := NewRESTClientGetter(clientConfig, config)
 
 	return clientConfig, rcGetter, namespace, nil

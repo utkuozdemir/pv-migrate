@@ -178,7 +178,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 			"Extraneous files will be deleted from the destination")
 	}
 
-	return engine.New().Run(&request)
+	return engine.New().Run(cmd.Context(), &request)
 }
 
 func buildSrcPVCInfo(flags *flag.FlagSet, name string) *migration.PVCInfo {

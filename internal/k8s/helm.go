@@ -10,16 +10,21 @@ import (
 )
 
 type HelmRESTClientGetter struct {
-	restConfig   *rest.Config
-	clientConfig clientcmd.ClientConfig
+	restConfig      *rest.Config
+	clientConfig    clientcmd.ClientConfig
+	discoveryClient discovery.CachedDiscoveryInterface
+	restMapper      meta.RESTMapper
 }
 
-func NewRESTClientGetter(restConfig *rest.Config,
-	clientConfig clientcmd.ClientConfig,
-) *HelmRESTClientGetter {
+func NewRESTClientGetter(restConfig *rest.Config, clientConfig clientcmd.ClientConfig) *HelmRESTClientGetter {
+	discoveryClient := buildDiscoveryClient(restConfig)
+	restMapper := buildRESTMapper(discoveryClient)
+
 	return &HelmRESTClientGetter{
-		restConfig:   restConfig,
-		clientConfig: clientConfig,
+		restConfig:      restConfig,
+		clientConfig:    clientConfig,
+		discoveryClient: discoveryClient,
+		restMapper:      restMapper,
 	}
 }
 
@@ -28,29 +33,25 @@ func (c *HelmRESTClientGetter) ToRESTConfig() (*rest.Config, error) {
 }
 
 func (c *HelmRESTClientGetter) ToDiscoveryClient() (discovery.CachedDiscoveryInterface, error) {
-	config, err := c.ToRESTConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	config.Burst = 100
-	discoveryClient, _ := discovery.NewDiscoveryClientForConfig(config)
-
-	return memory.NewMemCacheClient(discoveryClient), nil
+	return c.discoveryClient, nil
 }
 
 func (c *HelmRESTClientGetter) ToRESTMapper() (meta.RESTMapper, error) {
-	discoveryClient, err := c.ToDiscoveryClient()
-	if err != nil {
-		return nil, err
-	}
-
-	mapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
-	expander := restmapper.NewShortcutExpander(mapper, discoveryClient)
-
-	return expander, nil
+	return c.restMapper, nil
 }
 
 func (c *HelmRESTClientGetter) ToRawKubeConfigLoader() clientcmd.ClientConfig {
 	return c.clientConfig
+}
+
+func buildDiscoveryClient(config *rest.Config) discovery.CachedDiscoveryInterface {
+	discoveryClient, _ := discovery.NewDiscoveryClientForConfig(config)
+
+	return memory.NewMemCacheClient(discoveryClient)
+}
+
+func buildRESTMapper(discoveryClient discovery.CachedDiscoveryInterface) meta.RESTMapper {
+	mapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
+
+	return restmapper.NewShortcutExpander(mapper, discoveryClient)
 }

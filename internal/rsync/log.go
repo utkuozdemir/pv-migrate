@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -41,26 +42,26 @@ type progress struct {
 	total       int64
 }
 
-func (l *LogTail) Start() {
+func (l *LogTail) Start(ctx context.Context) {
 	if l.ShowProgressBar {
-		l.tailWithProgressBar()
+		l.tailWithProgressBar(ctx)
 
 		return
 	}
 
-	l.tailNoProgressBar()
+	l.tailNoProgressBar(ctx)
 }
 
-func (l *LogTail) tailNoProgressBar() {
-	l.tailWithRetry(func() {}, func(s string) { l.Logger.Debug(s) }, func() {})
+func (l *LogTail) tailNoProgressBar(ctx context.Context) {
+	l.tailWithRetry(ctx, func() {}, func(s string) { l.Logger.Debug(s) }, func() {})
 }
 
-func (l *LogTail) tailWithProgressBar() {
+func (l *LogTail) tailWithProgressBar(ctx context.Context) {
 	completed := false
 
 	var bar *progressbar.ProgressBar
 
-	l.tailWithRetry(func() {
+	l.tailWithRetry(ctx, func() {
 		bar = progressbar.NewOptions64(
 			1,
 			progressbar.OptionEnableColorCodes(true),
@@ -91,11 +92,11 @@ func (l *LogTail) tailWithProgressBar() {
 }
 
 // tailWithRetry will restart the log tailing if it times out.
-func (l *LogTail) tailWithRetry(beforeFunc func(), logFunc func(string), successFunc func()) {
+func (l *LogTail) tailWithRetry(ctx context.Context, beforeFunc func(), logFunc func(string), successFunc func()) {
 	failedOnce := false
 
 	for {
-		done, err := l.tail(beforeFunc, logFunc, successFunc)
+		done, err := l.tail(ctx, beforeFunc, logFunc, successFunc)
 		if err != nil && !failedOnce {
 			l.Logger.WithError(err).
 				Debug(":large_orange_diamond: Cannot tail logs to display progress")
@@ -109,9 +110,7 @@ func (l *LogTail) tailWithRetry(beforeFunc func(), logFunc func(string), success
 	}
 }
 
-func (l *LogTail) tail(beforeFunc func(),
-	logFunc func(string), successFunc func(),
-) (bool, error) {
+func (l *LogTail) tail(ctx context.Context, beforeFunc func(), logFunc func(string), successFunc func()) (bool, error) {
 	logReader, err := l.LogReaderFunc()
 	if err != nil {
 		return false, err
@@ -131,6 +130,8 @@ func (l *LogTail) tail(beforeFunc func(),
 			}
 
 			return true, nil
+		case <-ctx.Done():
+			return false, ctx.Err()
 		default:
 			if !scanner.Scan() {
 				return false, nil

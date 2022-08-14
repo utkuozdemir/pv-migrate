@@ -847,7 +847,10 @@ func deleteNs(cli *k8s.ClusterClient, name string) error {
 func runCliApp(cmd string) error {
 	// args := []string{os.Args[0]}
 	// args = append(args, strings.Fields(cmd)...)
-	logger, err := applog.New()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	logger, err := applog.New(ctx)
 	if err != nil {
 		return err
 	}
@@ -855,5 +858,5 @@ func runCliApp(cmd string) error {
 	cliApp := app.New(logger, "", "", "")
 	cliApp.SetArgs(strings.Fields(cmd))
 
-	return cliApp.Execute()
+	return cliApp.ExecuteContext(ctx)
 }

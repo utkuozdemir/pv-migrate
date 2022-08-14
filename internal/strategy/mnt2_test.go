@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +15,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/migration"
 )
 
+//nolint:dupl
 func TestCanDoSameNode(t *testing.T) {
 	t.Parallel()
 
@@ -34,8 +36,8 @@ func TestCanDoSameNode(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(context.Background(), c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(context.Background(), c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -47,6 +49,7 @@ func TestCanDoSameNode(t *testing.T) {
 	assert.True(t, canDo)
 }
 
+//nolint:dupl
 func TestCanDoDestRWX(t *testing.T) {
 	t.Parallel()
 
@@ -67,8 +70,8 @@ func TestCanDoDestRWX(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(context.Background(), c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(context.Background(), c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -80,6 +83,7 @@ func TestCanDoDestRWX(t *testing.T) {
 	assert.True(t, canDo)
 }
 
+//nolint:dupl
 func TestCanDoSourceROX(t *testing.T) {
 	t.Parallel()
 
@@ -100,8 +104,8 @@ func TestCanDoSourceROX(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(context.Background(), c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(context.Background(), c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -113,6 +117,7 @@ func TestCanDoSourceROX(t *testing.T) {
 	assert.True(t, canDo)
 }
 
+//nolint:dupl
 func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 	t.Parallel()
 
@@ -133,8 +138,8 @@ func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(context.Background(), c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(context.Background(), c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -167,8 +172,8 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c1 := buildTestClient(pvcA, pvcB, podA, podB)
 	c2 := buildTestClientWithAPIServerHost("https://127.0.0.2:6443", pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c1, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c2, destNS, destPvc)
+	src, _ := pvc.New(context.Background(), c1, sourceNS, sourcePVC)
+	dst, _ := pvc.New(context.Background(), c2, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -180,6 +185,7 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	assert.False(t, canDo)
 }
 
+//nolint:dupl
 func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 	t.Parallel()
 
@@ -200,8 +206,8 @@ func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(context.Background(), c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(context.Background(), c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -212,6 +218,7 @@ func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 	assert.Equal(t, destNode, targetNode)
 }
 
+//nolint:dupl
 func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 	t.Parallel()
 
@@ -232,8 +239,8 @@ func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(context.Background(), c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(context.Background(), c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,

@@ -19,9 +19,7 @@ import (
 var ErrUnexpectedTypeServiceWatch = errors.New("unexpected type while watching service")
 
 func GetServiceAddress(
-	cli kubernetes.Interface,
-	namespace string,
-	name string,
+	ctx context.Context, cli kubernetes.Interface, namespace string, name string,
 	lbTimeout time.Duration,
 ) (string, error) {
 	var result string
@@ -29,23 +27,23 @@ func GetServiceAddress(
 	resCli := cli.CoreV1().Services(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 
-	ctx, cancel := context.WithTimeout(context.TODO(), lbTimeout)
+	checkCtx, cancel := context.WithTimeout(ctx, lbTimeout)
 	defer cancel()
 
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
 
-			return resCli.List(ctx, options)
+			return resCli.List(checkCtx, options)
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
 
-			return resCli.Watch(ctx, options)
+			return resCli.Watch(checkCtx, options)
 		},
 	}
 
-	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Service{}, nil,
+	_, err := watchtools.UntilWithSync(checkCtx, listWatch, &corev1.Service{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Service)
 			if !ok {

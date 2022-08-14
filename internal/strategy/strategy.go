@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -54,7 +55,7 @@ type Strategy interface {
 	// Run runs the migration for the given task execution.
 	//
 	// This is the actual implementation of the migration.
-	Run(a *migration.Attempt) (bool, error)
+	Run(ctx context.Context, attempt *migration.Attempt) (bool, error)
 }
 
 func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
@@ -72,7 +73,7 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func registerCleanupHook(attempt *migration.Attempt, releaseNames []string) chan<- bool {
+func registerCleanupHook(ctx context.Context, attempt *migration.Attempt, releaseNames []string) chan<- bool {
 	doneCh := make(chan bool)
 	signalCh := make(chan os.Signal, 1)
 
@@ -84,6 +85,11 @@ func registerCleanupHook(attempt *migration.Attempt, releaseNames []string) chan
 			attempt.Logger.Warn(":large_orange_diamond: Received termination signal")
 			cleanup(attempt, releaseNames)
 			os.Exit(1)
+		case <-ctx.Done():
+			if ctx.Err() != nil {
+				cleanup(attempt, releaseNames)
+				os.Exit(1)
+			}
 		case <-doneCh:
 			return
 		}
@@ -92,9 +98,13 @@ func registerCleanupHook(attempt *migration.Attempt, releaseNames []string) chan
 	return doneCh
 }
 
-func cleanupAndReleaseHook(a *migration.Attempt, releaseNames []string, doneCh chan<- bool) {
+func cleanupAndReleaseHook(ctx context.Context, a *migration.Attempt, releaseNames []string, doneCh chan<- bool) {
 	cleanup(a, releaseNames)
-	doneCh <- true
+
+	select {
+	case <-ctx.Done():
+	case doneCh <- true:
+	}
 }
 
 func cleanup(a *migration.Attempt, releaseNames []string) {
@@ -124,8 +134,11 @@ func cleanup(a *migration.Attempt, releaseNames []string) {
 	logger.Info(":sparkles: Cleanup done")
 }
 
-func cleanupForPVC(logger *log.Entry, helmReleaseName string,
-	helmUninstallTimeout time.Duration, pvcInfo *pvc.Info,
+func cleanupForPVC(
+	logger *log.Entry,
+	helmReleaseName string,
+	helmUninstallTimeout time.Duration,
+	pvcInfo *pvc.Info,
 ) error {
 	ac, err := initHelmActionConfig(logger, pvcInfo)
 	if err != nil {
@@ -168,7 +181,11 @@ func getMergedHelmValues(helmValuesFile string, request *migration.Request) (map
 	return valsOptions.MergeValues(helmProviders)
 }
 
-func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string,
+func installHelmChart(
+	ctx context.Context,
+	attempt *migration.Attempt,
+	pvcInfo *pvc.Info,
+	name string,
 	values map[string]any,
 ) error {
 	helmValuesFile, err := writeHelmValuesToTempFile(attempt.ID, values)
@@ -197,7 +214,7 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 		return err
 	}
 
-	_, err = install.Run(mig.Chart, vals)
+	_, err = install.RunWithContext(ctx, mig.Chart, vals)
 
 	return err
 }
