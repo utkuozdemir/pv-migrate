@@ -27,7 +27,7 @@ jobs:
           username: utkuozdemir
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: GoReleaser
-        uses: goreleaser/goreleaser-action@v3.0.0
+        uses: goreleaser/goreleaser-action@v3.1.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
           version: v1.10.3
