@@ -14,10 +14,10 @@ require (
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.9.4
-	k8s.io/api v0.25.0
-	k8s.io/apimachinery v0.25.0
-	k8s.io/cli-runtime v0.25.0
-	k8s.io/client-go v0.25.0
+	k8s.io/api v0.25.1
+	k8s.io/apimachinery v0.25.1
+	k8s.io/cli-runtime v0.25.1
+	k8s.io/client-go v0.25.1
 	k8s.io/utils v0.0.0-20220823124924-e9cbc92d1a73
 )
 
@@ -68,7 +68,7 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/btree v1.0.1 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
-	github.com/google/go-cmp v0.5.6 // indirect
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.2.0 // indirect
