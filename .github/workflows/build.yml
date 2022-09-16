@@ -56,7 +56,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v3.1.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v1.11.2
+          version: v1.11.3
           args: build --snapshot --rm-dist --single-target
   test:
     runs-on: ubuntu-20.04
