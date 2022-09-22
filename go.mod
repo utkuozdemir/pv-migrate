@@ -14,10 +14,10 @@ require (
 	golang.org/x/crypto v0.0.0-20220919173607-35f4265a4bc0
 	gopkg.in/yaml.v3 v3.0.1
 	helm.sh/helm/v3 v3.10.0
-	k8s.io/api v0.25.1
-	k8s.io/apimachinery v0.25.1
-	k8s.io/cli-runtime v0.25.1
-	k8s.io/client-go v0.25.1
+	k8s.io/api v0.25.2
+	k8s.io/apimachinery v0.25.2
+	k8s.io/cli-runtime v0.25.2
+	k8s.io/client-go v0.25.2
 	k8s.io/utils v0.0.0-20220823124924-e9cbc92d1a73
 )
 
