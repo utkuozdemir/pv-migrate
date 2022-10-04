@@ -92,12 +92,12 @@ func setMigrateCmdFlags(cmd *cobra.Command) {
 	flags.StringP(FlagSourceKubeconfig, "k", "", "path of the kubeconfig file of the source PVC")
 	flags.StringP(FlagSourceContext, "c", "", "context in the kubeconfig file of the source PVC")
 	flags.StringP(FlagSourceNamespace, "n", "", "namespace of the source PVC")
-	flags.StringP(FlagSourcePath, "p", "/", "the filesystem path to migrate in the the source PVC")
+	flags.StringP(FlagSourcePath, "p", "/", "the filesystem path to migrate in the source PVC")
 
 	flags.StringP(FlagDestKubeconfig, "K", "", "path of the kubeconfig file of the destination PVC")
 	flags.StringP(FlagDestContext, "C", "", "context in the kubeconfig file of the destination PVC")
 	flags.StringP(FlagDestNamespace, "N", "", "namespace of the destination PVC")
-	flags.StringP(FlagDestPath, "P", "/", "the filesystem path to migrate in the the destination PVC")
+	flags.StringP(FlagDestPath, "P", "/", "the filesystem path to migrate in the destination PVC")
 
 	flags.BoolP(FlagDestDeleteExtraneousFiles, "d", false,
 		"delete extraneous files on the destination by using rsync's '--delete' flag")

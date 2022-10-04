@@ -36,7 +36,7 @@ Flags:
   -H, --dest-host-override string      the override for the rsync host destination when it is run over SSH, in cases when you need to target a different destination IP on rsync for some reason. By default, it is determined by used strategy and differs across strategies. Has no effect for mnt2 and local strategies
   -K, --dest-kubeconfig string         path of the kubeconfig file of the destination PVC
   -N, --dest-namespace string          namespace of the destination PVC
-  -P, --dest-path string               the filesystem path to migrate in the the destination PVC (default "/")
+  -P, --dest-path string               the filesystem path to migrate in the destination PVC (default "/")
       --helm-set strings               set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
       --helm-set-file strings          set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)
       --helm-set-string strings        set additional Helm STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
@@ -50,7 +50,7 @@ Flags:
   -k, --source-kubeconfig string       path of the kubeconfig file of the source PVC
   -R, --source-mount-read-only         mount the source PVC in ReadOnly mode (default true)
   -n, --source-namespace string        namespace of the source PVC
-  -p, --source-path string             the filesystem path to migrate in the the source PVC (default "/")
+  -p, --source-path string             the filesystem path to migrate in the source PVC (default "/")
   -a, --ssh-key-algorithm string       ssh key algorithm to be used. Valid values are rsa,ed25519 (default "ed25519")
   -s, --strategies strings             the comma-separated list of strategies to be used in the given order (default [mnt2,svc,lbsvc])
 
