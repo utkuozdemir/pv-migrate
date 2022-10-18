@@ -39,7 +39,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.1.0
       - name: Install go
-        uses: actions/setup-go@v3.3.0
+        uses: actions/setup-go@v3.3.1
         with:
           # renovate: go
           go-version: 1.19
@@ -64,7 +64,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.1.0
       - name: Install go
-        uses: actions/setup-go@v3.3.0
+        uses: actions/setup-go@v3.3.1
         with:
           # renovate: go
           go-version: 1.19
