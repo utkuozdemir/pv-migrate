@@ -53,10 +53,10 @@ jobs:
           args: --timeout=3m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v3.1.0
+        uses: goreleaser/goreleaser-action@v3.2.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v1.11.5
+          version: v1.12.1
           args: build --snapshot --rm-dist --single-target
   test:
     runs-on: ubuntu-20.04
@@ -101,7 +101,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 4.1.7
+          METALLB_CHART_VERSION: 4.1.8
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
