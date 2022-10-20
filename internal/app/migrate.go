@@ -21,6 +21,7 @@ const (
 	FlagSourceContext    = "source-context"
 	FlagSourceNamespace  = "source-namespace"
 	FlagSourcePath       = "source-path"
+	FlagSourceDnsSuffix  = "source-dns-suffix"
 
 	FlagDestKubeconfig   = "dest-kubeconfig"
 	FlagDestContext      = "dest-context"
@@ -93,6 +94,7 @@ func setMigrateCmdFlags(cmd *cobra.Command) {
 	flags.StringP(FlagSourceContext, "c", "", "context in the kubeconfig file of the source PVC")
 	flags.StringP(FlagSourceNamespace, "n", "", "namespace of the source PVC")
 	flags.StringP(FlagSourcePath, "p", "/", "the filesystem path to migrate in the source PVC")
+	flags.StringP(FlagSourceDnsSuffix, "S", "", "dns suffix for source cluster (for inter-cluster services)")
 
 	flags.StringP(FlagDestKubeconfig, "K", "", "path of the kubeconfig file of the destination PVC")
 	flags.StringP(FlagDestContext, "C", "", "context in the kubeconfig file of the destination PVC")
@@ -143,6 +145,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 	helmSetFile, _ := flags.GetStringSlice(FlagHelmSetFile)
 	strs, _ := flags.GetStringSlice(FlagStrategies)
 	destHostOverride, _ := flags.GetString(FlagDestHostOverride)
+	srcDnsSuffix, _ := flags.GetString(FlagSourceDnsSuffix)
 
 	deleteExtraneousFiles, _ := flags.GetBool(FlagDestDeleteExtraneousFiles)
 	request := migration.Request{
@@ -161,6 +164,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		HelmFileValues:        helmSetFile,
 		Strategies:            strs,
 		DestHostOverride:      destHostOverride,
+		SourceDnsSuffix:       srcDnsSuffix,
 		Logger:                logger,
 	}
 

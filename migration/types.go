@@ -34,6 +34,7 @@ type Request struct {
 	Strategies            []string
 	Logger                *log.Entry
 	DestHostOverride      string
+	SourceDnsSuffix       string
 }
 
 type Migration struct {

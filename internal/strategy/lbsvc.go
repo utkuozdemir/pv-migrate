@@ -51,6 +51,11 @@ func (r *LbSvc) Run(attempt *migration.Attempt) (bool, error) {
 	}
 
 	sshTargetHost := formatSSHTargetHost(lbSvcAddress)
+
+	if mig.Request.SourceDnsSuffix != "" {
+		sshTargetHost = fmt.Sprintf("%s.%s", lbSvcAddress, mig.Request.SourceDnsSuffix)
+	}
+
 	if mig.Request.DestHostOverride != "" {
 		sshTargetHost = mig.Request.DestHostOverride
 	}
@@ -73,6 +78,10 @@ func installOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMoun
 	mig := attempt.Migration
 	sourceInfo := mig.SourceInfo
 	namespace := sourceInfo.Claim.Namespace
+	svcType := "LoadBalancer"
+	if attempt.Migration.Request.SourceDnsSuffix != "" {
+		svcType = "ClusterIP"
+	}
 
 	vals := map[string]any{
 		"sshd": map[string]any{
@@ -80,7 +89,7 @@ func installOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMoun
 			"namespace": namespace,
 			"publicKey": publicKey,
 			"service": map[string]any{
-				"type": "LoadBalancer",
+				"type": svcType,
 			},
 			"pvcMounts": []map[string]any{
 				{

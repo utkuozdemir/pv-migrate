@@ -47,6 +47,7 @@ Flags:
   -o, --no-chown                       omit chown on rsync
   -b, --no-progress-bar                do not display a progress bar
   -c, --source-context string          context in the kubeconfig file of the source PVC
+  -S  --source-dns-suffix              dns suffix for destination cluster (for inter-cluster services)
   -k, --source-kubeconfig string       path of the kubeconfig file of the source PVC
   -R, --source-mount-read-only         mount the source PVC in ReadOnly mode (default true)
   -n, --source-namespace string        namespace of the source PVC
@@ -132,4 +133,3 @@ $ pv-migrate migrate \
 
 
 **For further customization on the rendered manifests** (custom labels, annotations etc.), see the [Helm chart values](helm/pv-migrate).
-
