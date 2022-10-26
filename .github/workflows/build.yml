@@ -87,7 +87,7 @@ jobs:
         with:
           cluster_name: kind-1
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.16.0
+          version: v0.17.0
           config: test/kind-config.yaml
       - name: kind-1 - Create metallb-system namespace
         run: kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
@@ -140,7 +140,7 @@ jobs:
         with:
           cluster_name: kind-2
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.16.0
+          version: v0.17.0
           config: test/kind-config.yaml
       - name: kind-2 - Install allow-all network policies on system namespaces
         env:
