@@ -3,9 +3,12 @@ version: "3"
 tasks:
   fmt:
     desc: format code
+    vars:
+      MODULE:
+        sh: head -n 1 go.mod | cut -d' ' -f2
     cmds:
       - go mod tidy
-      - gci write -s standard -s default -s "prefix(github.com/utkuozdemir/pv-migrate)" .
+      - gci write -s standard -s default -s "prefix({{.MODULE}})" .
       - gofumpt -w -l .
 
   lint:
@@ -15,18 +18,32 @@ tasks:
       - helm lint helm/pv-migrate
 
   update-chart:
-    desc: Update the Helm chart
+    desc: update the helm chart
     cmds:
       - helm-docs -c helm/pv-migrate/
       - helm package helm/pv-migrate/
       - mv pv-migrate-*.tgz internal/migrator/helm-chart.tgz
 
-  release:
-    desc: Create a new tag
-    vars:
-      NEXT:
-        sh: svu n
+  clean:
+    desc: clean
     cmds:
-      - git tag {{.NEXT}}
-      - echo {{.NEXT}}
-      - git push origin {{.NEXT}}
+      - rm -rf {{.ROOT_DIR}}/dist/
+
+  build:
+    desc: build
+    cmds:
+      - goreleaser build --snapshot --rm-dist --single-target
+
+  release:
+    desc: release
+    vars:
+      NUM_LAST_TAGS: 3
+      LAST_TAGS:
+        sh: git tag --sort=-version:refname | head -n {{.NUM_LAST_TAGS}} | xargs echo
+      NEXT_TAG:
+        sh: svu next
+    cmds:
+      - "echo Last {{.NUM_LAST_TAGS}} tags: {{.LAST_TAGS}}"
+      - "echo Next tag: {{.NEXT_TAG}}"
+      - git tag -a {{.NEXT_TAG}} -m "Release {{.NEXT_TAG}}"
+      - git push origin {{.NEXT_TAG}}

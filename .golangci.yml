@@ -3,12 +3,16 @@ linters:
   enable-all: true
   disable:
     # deprecated:
+    - deadcode
     - exhaustivestruct
     - golint
+    - ifshort
     - interfacer
     - maligned
+    - nosnakecase
     - scopelint
-    - ifshort
+    - structcheck
+    - varcheck
     # not useful
     - exhaustruct
     # todo: consider enabling:
@@ -19,87 +23,11 @@ linters:
 
 linters-settings:
   gci:
-    local-prefixes: github.com/utkuozdemir/pv-migrate
+    sections:
+      - standard
+      - default
+      - prefix(github.com/utkuozdemir/pv-migrate)
   goimports:
     local-prefixes: github.com/utkuozdemir/pv-migrate
   goconst:
     ignore-tests: true
-
-
-#
-#
-## https://golangci-lint.run/usage/linters/
-#linters:
-#  enable:
-#    - asciicheck
-#    - bidichk
-#    - containedctx
-#    - contextcheck
-#    - cyclop
-#    - decorder
-#    - dogsled
-#    - dupl
-#    - durationcheck
-#    - errname
-#    - errorlint
-#    - exhaustive
-#    - exportloopref
-#    - forbidigo
-#    - forcetypeassert
-#    - funlen
-#    - gci
-##    - gochecknoglobals
-#    - gochecknoinits
-#    - gocognit
-#    - goconst
-#    - gocritic
-#    - gocyclo
-#    - godot
-#    - godox
-#    - goerr113
-#    - gofumpt
-#    - goheader
-##    - goimports # inconsistent with gci
-#    - gomnd
-#    - gomoddirectives
-##    - gomodguard # no need
-#    - goprintffuncname
-#    - gosec
-#    - grouper
-#    - ifshort
-#    - importas
-##    - ireturn # TODO revisit
-#    - lll
-#    - maintidx
-#    - makezero
-#    - misspell
-#    - nakedret
-#    - nestif
-#    - nilerr
-#    - nilnil
-#    - nlreturn
-#    - noctx
-#    - nolintlint
-#    - paralleltest
-#    - prealloc
-#    - predeclared
-#    - revive
-#    - rowserrcheck
-##    - sqlclosecheck
-#    - stylecheck
-#    - tagliatelle
-#    - tenv
-##    - testpackage # TODO: visit
-#    - thelper
-#    - tparallel
-#    - unconvert
-#    - unparam
-#    - varnamelen
-#    - wastedassign
-#    - whitespace
-##    - wrapcheck # TODO: visit
-#    - wsl
-#
-#linters-settings:
-#  goconst:
-#    ignore-tests: true
