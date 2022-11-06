@@ -6,7 +6,7 @@ go 1.19
 require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/kyokomi/emoji/v2 v2.2.10
-	github.com/schollz/progressbar/v3 v3.12.0
+	github.com/schollz/progressbar/v3 v3.12.1
 	github.com/sirupsen/logrus v1.9.0
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
