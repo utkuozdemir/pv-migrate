@@ -70,7 +70,7 @@ jobs:
           go-version: 1.19
       - name: Install richgo
         # renovate: depName=kyoh86/richgo
-        run: go install github.com/kyoh86/richgo@v0.3.10
+        run: go install github.com/kyoh86/richgo@v0.3.11
       - name: Install helm
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install cilium-cli
