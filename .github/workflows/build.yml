@@ -39,7 +39,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.1.0
       - name: Install go
-        uses: actions/setup-go@v3.3.1
+        uses: actions/setup-go@v3.4.0
         with:
           # renovate: go
           go-version: 1.19
@@ -64,7 +64,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.1.0
       - name: Install go
-        uses: actions/setup-go@v3.3.1
+        uses: actions/setup-go@v3.4.0
         with:
           # renovate: go
           go-version: 1.19
@@ -76,7 +76,7 @@ jobs:
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
-          CILIUM_CLI_VERSION: v0.12.10
+          CILIUM_CLI_VERSION: v0.12.11
         run: |
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
