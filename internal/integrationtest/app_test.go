@@ -798,7 +798,7 @@ func execInPod(cli *k8s.ClusterClient, ns string, name string, cmd string) (stri
 
 	var result *multierror.Error
 
-	err = exec.Stream(remotecommand.StreamOptions{Stdout: stdoutBuffer, Stderr: stderrBuffer})
+	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{Stdout: stdoutBuffer, Stderr: stderrBuffer})
 	if err != nil {
 		result = multierror.Append(result, err)
 	}
