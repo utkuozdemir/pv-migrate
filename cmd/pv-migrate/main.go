@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	// will be overridden by goreleaser: https://goreleaser.com/cookbooks/using-main.version
+	// will be overridden by goreleaser: https://goreleaser.com/cookbooks/using-main.version/
 	version = "dev"
 	commit  = "none"
 	date    = "unknown"
