@@ -49,7 +49,7 @@ jobs:
         uses: golangci/golangci-lint-action@v3.4.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v1.51.1
+          version: v1.51.2
           args: --timeout=3m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
