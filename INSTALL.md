@@ -36,7 +36,7 @@ $ kubectl krew install pv-migrate
 Sample steps for MacOS:
 ```bash
 $ VERSION=<VERSION_TAG>
-$ wget https://github.com/utkuozdemir/pv-migrate/releases/download/v${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
+$ wget https://github.com/utkuozdemir/pv-migrate/releases/download/${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ tar -xvzf pv-migrate_${VERSION}_darwin_x86_64.tar.gz
 $ mv pv-migrate /usr/local/bin
 $ pv-migrate --help
