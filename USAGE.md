@@ -44,6 +44,7 @@ Flags:
   -t, --helm-timeout duration          install/uninstall timeout for helm releases (default 1m0s)
   -h, --help                           help for migrate
   -i, --ignore-mounted                 do not fail if the source or destination PVC is mounted
+      --lbsvc-timeout duration         timeout for the load balancer service to receive an external IP. Only used by the lbsvc strategy (default 2m0s)
   -o, --no-chown                       omit chown on rsync
   -b, --no-progress-bar                do not display a progress bar
   -c, --source-context string          context in the kubeconfig file of the source PVC
