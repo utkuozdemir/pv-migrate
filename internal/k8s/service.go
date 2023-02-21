@@ -16,19 +16,20 @@ import (
 	watchtools "k8s.io/client-go/tools/watch"
 )
 
-const (
-	serviceLbCheckTimeout = 120 * time.Second
-)
-
 var ErrUnexpectedTypeServiceWatch = errors.New("unexpected type while watching service")
 
-func GetServiceAddress(cli kubernetes.Interface, namespace string, name string) (string, error) {
+func GetServiceAddress(
+	cli kubernetes.Interface,
+	namespace string,
+	name string,
+	lbTimeout time.Duration,
+) (string, error) {
 	var result string
 
 	resCli := cli.CoreV1().Services(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 
-	ctx, cancel := context.WithTimeout(context.TODO(), serviceLbCheckTimeout)
+	ctx, cancel := context.WithTimeout(context.TODO(), lbTimeout)
 	defer cancel()
 
 	listWatch := &cache.ListWatch{

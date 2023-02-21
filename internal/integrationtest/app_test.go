@@ -129,7 +129,7 @@ func TestSameNSLbSvc(t *testing.T) {
 	_, err := execInPod(mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
+	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s --lbsvc-timeout 5m source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(cmd))
 
 	stdout, err := execInPod(mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)

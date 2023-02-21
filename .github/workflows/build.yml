@@ -41,8 +41,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v3.5.0
         with:
-          # renovate: go
-          go-version: 1.19
+          go-version-file: go.mod
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
       - name: Run linters
@@ -50,14 +49,14 @@ jobs:
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
           version: v1.51.2
-          args: --timeout=3m0s
+          args: --timeout=10m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
         uses: goreleaser/goreleaser-action@v4.2.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
           version: v1.15.2
-          args: build --snapshot --rm-dist --single-target
+          args: build --snapshot --clean --single-target
   test:
     runs-on: ubuntu-20.04
     steps:
@@ -66,8 +65,7 @@ jobs:
       - name: Install go
         uses: actions/setup-go@v3.5.0
         with:
-          # renovate: go
-          go-version: 1.19
+          go-version-file: go.mod
       - name: Install richgo
         # renovate: depName=kyoh86/richgo
         run: go install github.com/kyoh86/richgo@v0.3.11

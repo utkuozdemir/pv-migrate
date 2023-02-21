@@ -60,7 +60,7 @@ func PortForward(req *PortForwardRequest) error {
 	return forwarder.ForwardPorts()
 }
 
-func tryClose(logger *log.Entry, w io.WriteCloser) {
+func tryClose(logger *log.Entry, w io.Closer) {
 	if err := w.Close(); err != nil {
 		logger.Debug("failed to close port-forward output stream")
 	}

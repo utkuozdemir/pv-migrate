@@ -30,13 +30,20 @@ builds:
 
 archives:
   - id: pv-migrate-archive
+    rlcp: true
     # default name template except we use .Tag instead of .Version to keep the "v" prefix
-    name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ if .Mips }}_{{ .Mips }}{{ end }}"
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Tag }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- with .Arm }}v{{ . }}{{ end }}
+      {{- with .Mips }}_{{ . }}{{ end }}
+      {{- if not (eq .Amd64 "v1") }}{{ .Amd64 }}{{ end }}
     builds:
       - pv-migrate
-    replacements:
-      386: i386
-      amd64: x86_64
     format_overrides:
       - goos: windows
         format: zip

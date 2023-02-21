@@ -2,7 +2,7 @@ package migrator
 
 import (
 	"bytes"
-	_ "embed"
+	_ "embed" // we embed the helm chart
 	"errors"
 	"fmt"
 	"strings"

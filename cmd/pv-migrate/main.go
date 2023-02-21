@@ -1,9 +1,6 @@
 package main
 
 import (
-	"math/rand"
-	"time"
-
 	log "github.com/sirupsen/logrus"
 	// load all auth plugins - needed for gcp, azure etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -20,8 +17,6 @@ var (
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
-
 	logger, err := applog.New()
 	if err != nil {
 		log.Fatalf("Error: %s", err.Error())
