@@ -45,7 +45,7 @@ func (r *LbSvc) Run(attempt *migration.Attempt) (bool, error) {
 	sourceKubeClient := attempt.Migration.SourceInfo.ClusterClient.KubeClient
 	svcName := srcReleaseName + "-sshd"
 
-	lbSvcAddress, err := k8s.GetServiceAddress(sourceKubeClient, sourceNs, svcName)
+	lbSvcAddress, err := k8s.GetServiceAddress(sourceKubeClient, sourceNs, svcName, mig.Request.LBSvcTimeout)
 	if err != nil {
 		return true, err
 	}

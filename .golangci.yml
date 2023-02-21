@@ -3,17 +3,18 @@ linters:
   enable-all: true
   disable:
     # deprecated:
-    - deadcode
-    - exhaustivestruct
-    - golint
-    - ifshort
-    - interfacer
-    - maligned
-    - nosnakecase
-    - scopelint
-    - structcheck
-    - varcheck
+#    - deadcode
+#    - exhaustivestruct
+#    - golint
+#    - ifshort
+#    - interfacer
+#    - maligned
+#    - nosnakecase
+#    - scopelint
+#    - structcheck
+#    - varcheck
     # not useful
+    - exhaustivestruct
     - exhaustruct
     # todo: consider enabling:
     - wrapcheck

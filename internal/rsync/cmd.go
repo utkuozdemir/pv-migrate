@@ -9,15 +9,15 @@ import (
 var ErrSSHOnBothSrcAndDest = fmt.Errorf("cannot use ssh on both source and destination")
 
 type Cmd struct {
-	Command     string
 	Port        int
 	NoChown     bool
 	Delete      bool
 	SrcUseSSH   bool
+	DestUseSSH  bool
+	Command     string
 	SrcSSHUser  string
 	SrcSSHHost  string
 	SrcPath     string
-	DestUseSSH  bool
 	DestSSHUser string
 	DestSSHHost string
 	DestPath    string

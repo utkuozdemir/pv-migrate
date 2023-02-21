@@ -27,6 +27,7 @@ const (
 	FlagDestNamespace    = "dest-namespace"
 	FlagDestPath         = "dest-path"
 	FlagDestHostOverride = "dest-host-override"
+	FlagLBSvcTimeout     = "lbsvc-timeout"
 
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
@@ -43,6 +44,8 @@ const (
 	FlagHelmSetFile   = "helm-set-file"
 
 	migrateCmdNumArgs = 2
+
+	lbSvcTimeoutDefault = 2 * time.Minute
 )
 
 var completionFuncNoFileComplete = func(cmd *cobra.Command, args []string,
@@ -116,6 +119,8 @@ func setMigrateCmdFlags(cmd *cobra.Command) {
 			"in cases when you need to target a different destination IP on rsync for some reason. "+
 			"By default, it is determined by used strategy and differs across strategies. "+
 			"Has no effect for mnt2 and local strategies")
+	flags.Duration(FlagLBSvcTimeout, lbSvcTimeoutDefault, fmt.Sprintf("timeout for the load balancer service to "+
+		"receive an external IP. Only used by the %s strategy", strategy.LbSvcStrategy))
 
 	flags.DurationP(FlagHelmTimeout, "t", 1*time.Minute, "install/uninstall timeout for helm releases")
 	flags.StringSliceP(FlagHelmValues, "f", nil,
@@ -143,6 +148,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 	helmSetFile, _ := flags.GetStringSlice(FlagHelmSetFile)
 	strs, _ := flags.GetStringSlice(FlagStrategies)
 	destHostOverride, _ := flags.GetString(FlagDestHostOverride)
+	lbSvcTimeout, _ := flags.GetDuration(FlagLBSvcTimeout)
 
 	deleteExtraneousFiles, _ := flags.GetBool(FlagDestDeleteExtraneousFiles)
 	request := migration.Request{
@@ -161,6 +167,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		HelmFileValues:        helmSetFile,
 		Strategies:            strs,
 		DestHostOverride:      destHostOverride,
+		LBSvcTimeout:          lbSvcTimeout,
 		Logger:                logger,
 	}
 
