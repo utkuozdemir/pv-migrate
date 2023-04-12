@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.5.0
+        uses: actions/checkout@v3.5.1
       - name: Install go
         uses: actions/setup-go@v4.0.0
         with:
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.5.0
+        uses: actions/checkout@v3.5.1
       - name: Install go
         uses: actions/setup-go@v4.0.0
         with:
@@ -99,7 +99,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 4.2.0
+          METALLB_CHART_VERSION: 4.3.0
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
