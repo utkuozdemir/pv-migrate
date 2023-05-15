@@ -17,7 +17,7 @@ jobs:
           # https://github.com/goreleaser/goreleaser-action/issues/56#issuecomment-568718162
           fetch-depth: 0
       - name: Setup Go
-        uses: actions/setup-go@v4.0.0
+        uses: actions/setup-go@v4.0.1
         with:
           go-version-file: go.mod
       - name: Login to DockerHub
