@@ -99,7 +99,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 4.5.1
+          METALLB_CHART_VERSION: 4.5.2
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
