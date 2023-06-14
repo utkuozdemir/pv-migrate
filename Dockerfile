@@ -1,2 +1,2 @@
-FROM alpine:3.18.0
+FROM alpine:3.18.2
 COPY pv-migrate /usr/local/bin/pv-migrate
