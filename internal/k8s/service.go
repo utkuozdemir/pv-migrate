@@ -64,7 +64,7 @@ func GetServiceAddress(
 					result = res.Status.LoadBalancer.Ingress[0].Hostname
 				} else {
 					result = res.Status.LoadBalancer.Ingress[0].IP
-				}		
+				}
 
 				return true, nil
 			}
