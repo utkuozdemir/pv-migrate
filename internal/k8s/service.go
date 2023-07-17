@@ -59,7 +59,6 @@ func GetServiceAddress(
 			}
 
 			if len(res.Status.LoadBalancer.Ingress) > 0 {
-
 				if len(res.Status.LoadBalancer.Ingress[0].Hostname) > 0 {
 					result = res.Status.LoadBalancer.Ingress[0].Hostname
 				} else {
