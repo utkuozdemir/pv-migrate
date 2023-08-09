@@ -127,15 +127,15 @@ brews:
       zsh_completion.install "completions/pv-migrate.zsh" => "_pv-migrate"
       fish_completion.install "completions/pv-migrate.fish"
 
-scoop:
-  bucket:
-    owner: utkuozdemir
-    name: scoop-pv-migrate
-    token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"
-  commit_author:
-    name: Utku Ozdemir
-    email: uoz@protonmail.com
-  commit_msg_template: "Scoop update for {{ .ProjectName }} version {{ .Tag }}"
-  homepage: https://github.com/utkuozdemir/pv-migrate
-  description: Persistent volume migration plugin for Kubernetes
-  license: Apache-2.0
+scoops:
+  - bucket:
+      owner: utkuozdemir
+      name: scoop-pv-migrate
+      token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"
+    commit_author:
+      name: Utku Ozdemir
+      email: uoz@protonmail.com
+    commit_msg_template: "Scoop update for {{ .ProjectName }} version {{ .Tag }}"
+    homepage: https://github.com/utkuozdemir/pv-migrate
+    description: Persistent volume migration plugin for Kubernetes
+    license: Apache-2.0
