@@ -39,7 +39,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.5.3
       - name: Install go
-        uses: actions/setup-go@v4.0.1
+        uses: actions/setup-go@v4.1.0
         with:
           go-version-file: go.mod
       - name: Ensure go.mod is already tidied
@@ -48,14 +48,14 @@ jobs:
         uses: golangci/golangci-lint-action@v3.6.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v1.53.3
+          version: v1.54.0
           args: --timeout=10m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v4.3.0
+        uses: goreleaser/goreleaser-action@v4.4.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v1.18.2
+          version: v1.19.2
           args: build --snapshot --clean --single-target
   test:
     runs-on: ubuntu-22.04
@@ -63,7 +63,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3.5.3
       - name: Install go
-        uses: actions/setup-go@v4.0.1
+        uses: actions/setup-go@v4.1.0
         with:
           go-version-file: go.mod
       - name: Install richgo
@@ -81,7 +81,7 @@ jobs:
           rm cilium-linux-amd64.tar.gz
 
       - name: kind-1 - Create cluster
-        uses: helm/kind-action@v1.7.0
+        uses: helm/kind-action@v1.8.0
         with:
           cluster_name: kind-1
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
@@ -99,7 +99,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 4.5.4
+          METALLB_CHART_VERSION: 4.6.3
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
@@ -132,7 +132,7 @@ jobs:
           done
 
       - name: kind-2 - Create cluster
-        uses: helm/kind-action@v1.7.0
+        uses: helm/kind-action@v1.8.0
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
         with:
