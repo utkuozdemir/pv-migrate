@@ -2,27 +2,16 @@
 linters:
   enable-all: true
   disable:
-    # deprecated:
-#    - deadcode
-#    - exhaustivestruct
-#    - golint
-#    - ifshort
-#    - interfacer
-#    - maligned
-#    - nosnakecase
-#    - scopelint
-#    - structcheck
-#    - varcheck
     # not useful
-    - exhaustivestruct
-    - exhaustruct
+    - exhaustivestruct # pointless
+    - exhaustruct # pointless
+    - gomnd # magic numbers are ok mostly
+    - goerr113 # no need to wrap all errors, too much work
     # breaking things: https://github.com/atc0005/go-ci/issues/1024
     - depguard
     # todo: consider enabling:
-    - wrapcheck
     - testpackage
     - gochecknoglobals
-    - ireturn
 
 linters-settings:
   gci:
