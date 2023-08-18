@@ -6,7 +6,7 @@ import (
 	log "github.com/sirupsen/logrus"
 	"helm.sh/helm/v3/pkg/chart"
 
-	"github.com/utkuozdemir/pv-migrate/internal/pvc"
+	"github.com/utkuozdemir/pv-migrate/pvc"
 )
 
 type PVCInfo struct {

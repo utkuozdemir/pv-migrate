@@ -36,7 +36,7 @@ That's it.
 ## Editing the helm chart
 
 The `pv-migrate` helm chart is located at `helm/pv-migrate`. It is inserted into the go code during build. 
-The source is a helm package located in `internal/migrator/helm-chart.tgz`.
+The source is a helm package located in `migrator/helm-chart.tgz`.
 
 If you want to tweak the helm chart, you must run the following command before recompiling the code in order
 to update the chart (you need [helm](https://helm.sh/docs/intro/install/) and [helm-docs](https://github.com/norwoodj/helm-docs) installed):

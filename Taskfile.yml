@@ -22,7 +22,7 @@ tasks:
     cmds:
       - helm-docs -c helm/pv-migrate/
       - helm package helm/pv-migrate/
-      - mv pv-migrate-*.tgz internal/migrator/helm-chart.tgz
+      - mv pv-migrate-*.tgz migrator/helm-chart.tgz
 
   clean:
     desc: clean
