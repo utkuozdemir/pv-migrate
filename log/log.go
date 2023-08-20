@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
-	"github.com/kyokomi/emoji/v2"
+	"github.com/forPelevin/gomoji"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -34,13 +35,13 @@ var (
 	}
 )
 
-func New() (*log.Entry, error) {
+func New(ctx context.Context) (*log.Entry, error) {
 	configureGlobalLogger()
 
 	l := log.New()
 	l.SetOutput(os.Stdout)
 
-	entry := l.WithContext(context.Background())
+	entry := l.WithContext(ctx)
 
 	err := Configure(entry, LevelInfo, FormatFancy)
 	if err != nil {
@@ -76,7 +77,7 @@ func Configure(entry *log.Entry, level string, format string) error {
 func getLogFormatter(format string) (log.Formatter, error) {
 	switch format {
 	case FormatJSON:
-		return &log.JSONFormatter{}, nil
+		return &jsonFormatter{}, nil
 	case FormatFancy:
 		return &fancyFormatter{}, nil
 	}
@@ -105,13 +106,25 @@ func getLogLevel(level string) (log.Level, error) {
 	return 0, fmt.Errorf("unknown log level: %s", level)
 }
 
+type jsonFormatter struct {
+	inner log.JSONFormatter
+}
+
+func (f *jsonFormatter) Format(e *log.Entry) ([]byte, error) {
+	e.Message = strings.TrimSpace(gomoji.RemoveEmojis(e.Message))
+
+	formatted, err := f.inner.Format(e)
+	if err != nil {
+		return nil, fmt.Errorf("failed to format log entry: %w", err)
+	}
+
+	return formatted, nil
+}
+
 type fancyFormatter struct{}
 
 func (f *fancyFormatter) Format(e *log.Entry) ([]byte, error) {
-	msg := emoji.Sprintf("%s\n", e.Message)
-	bytes := []byte(msg)
-
-	return bytes, nil
+	return []byte(e.Message), nil
 }
 
 func configureGlobalLogger() {

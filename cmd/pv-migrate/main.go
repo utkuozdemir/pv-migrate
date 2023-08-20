@@ -1,7 +1,10 @@
 package main
 
 import (
-	log "github.com/sirupsen/logrus"
+	"context"
+	"fmt"
+	"os"
+
 	// load all auth plugins - needed for gcp, azure etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -17,15 +20,30 @@ var (
 )
 
 func main() {
-	logger, err := applog.New()
+	if exitCode := run(); exitCode != 0 {
+		os.Exit(exitCode)
+	}
+}
+
+func run() int {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	logger, err := applog.New(ctx)
 	if err != nil {
-		log.Fatalf("Error: %s", err.Error())
+		fmt.Printf("❌ Error: %s\n", err.Error()) //nolint:forbidigo
+
+		return 1
 	}
 
 	rootCmd := app.New(logger, version, commit, date)
 
-	err = rootCmd.Execute()
+	err = rootCmd.ExecuteContext(ctx)
 	if err != nil {
-		logger.Fatalf(":cross_mark: Error: %s", err.Error())
+		logger.Errorf("❌ Error: %s", err.Error())
+
+		return 1
 	}
+
+	return 0
 }

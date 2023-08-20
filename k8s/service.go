@@ -17,6 +17,7 @@ import (
 
 //nolint:funlen
 func GetServiceAddress(
+	ctx context.Context,
 	cli kubernetes.Interface,
 	namespace string,
 	name string,
@@ -27,7 +28,7 @@ func GetServiceAddress(
 	resCli := cli.CoreV1().Services(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 
-	ctx, cancel := context.WithTimeout(context.TODO(), lbTimeout)
+	ctx, cancel := context.WithTimeout(ctx, lbTimeout)
 	defer cancel()
 
 	listWatch := &cache.ListWatch{

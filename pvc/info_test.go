@@ -6,6 +6,7 @@
 package pvc_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,12 +23,15 @@ import (
 func TestNew(t *testing.T) {
 	t.Parallel()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	t.Run("should have required affinity when only RWO is supported", func(t *testing.T) {
 		t.Parallel()
 
 		clusterClient := buildClusterClient("node-2", corev1.ReadWriteOnce)
 
-		pvcInfo, err := pvc.New(clusterClient, "testns", "test")
+		pvcInfo, err := pvc.New(ctx, clusterClient, "testns", "test")
 		require.NoError(t, err)
 
 		assert.Equal(t, clusterClient, pvcInfo.ClusterClient)
@@ -61,7 +65,7 @@ func TestNew(t *testing.T) {
 
 		clusterClient := buildClusterClient("node-2", corev1.ReadWriteOnce, corev1.ReadOnlyMany)
 
-		pvcInfo, err := pvc.New(clusterClient, "testns", "test")
+		pvcInfo, err := pvc.New(ctx, clusterClient, "testns", "test")
 		require.NoError(t, err)
 
 		assert.Equal(t, clusterClient, pvcInfo.ClusterClient)
@@ -96,7 +100,7 @@ func TestNew(t *testing.T) {
 
 		clusterClient := buildClusterClient("node-2", corev1.ReadWriteOncePod)
 
-		_, err := pvc.New(clusterClient, "testns", "test")
+		_, err := pvc.New(ctx, clusterClient, "testns", "test")
 		require.ErrorContains(t, err, "ReadWriteOncePod")
 	})
 
@@ -105,7 +109,7 @@ func TestNew(t *testing.T) {
 
 		clusterClient := buildClusterClient("", corev1.ReadWriteOncePod)
 
-		pvcInfo, err := pvc.New(clusterClient, "testns", "test")
+		pvcInfo, err := pvc.New(ctx, clusterClient, "testns", "test")
 		require.NoError(t, err)
 
 		assert.Equal(t, "", pvcInfo.MountedNode)

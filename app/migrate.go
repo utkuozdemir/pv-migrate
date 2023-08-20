@@ -73,12 +73,12 @@ func buildMigrateCmd() *cobra.Command {
 func setMigrateCmdCompletion(cmd *cobra.Command) {
 	_ = cmd.RegisterFlagCompletionFunc(FlagSourceContext, buildKubeContextCompletionFunc(FlagSourceKubeconfig))
 	_ = cmd.RegisterFlagCompletionFunc(FlagSourceNamespace,
-		buildKubeNSCompletionFunc(FlagSourceKubeconfig, FlagSourceContext))
+		buildKubeNSCompletionFunc(cmd.Context(), FlagSourceKubeconfig, FlagSourceContext))
 	_ = cmd.RegisterFlagCompletionFunc(FlagSourcePath, completionFuncNoFileComplete)
 
 	_ = cmd.RegisterFlagCompletionFunc(FlagDestContext, buildKubeContextCompletionFunc(FlagDestKubeconfig))
 	_ = cmd.RegisterFlagCompletionFunc(FlagDestNamespace,
-		buildKubeNSCompletionFunc(FlagDestKubeconfig, FlagDestContext))
+		buildKubeNSCompletionFunc(cmd.Context(), FlagDestKubeconfig, FlagDestContext))
 	_ = cmd.RegisterFlagCompletionFunc(FlagDestPath, completionFuncNoFileComplete)
 
 	_ = cmd.RegisterFlagCompletionFunc(FlagStrategies, buildSliceCompletionFunc(strategy.AllStrategies))
@@ -171,14 +171,13 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		Logger:                logger,
 	}
 
-	logger.Info(":rocket: Starting migration")
+	logger.Info("🚀 Starting migration")
 
 	if deleteExtraneousFiles {
-		logger.Info(":white_exclamation_mark: " +
-			"Extraneous files will be deleted from the destination")
+		logger.Info("❕ Extraneous files will be deleted from the destination")
 	}
 
-	if err := migrator.New().Run(&request); err != nil {
+	if err := migrator.New().Run(cmd.Context(), &request); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 

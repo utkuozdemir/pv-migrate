@@ -1,6 +1,7 @@
 package migrator
 
 import (
+	"context"
 	"testing"
 
 	log "github.com/sirupsen/logrus"
@@ -29,9 +30,12 @@ const (
 func TestBuildTask(t *testing.T) {
 	t.Parallel()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	m := Migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(true)
-	tsk, err := m.buildMigration(mig)
+	tsk, err := m.buildMigration(ctx, mig)
 	assert.Nil(t, err)
 
 	sourceInfo := tsk.SourceInfo
@@ -54,9 +58,12 @@ func TestBuildTask(t *testing.T) {
 func TestBuildTaskMounted(t *testing.T) {
 	t.Parallel()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	m := Migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(false)
-	tsk, err := m.buildMigration(mig)
+	tsk, err := m.buildMigration(ctx, mig)
 	assert.Nil(t, tsk)
 	assert.Error(t, err)
 }
@@ -64,10 +71,13 @@ func TestBuildTaskMounted(t *testing.T) {
 func TestRunStrategiesInOrder(t *testing.T) {
 	t.Parallel()
 
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
 	var result []int
 
 	str1 := mockStrategy{
-		runFunc: func(_ *migration.Attempt) error {
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
 			result = append(result, 1)
 
 			return strategy.ErrUnaccepted
@@ -75,7 +85,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	}
 
 	str2 := mockStrategy{
-		runFunc: func(_ *migration.Attempt) error {
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
 			result = append(result, 2)
 
 			return nil
@@ -83,7 +93,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	}
 
 	str3 := mockStrategy{
-		runFunc: func(_ *migration.Attempt) error {
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
 			result = append(result, 3)
 
 			return strategy.ErrUnaccepted
@@ -104,7 +114,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	strs := []string{"str3", "str1", "str2"}
 	mig := buildMigrationRequestWithStrategies(strs, true)
 
-	err := migrator.Run(mig)
+	err := migrator.Run(ctx, mig)
 	assert.NoError(t, err)
 	assert.Equal(t, []int{3, 1, 2}, result)
 }
@@ -181,9 +191,9 @@ func buildTestPVC(namespace string, name string,
 }
 
 type mockStrategy struct {
-	runFunc func(*migration.Attempt) error
+	runFunc func(context.Context, *migration.Attempt) error
 }
 
-func (m *mockStrategy) Run(a *migration.Attempt) error {
-	return m.runFunc(a)
+func (m *mockStrategy) Run(ctx context.Context, a *migration.Attempt) error {
+	return m.runFunc(ctx, a)
 }

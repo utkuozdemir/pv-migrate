@@ -2,6 +2,7 @@ package migrator
 
 import (
 	"bytes"
+	"context"
 	_ "embed" // we embed the helm chart
 	"errors"
 	"fmt"
@@ -42,13 +43,13 @@ func New() *Migrator {
 	}
 }
 
-func (m *Migrator) Run(request *migration.Request) error {
+func (m *Migrator) Run(ctx context.Context, request *migration.Request) error {
 	nameToStrategyMap, err := m.getStrategyMap(request.Strategies)
 	if err != nil {
 		return err
 	}
 
-	mig, err := m.buildMigration(request)
+	mig, err := m.buildMigration(ctx, request)
 	if err != nil {
 		return err
 	}
@@ -56,7 +57,7 @@ func (m *Migrator) Run(request *migration.Request) error {
 	strs := strings.Join(request.Strategies, ", ")
 	mig.Logger.
 		WithField("strategies", strs).
-		Infof(":thought_balloon: Will attempt %v strategies: %s",
+		Infof("💭 Will attempt %v strategies: %s",
 			len(nameToStrategyMap), strs)
 
 	for _, name := range request.Strategies {
@@ -69,25 +70,25 @@ func (m *Migrator) Run(request *migration.Request) error {
 		}
 
 		sLogger := attempt.Logger.WithField("strategy", name)
-		sLogger.Infof(":helicopter: Attempting strategy: %s", name)
+		sLogger.Infof("🚁 Attempting strategy: %s", name)
 		s := nameToStrategyMap[name]
 
-		if runErr := s.Run(&attempt); runErr != nil {
+		if runErr := s.Run(ctx, &attempt); runErr != nil {
 			if errors.Is(err, strategy.ErrUnaccepted) {
-				sLogger.Infof(":fox: Strategy '%s' cannot handle this migration, "+
+				sLogger.Infof("🦊 Strategy '%s' cannot handle this migration, "+
 					"will try the next one", name)
 
 				continue
 			}
 
 			sLogger.WithError(runErr).
-				Warn(":large_orange_diamond: Migration failed with this strategy, " +
+				Warn("🔶 Migration failed with this strategy, " +
 					"will try with the remaining strategies")
 
 			continue
 		}
 
-		sLogger.Info(":check_mark_button: Migration succeeded")
+		sLogger.Info("✅ Migration succeeded")
 
 		return nil
 	}
@@ -95,7 +96,7 @@ func (m *Migrator) Run(request *migration.Request) error {
 	return fmt.Errorf("all strategies failed for this migration")
 }
 
-func (m *Migrator) buildMigration(request *migration.Request) (*migration.Migration, error) {
+func (m *Migrator) buildMigration(ctx context.Context, request *migration.Request) (*migration.Migration, error) {
 	chart, err := loader.LoadArchive(bytes.NewReader(chartBytes))
 	if err != nil {
 		return nil, fmt.Errorf("failed to load helm chart: %w", err)
@@ -119,12 +120,12 @@ func (m *Migrator) buildMigration(request *migration.Request) (*migration.Migrat
 		destNs = destClient.NsInContext
 	}
 
-	sourcePvcInfo, err := pvc.New(sourceClient, sourceNs, source.Name)
+	sourcePvcInfo, err := pvc.New(ctx, sourceClient, sourceNs, source.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PVC info for source PVC: %w", err)
 	}
 
-	destPvcInfo, err := pvc.New(destClient, destNs, dest.Name)
+	destPvcInfo, err := pvc.New(ctx, destClient, destNs, dest.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get PVC info for destination PVC: %w", err)
 	}
@@ -198,7 +199,7 @@ func handleMounted(logger *log.Entry, info *pvc.Info, ignoreMounted bool) error 
 	}
 
 	if ignoreMounted {
-		logger.Infof(":bulb: PVC %s is mounted to node %s, ignoring...",
+		logger.Infof("💡 PVC %s is mounted to node %s, ignoring...",
 			info.Claim.Name, info.MountedNode)
 
 		return nil

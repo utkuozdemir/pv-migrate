@@ -1,6 +1,8 @@
+//nolint:dupl
 package strategy
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -16,6 +18,9 @@ import (
 
 func TestCanDoSameNode(t *testing.T) {
 	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -34,8 +39,8 @@ func TestCanDoSameNode(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -49,6 +54,9 @@ func TestCanDoSameNode(t *testing.T) {
 
 func TestCanDoDestRWX(t *testing.T) {
 	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -67,8 +75,8 @@ func TestCanDoDestRWX(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -82,6 +90,9 @@ func TestCanDoDestRWX(t *testing.T) {
 
 func TestCanDoSourceROX(t *testing.T) {
 	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -100,8 +111,8 @@ func TestCanDoSourceROX(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -115,6 +126,9 @@ func TestCanDoSourceROX(t *testing.T) {
 
 func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -133,8 +147,8 @@ func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -148,6 +162,9 @@ func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 
 func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -167,8 +184,8 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c1 := buildTestClient(pvcA, pvcB, podA, podB)
 	c2 := buildTestClientWithAPIServerHost("https://127.0.0.2:6443", pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c1, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c2, destNS, destPvc)
+	src, _ := pvc.New(ctx, c1, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c2, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -182,6 +199,9 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 
 func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -200,8 +220,8 @@ func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
@@ -214,6 +234,9 @@ func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 
 func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -232,8 +255,8 @@ func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,

@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -30,7 +31,7 @@ const (
 
 type Local struct{}
 
-func (r *Local) Run(attempt *migration.Attempt) error {
+func (r *Local) Run(ctx context.Context, attempt *migration.Attempt) error {
 	_, err := exec.LookPath("ssh")
 	if err != nil {
 		return fmt.Errorf("ssh binary not found")
@@ -50,14 +51,14 @@ func (r *Local) Run(attempt *migration.Attempt) error {
 	doneCh := registerCleanupHook(attempt, releaseNames)
 	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
 
-	srcFwdPort, srcStopChan, err := portForwardToSshd(mig.Logger, sourceInfo, srcReleaseName)
+	srcFwdPort, srcStopChan, err := portForwardToSshd(ctx, mig.Logger, sourceInfo, srcReleaseName)
 	if err != nil {
 		return fmt.Errorf("failed to port-forward to source: %w", err)
 	}
 
 	defer func() { srcStopChan <- struct{}{} }()
 
-	destFwdPort, destStopChan, err := portForwardToSshd(mig.Logger, destInfo, destReleaseName)
+	destFwdPort, destStopChan, err := portForwardToSshd(ctx, mig.Logger, destInfo, destReleaseName)
 	if err != nil {
 		return fmt.Errorf("failed to port-forward to destination: %w", err)
 	}
@@ -143,7 +144,7 @@ func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
 }
 
 func (r *Local) installLocalReleases(attempt *migration.Attempt) (string, string, string, error) {
-	attempt.Migration.Logger.Info(":key: Generating SSH key pair")
+	attempt.Migration.Logger.Info("🔑 Generating SSH key pair")
 	keyAlgorithm := attempt.Migration.Request.KeyAlgorithm
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
@@ -170,10 +171,10 @@ func (r *Local) installLocalReleases(attempt *migration.Attempt) (string, string
 	return srcReleaseName, destReleaseName, privateKey, nil
 }
 
-func getSshdPodForHelmRelease(pvcInfo *pvc.Info, name string) (*corev1.Pod, error) {
+func getSshdPodForHelmRelease(ctx context.Context, pvcInfo *pvc.Info, name string) (*corev1.Pod, error) {
 	labelSelector := "app.kubernetes.io/component=sshd,app.kubernetes.io/instance=" + name
 
-	pod, err := k8s.WaitForPod(pvcInfo.ClusterClient.KubeClient, pvcInfo.Claim.Namespace, labelSelector)
+	pod, err := k8s.WaitForPod(ctx, pvcInfo.ClusterClient.KubeClient, pvcInfo.Claim.Namespace, labelSelector)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sshd pod for helm release %s: %w", name, err)
 	}
@@ -263,8 +264,10 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 	return name, nil
 }
 
-func portForwardToSshd(logger *log.Entry, pvcInfo *pvc.Info, helmReleaseName string) (int, chan<- struct{}, error) {
-	sshdPod, err := getSshdPodForHelmRelease(pvcInfo, helmReleaseName)
+func portForwardToSshd(ctx context.Context, logger *log.Entry,
+	pvcInfo *pvc.Info, helmReleaseName string,
+) (int, chan<- struct{}, error) {
+	sshdPod, err := getSshdPodForHelmRelease(ctx, pvcInfo, helmReleaseName)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -294,7 +297,7 @@ func portForwardToSshd(logger *log.Entry, pvcInfo *pvc.Info, helmReleaseName str
 		})
 		if err != nil {
 			logger.WithError(err).WithField("ns", namespace).WithField("name", name).
-				WithField("port", port).Error(":cross_mark: Error on port-forward")
+				WithField("port", port).Error("❌ Error on port-forward")
 		}
 	}()
 

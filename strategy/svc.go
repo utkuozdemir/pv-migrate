@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/utkuozdemir/pv-migrate/k8s"
@@ -19,7 +20,7 @@ func (r *Svc) canDo(t *migration.Migration) bool {
 	return sameCluster
 }
 
-func (r *Svc) Run(attempt *migration.Attempt) error {
+func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt) error {
 	mig := attempt.Migration
 	if !r.canDo(mig) {
 		return ErrUnaccepted
@@ -45,7 +46,7 @@ func (r *Svc) Run(attempt *migration.Attempt) error {
 	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
 	jobName := releaseName + "-rsync"
 
-	if err = k8s.WaitForJobCompletion(attempt.Logger, kubeClient,
+	if err = k8s.WaitForJobCompletion(ctx, attempt.Logger, kubeClient,
 		mig.DestInfo.Claim.Namespace, jobName, showProgressBar); err != nil {
 		return fmt.Errorf("failed to wait for job completion: %w", err)
 	}
@@ -60,7 +61,7 @@ func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string
 	sourceNs := sourceInfo.Claim.Namespace
 	destNs := destInfo.Claim.Namespace
 
-	mig.Logger.Info(":key: Generating SSH key pair")
+	mig.Logger.Info("🔑 Generating SSH key pair")
 	keyAlgorithm := mig.Request.KeyAlgorithm
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)

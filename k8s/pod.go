@@ -19,12 +19,12 @@ const (
 	podWatchTimeout = 2 * time.Minute
 )
 
-func WaitForPod(cli kubernetes.Interface, namespace, labelSelector string) (*corev1.Pod, error) {
+func WaitForPod(ctx context.Context, cli kubernetes.Interface, namespace, labelSelector string) (*corev1.Pod, error) {
 	var result *corev1.Pod
 
 	resCli := cli.CoreV1().Pods(namespace)
 
-	ctx, cancel := context.WithTimeout(context.TODO(), podWatchTimeout)
+	ctx, cancel := context.WithTimeout(ctx, podWatchTimeout)
 	defer cancel()
 
 	listWatch := &cache.ListWatch{
@@ -72,12 +72,13 @@ func WaitForPod(cli kubernetes.Interface, namespace, labelSelector string) (*cor
 	return result, nil
 }
 
-func waitForPodTermination(cli kubernetes.Interface, namespace string, name string) (*corev1.PodPhase, error) {
+func waitForPodTermination(ctx context.Context, cli kubernetes.Interface,
+	namespace string, name string,
+) (*corev1.PodPhase, error) {
 	var result *corev1.PodPhase
 
 	resCli := cli.CoreV1().Pods(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
-	ctx := context.Background()
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
