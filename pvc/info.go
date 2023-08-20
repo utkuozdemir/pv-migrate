@@ -22,11 +22,11 @@ type Info struct {
 }
 
 //nolint:cyclop
-func New(client *k8s.ClusterClient, namespace string, name string) (*Info, error) {
+func New(ctx context.Context, client *k8s.ClusterClient, namespace string, name string) (*Info, error) {
 	kubeClient := client.KubeClient
 
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).
-		Get(context.TODO(), name, metav1.GetOptions{})
+		Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pvc %s/%s: %w", namespace, name, err)
 	}
@@ -51,7 +51,7 @@ func New(client *k8s.ClusterClient, namespace string, name string) (*Info, error
 		}
 	}
 
-	mountedNode, err := findMountedNode(kubeClient, claim)
+	mountedNode, err := findMountedNode(ctx, kubeClient, claim)
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +76,10 @@ func New(client *k8s.ClusterClient, namespace string, name string) (*Info, error
 	}, nil
 }
 
-func findMountedNode(kubeClient kubernetes.Interface, pvc *corev1.PersistentVolumeClaim) (string, error) {
-	podList, err := kubeClient.CoreV1().Pods(pvc.Namespace).List(context.TODO(), metav1.ListOptions{})
+func findMountedNode(ctx context.Context, kubeClient kubernetes.Interface,
+	pvc *corev1.PersistentVolumeClaim,
+) (string, error) {
+	podList, err := kubeClient.CoreV1().Pods(pvc.Namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("failed to list pods: %w", err)
 	}

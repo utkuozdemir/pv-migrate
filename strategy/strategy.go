@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -54,7 +55,7 @@ type Strategy interface {
 	// Run runs the migration for the given task execution.
 	//
 	// This is the actual implementation of the migration.
-	Run(a *migration.Attempt) error
+	Run(ctx context.Context, a *migration.Attempt) error
 }
 
 func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
@@ -81,7 +82,7 @@ func registerCleanupHook(attempt *migration.Attempt, releaseNames []string) chan
 	go func() {
 		select {
 		case <-signalCh:
-			attempt.Logger.Warn(":large_orange_diamond: Received termination signal")
+			attempt.Logger.Warn("🔶 Received termination signal")
 			cleanup(attempt, releaseNames)
 			os.Exit(1)
 		case <-doneCh:
@@ -101,7 +102,7 @@ func cleanup(a *migration.Attempt, releaseNames []string) {
 	mig := a.Migration
 	req := mig.Request
 	logger := a.Logger
-	logger.Info(":broom: Cleaning up")
+	logger.Info("🧹 Cleaning up")
 
 	var result *multierror.Error
 
@@ -116,12 +117,12 @@ func cleanup(a *migration.Attempt, releaseNames []string) {
 
 	if err := result.ErrorOrNil(); err != nil {
 		logger.WithError(err).
-			Warn(":large_orange_diamond: Cleanup failed, you might want to clean up manually")
+			Warn("🔶 Cleanup failed, you might want to clean up manually")
 
 		return
 	}
 
-	logger.Info(":sparkles: Cleanup done")
+	logger.Info("✨ Cleanup done")
 }
 
 func cleanupForPVC(logger *log.Entry, helmReleaseName string,

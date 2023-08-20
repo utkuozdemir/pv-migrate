@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/kyokomi/emoji/v2"
 	"github.com/schollz/progressbar/v3"
 	log "github.com/sirupsen/logrus"
 )
@@ -65,7 +64,7 @@ func (l *LogTail) tailWithProgressBar() {
 			progressbar.OptionSetRenderBlankState(true),
 			progressbar.OptionFullWidth(),
 			progressbar.OptionOnCompletion(func() { fmt.Println() }), //nolint:forbidigo
-			progressbar.OptionSetDescription(emoji.Sprint(":open_file_folder: Copying data...")),
+			progressbar.OptionSetDescription("📂 Copying data..."),
 		)
 	}, func(s string) {
 		if completed || bar == nil {
@@ -95,7 +94,7 @@ func (l *LogTail) tailWithRetry(beforeFunc func(), logFunc func(string), success
 		done, err := l.tail(beforeFunc, logFunc, successFunc)
 		if err != nil && !failedOnce {
 			l.Logger.WithError(err).
-				Debug(":large_orange_diamond: Cannot tail logs to display progress")
+				Debug("🔶 Cannot tail logs to display progress")
 
 			failedOnce = true
 		}

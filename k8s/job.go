@@ -13,12 +13,12 @@ import (
 	"github.com/utkuozdemir/pv-migrate/rsync"
 )
 
-func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
+func WaitForJobCompletion(ctx context.Context, logger *log.Entry, cli kubernetes.Interface,
 	namespace string, name string, progressBarRequested bool,
 ) error {
 	s := fmt.Sprintf("job-name=%s", name)
 
-	pod, err := WaitForPod(cli, namespace, s)
+	pod, err := WaitForPod(ctx, cli, namespace, s)
 	if err != nil {
 		return err
 	}
@@ -31,7 +31,7 @@ func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 	logTail := rsync.LogTail{
 		LogReaderFunc: func() (io.ReadCloser, error) {
 			stream, streamErr := cli.CoreV1().Pods(namespace).GetLogs(pod.Name,
-				&corev1.PodLogOptions{Follow: true}).Stream(context.TODO())
+				&corev1.PodLogOptions{Follow: true}).Stream(ctx)
 			if streamErr != nil {
 				return nil, fmt.Errorf("failed to stream logs from pod %s/%s: %w", namespace, pod.Name, streamErr)
 			}
@@ -45,7 +45,7 @@ func WaitForJobCompletion(logger *log.Entry, cli kubernetes.Interface,
 
 	go logTail.Start()
 
-	terminatedPod, err := waitForPodTermination(cli, pod.Namespace, pod.Name)
+	terminatedPod, err := waitForPodTermination(ctx, cli, pod.Namespace, pod.Name)
 	if err != nil {
 		successCh <- false
 

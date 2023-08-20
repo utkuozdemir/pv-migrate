@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/utkuozdemir/pv-migrate/k8s"
@@ -29,7 +30,7 @@ func (r *Mnt2) canDo(t *migration.Migration) bool {
 	return sameNode || sourceInfo.SupportsROX || sourceInfo.SupportsRWX || destInfo.SupportsRWX
 }
 
-func (r *Mnt2) Run(attempt *migration.Attempt) error {
+func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt) error {
 	mig := attempt.Migration
 	if !r.canDo(mig) {
 		return ErrUnaccepted
@@ -82,7 +83,7 @@ func (r *Mnt2) Run(attempt *migration.Attempt) error {
 	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
 	jobName := attempt.HelmReleaseNamePrefix + "-rsync"
 
-	if err = k8s.WaitForJobCompletion(attempt.Logger, kubeClient, namespace, jobName, showProgressBar); err != nil {
+	if err = k8s.WaitForJobCompletion(ctx, attempt.Logger, kubeClient, namespace, jobName, showProgressBar); err != nil {
 		return fmt.Errorf("failed to wait for job completion: %w", err)
 	}
 

@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/utkuozdemir/pv-migrate/k8s"
@@ -12,7 +13,7 @@ import (
 
 type LbSvc struct{}
 
-func (r *LbSvc) Run(attempt *migration.Attempt) error {
+func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt) error {
 	mig := attempt.Migration
 
 	sourceInfo := mig.SourceInfo
@@ -20,7 +21,7 @@ func (r *LbSvc) Run(attempt *migration.Attempt) error {
 	sourceNs := sourceInfo.Claim.Namespace
 	destNs := destInfo.Claim.Namespace
 
-	mig.Logger.Info(":key: Generating SSH key pair")
+	mig.Logger.Info("🔑 Generating SSH key pair")
 	keyAlgorithm := mig.Request.KeyAlgorithm
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
@@ -45,7 +46,7 @@ func (r *LbSvc) Run(attempt *migration.Attempt) error {
 	sourceKubeClient := attempt.Migration.SourceInfo.ClusterClient.KubeClient
 	svcName := srcReleaseName + "-sshd"
 
-	lbSvcAddress, err := k8s.GetServiceAddress(sourceKubeClient, sourceNs, svcName, mig.Request.LBSvcTimeout)
+	lbSvcAddress, err := k8s.GetServiceAddress(ctx, sourceKubeClient, sourceNs, svcName, mig.Request.LBSvcTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to get service address: %w", err)
 	}
@@ -65,7 +66,7 @@ func (r *LbSvc) Run(attempt *migration.Attempt) error {
 	kubeClient := destInfo.ClusterClient.KubeClient
 	jobName := destReleaseName + "-rsync"
 
-	if err = k8s.WaitForJobCompletion(attempt.Logger, kubeClient, destNs, jobName, showProgressBar); err != nil {
+	if err = k8s.WaitForJobCompletion(ctx, attempt.Logger, kubeClient, destNs, jobName, showProgressBar); err != nil {
 		return fmt.Errorf("failed to wait for job completion: %w", err)
 	}
 

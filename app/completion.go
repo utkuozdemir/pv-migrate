@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -97,13 +98,13 @@ func buildKubeContextCompletionFunc(kubeconfigFlag string) func(cmd *cobra.Comma
 	}
 }
 
-func buildKubeNSCompletionFunc(kubeconfigFlag string, contextFlag string) func(cmd *cobra.Command,
+func buildKubeNSCompletionFunc(ctx context.Context, kubeconfigFlag string, contextFlag string) func(cmd *cobra.Command,
 	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		srcKubeconfig, _ := cmd.Flags().GetString(kubeconfigFlag)
 		srcContext, _ := cmd.Flags().GetString(contextFlag)
 
-		contexts, err := k8s.GetNamespaces(srcKubeconfig, srcContext)
+		contexts, err := k8s.GetNamespaces(ctx, srcKubeconfig, srcContext)
 		if err != nil {
 			logger.Tracef("error: %v", err)
 
@@ -176,7 +177,7 @@ func buildPVCsCompletionFunc() func(cmd *cobra.Command, args []string,
 			namespace, _ = cmd.Flags().GetString(FlagDestNamespace)
 		}
 
-		pvcs, err := k8s.GetPVCs(kubeconfig, context, namespace)
+		pvcs, err := k8s.GetPVCs(cmd.Context(), kubeconfig, context, namespace)
 		if err != nil {
 			logger.Tracef("error: %v", err)
 

@@ -1,6 +1,8 @@
+//nolint:dupl
 package strategy
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,6 +14,9 @@ import (
 
 func TestSvcCanDoSameCluster(t *testing.T) {
 	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -30,8 +35,8 @@ func TestSvcCanDoSameCluster(t *testing.T) {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPvc)
 	c := buildTestClient(pvcA, pvcB, podA, podB)
-	src, _ := pvc.New(c, sourceNS, sourcePVC)
-	dst, _ := pvc.New(c, destNS, destPvc)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
 
 	mig := migration.Migration{
 		SourceInfo: src,
