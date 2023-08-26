@@ -146,6 +146,8 @@ rsync:
   privateKeyMountPath: /root/.ssh/id_ed25519
   # -- The private key content
   privateKey: ""
+  # -- Number of attempts to run rsync command
+  maxAttempts: 10
   # -- Full Rsync command and flags
   command: ""
 

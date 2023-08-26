@@ -35,7 +35,7 @@ spec:
             - |
               n=0
               rc=1
-              retries=10
+              retries={{ .Values.rsync.maxAttempts }}
               until [ "$n" -ge "$retries" ]
               do
                 {{ required ".Values.rsync.command is required!" .Values.rsync.command }} && rc=0 && break
