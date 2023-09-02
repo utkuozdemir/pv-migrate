@@ -23,6 +23,7 @@ type Request struct {
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
+	SkipCleanup           bool
 	NoProgressBar         bool
 	SourceMountReadOnly   bool
 	KeyAlgorithm          string

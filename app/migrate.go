@@ -32,6 +32,7 @@ const (
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
 	FlagNoChown                   = "no-chown"
+	FlagSkipCleanup               = "skip-cleanup"
 	FlagNoProgressBar             = "no-progress-bar"
 	FlagSourceMountReadOnly       = "source-mount-read-only"
 	FlagStrategies                = "strategies"
@@ -107,6 +108,7 @@ func setMigrateCmdFlags(cmd *cobra.Command) {
 	flags.BoolP(FlagIgnoreMounted, "i", false,
 		"do not fail if the source or destination PVC is mounted")
 	flags.BoolP(FlagNoChown, "o", false, "omit chown on rsync")
+	flags.BoolP(FlagSkipCleanup, "x", false, "skip cleanup of the migration")
 	flags.BoolP(FlagNoProgressBar, "b", false, "do not display a progress bar")
 	flags.BoolP(FlagSourceMountReadOnly, "R", true, "mount the source PVC in ReadOnly mode")
 	flags.StringSliceP(FlagStrategies, "s", strategy.DefaultStrategies,
@@ -139,6 +141,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 	ignoreMounted, _ := flags.GetBool(FlagIgnoreMounted)
 	srcMountReadOnly, _ := flags.GetBool(FlagSourceMountReadOnly)
 	noChown, _ := flags.GetBool(FlagNoChown)
+	skipCleanup, _ := flags.GetBool(FlagSkipCleanup)
 	noProgressBar, _ := flags.GetBool(FlagNoProgressBar)
 	sshKeyAlg, _ := flags.GetString(FlagSSHKeyAlgorithm)
 	helmTimeout, _ := flags.GetDuration(FlagHelmTimeout)
@@ -158,6 +161,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		IgnoreMounted:         ignoreMounted,
 		SourceMountReadOnly:   srcMountReadOnly,
 		NoChown:               noChown,
+		SkipCleanup:           skipCleanup,
 		NoProgressBar:         noProgressBar,
 		KeyAlgorithm:          sshKeyAlg,
 		HelmTimeout:           helmTimeout,

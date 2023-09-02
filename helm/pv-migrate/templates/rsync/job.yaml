@@ -33,6 +33,7 @@ spec:
             - sh
             - -c
             - |
+              set -x
               n=0
               rc=1
               retries=10
