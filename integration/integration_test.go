@@ -131,6 +131,37 @@ func TestSameNS(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestCustomRsyncArgs is the same as TestSameNS except it also passes custom args to rsync.
+func TestCustomRsyncArgs(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	assert.NoError(t, clearDests(ctx))
+
+	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
+	assert.NoError(t, err)
+
+	cmd := fmt.Sprintf(`%s -i -n %s -N %s --helm-set rsync.extraArgs="--partial --inplace --sparse" source dest`, migrateCmdlineWithNetpols, ns1, ns1)
+	assert.NoError(t, runCliApp(ctx, cmd))
+
+	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
+	assert.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
+	assert.NoError(t, err)
+}
+
 func TestSameNSLbSvc(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)

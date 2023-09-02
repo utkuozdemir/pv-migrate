@@ -131,6 +131,13 @@ $ pv-migrate migrate \
   old-pvc new-pvc
 ```
 
+### Example 6: Passing additional rsync arguments
+
+```bash
+$ pv-migrate migrate \
+  --helm-set rsync.extraArgs="--partial --inplace" \
+  old-pvc new-pvc
+```
+
 
 **For further customization on the rendered manifests** (custom labels, annotations etc.), see the [Helm chart values](helm/pv-migrate).
-

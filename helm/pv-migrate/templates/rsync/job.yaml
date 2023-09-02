@@ -38,7 +38,7 @@ spec:
               retries=10
               until [ "$n" -ge "$retries" ]
               do
-                {{ required ".Values.rsync.command is required!" .Values.rsync.command }} && rc=0 && break
+                {{ required ".Values.rsync.command is required!" .Values.rsync.command }} {{ .Values.rsync.extraArgs }} && rc=0 && break
                 n=$((n+1))
                 echo "rsync attempt $n/10 failed, waiting 5 seconds before trying again"
                 sleep 5
