@@ -13,7 +13,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-	"unicode"
 
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
@@ -73,6 +72,10 @@ var (
 		dataFilePath, dataFilePath, dataFilePath)
 	checkExtraDataShellCommand = "ls " + extraDataFilePath
 	clearDataShellCommand      = "find /volume -mindepth 1 -delete"
+
+	resourceLabels = map[string]string{
+		"pv-migrate-test": "true",
+	}
 
 	ErrPodExecStderr          = errors.New("pod exec stderr")
 	ErrUnexpectedTypePVCWatch = errors.New("unexpected type while watching PVC")
@@ -142,8 +145,10 @@ func TestCustomRsyncArgs(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf(`%s -i -n %s -N %s --helm-set rsync.extraArgs="--partial --inplace --sparse" source dest`, migrateCmdlineWithNetpols, ns1, ns1)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", migrateCmdlineWithNetpols, ns1, ns1))
+	cmdArgs = append(cmdArgs, "--helm-set", "rsync.extraArgs=--partial --inplace --sparse", "source", "dest")
+
+	assert.NoError(t, runCliAppWithArgs(ctx, cmdArgs...))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	assert.NoError(t, err)
@@ -322,7 +327,8 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(context.Background(),
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: svcName,
+				Name:   svcName,
+				Labels: resourceLabels,
 			},
 			Spec: corev1.ServiceSpec{
 				Selector: map[string]string{
@@ -701,6 +707,7 @@ func createPod(ctx context.Context, cli *k8s.ClusterClient, namespace string, na
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    resourceLabels,
 		},
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
@@ -739,12 +746,16 @@ func createPod(ctx context.Context, cli *k8s.ClusterClient, namespace string, na
 }
 
 func createPVC(ctx context.Context, cli *k8s.ClusterClient, namespace string, name string) error {
+	storageClass := os.Getenv("PVMIG_TEST_STORAGE_CLASS")
+
 	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
+			Labels:    resourceLabels,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
+			StorageClassName: &storageClass,
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				corev1.ReadWriteOnce,
 			},
@@ -926,7 +937,8 @@ func createNS(ctx context.Context, cli *k8s.ClusterClient, name string) error {
 	if _, err := cli.KubeClient.CoreV1().
 		Namespaces().Create(ctx, &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name:   name,
+			Labels: resourceLabels,
 		},
 	}, metav1.CreateOptions{}); err != nil {
 		return fmt.Errorf("failed to create namespace %s: %w", name, err)
@@ -946,42 +958,21 @@ func deleteNS(ctx context.Context, cli *k8s.ClusterClient, name string) error {
 }
 
 func runCliApp(ctx context.Context, cmd string) error {
-	// args := []string{os.Args[0]}
-	// args = append(args, strings.Fields(cmd)...)
+	return runCliAppWithArgs(ctx, strings.Fields(cmd)...)
+}
+
+func runCliAppWithArgs(ctx context.Context, args ...string) error {
 	logger, err := applog.New(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to create logger: %w", err)
 	}
 
 	cliApp := app.New(logger, "", "", "")
-	cliApp.SetArgs(cmdToArgs(cmd))
+	cliApp.SetArgs(args)
 
 	if err = cliApp.Execute(); err != nil {
 		return fmt.Errorf("failed to execute command: %w", err)
 	}
 
 	return nil
-}
-
-func cmdToArgs(cmd string) []string {
-	inQuote := false
-
-	cmdFields := strings.FieldsFunc(cmd, func(r rune) bool {
-		if r == '"' {
-			inQuote = !inQuote
-		}
-
-		return unicode.IsSpace(r) && !inQuote
-	})
-
-	trimmedFields := make([]string, 0, len(cmdFields))
-
-	for _, field := range cmdFields {
-		trimmed := strings.TrimSpace(field)
-		if trimmed != "" {
-			trimmedFields = append(trimmedFields, trimmed)
-		}
-	}
-
-	return trimmedFields
 }

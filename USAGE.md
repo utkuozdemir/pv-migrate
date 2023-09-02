@@ -47,6 +47,7 @@ Flags:
       --lbsvc-timeout duration         timeout for the load balancer service to receive an external IP. Only used by the lbsvc strategy (default 2m0s)
   -o, --no-chown                       omit chown on rsync
   -b, --no-progress-bar                do not display a progress bar
+  -x, --skip-cleanup                   skip cleanup of the migration
   -c, --source-context string          context in the kubeconfig file of the source PVC
   -k, --source-kubeconfig string       path of the kubeconfig file of the source PVC
   -R, --source-mount-read-only         mount the source PVC in ReadOnly mode (default true)
