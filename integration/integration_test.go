@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
@@ -953,11 +954,34 @@ func runCliApp(ctx context.Context, cmd string) error {
 	}
 
 	cliApp := app.New(logger, "", "", "")
-	cliApp.SetArgs(strings.Fields(cmd))
+	cliApp.SetArgs(cmdToArgs(cmd))
 
 	if err = cliApp.Execute(); err != nil {
 		return fmt.Errorf("failed to execute command: %w", err)
 	}
 
 	return nil
+}
+
+func cmdToArgs(cmd string) []string {
+	inQuote := false
+
+	cmdFields := strings.FieldsFunc(cmd, func(r rune) bool {
+		if r == '"' {
+			inQuote = !inQuote
+		}
+
+		return unicode.IsSpace(r) && !inQuote
+	})
+
+	trimmedFields := make([]string, 0, len(cmdFields))
+
+	for _, field := range cmdFields {
+		trimmed := strings.TrimSpace(field)
+		if trimmed != "" {
+			trimmedFields = append(trimmedFields, trimmed)
+		}
+	}
+
+	return trimmedFields
 }
