@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.6.0
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
       - name: Install go
         uses: actions/setup-go@v4.1.0
         with:
@@ -52,16 +52,16 @@ jobs:
           args: --timeout=10m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v4.4.0
+        uses: goreleaser/goreleaser-action@v5.0.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v1.20.0
+          version: v1.21.0
           args: build --snapshot --clean --single-target
   test:
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v3.6.0
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608 # v4.1.0
       - name: Install go
         uses: actions/setup-go@v4.1.0
         with:
@@ -74,7 +74,7 @@ jobs:
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
-          CILIUM_CLI_VERSION: v0.15.6
+          CILIUM_CLI_VERSION: v0.15.8
         run: |
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
@@ -99,7 +99,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 4.7.0
+          METALLB_CHART_VERSION: 4.7.3
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
