@@ -98,10 +98,16 @@ func cleanupAndReleaseHook(a *migration.Attempt, releaseNames []string, doneCh c
 	doneCh <- true
 }
 
-func cleanup(a *migration.Attempt, releaseNames []string) {
-	mig := a.Migration
+func cleanup(attempt *migration.Attempt, releaseNames []string) {
+	if attempt.Migration.Request.SkipCleanup {
+		attempt.Logger.Info("🧹 Cleanup skipped")
+
+		return
+	}
+
+	mig := attempt.Migration
 	req := mig.Request
-	logger := a.Logger
+	logger := attempt.Logger
 	logger.Info("🧹 Cleaning up")
 
 	var result *multierror.Error

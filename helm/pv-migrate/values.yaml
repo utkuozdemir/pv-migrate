@@ -152,10 +152,12 @@ rsync:
   retryPeriodSeconds: 5
   # -- Full Rsync command and flags
   command: ""
+  # -- Extra args to be appended to the rsync command. Setting this might cause the tool to not function properly.
+  extraArgs: ""
 
   # -- Namespace to run Rsync pod in
   namespace: ""
-  # -- PVC mounts into the Rsync pod. For examples, see see [values.yaml](values.yaml)
+  # -- PVC mounts into the Rsync pod. For examples, see [values.yaml](values.yaml)
   pvcMounts: []
     #- name: pvc-1
     #  readOnly: false

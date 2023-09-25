@@ -124,7 +124,7 @@ func (f *jsonFormatter) Format(e *log.Entry) ([]byte, error) {
 type fancyFormatter struct{}
 
 func (f *fancyFormatter) Format(e *log.Entry) ([]byte, error) {
-	return []byte(e.Message), nil
+	return []byte(e.Message + "\n"), nil
 }
 
 func configureGlobalLogger() {

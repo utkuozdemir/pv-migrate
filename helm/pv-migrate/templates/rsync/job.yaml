@@ -33,13 +33,14 @@ spec:
             - sh
             - -c
             - |
+              set -x
               n=0
               rc=1
               retries={{ .Values.rsync.maxRetries }}
               period={{ .Values.rsync.retryPeriodSeconds }}
               until [ "$n" -ge "$retries" ]
               do
-                {{ required ".Values.rsync.command is required!" .Values.rsync.command }} && rc=0 && break
+                {{ required ".Values.rsync.command is required!" .Values.rsync.command }} {{ .Values.rsync.extraArgs }} && rc=0 && break
                 n=$((n+1))
                 echo "rsync attempt $n/$retries failed, waiting $period seconds before trying again"
                 sleep $period
