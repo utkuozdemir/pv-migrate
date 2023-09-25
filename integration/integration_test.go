@@ -746,7 +746,12 @@ func createPod(ctx context.Context, cli *k8s.ClusterClient, namespace string, na
 }
 
 func createPVC(ctx context.Context, cli *k8s.ClusterClient, namespace string, name string) error {
+	var storageClassRef *string
+
 	storageClass := os.Getenv("PVMIG_TEST_STORAGE_CLASS")
+	if storageClass != "" {
+		storageClassRef = &storageClass
+	}
 
 	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -755,7 +760,7 @@ func createPVC(ctx context.Context, cli *k8s.ClusterClient, namespace string, na
 			Labels:    resourceLabels,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
-			StorageClassName: &storageClass,
+			StorageClassName: storageClassRef,
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				corev1.ReadWriteOnce,
 			},
