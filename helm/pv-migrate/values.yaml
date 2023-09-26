@@ -146,6 +146,10 @@ rsync:
   privateKeyMountPath: /root/.ssh/id_ed25519
   # -- The private key content
   privateKey: ""
+  # -- Number of retries to run rsync command
+  maxRetries: 10
+  # -- Waiting time between retries
+  retryPeriodSeconds: 5
   # -- Full Rsync command and flags
   command: ""
   # -- Extra args to be appended to the rsync command. Setting this might cause the tool to not function properly.
