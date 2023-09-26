@@ -2,8 +2,8 @@ apiVersion: v2
 name: pv-migrate
 description: The helm chart of pv-migrate
 type: application
-version: 0.3.0
-appVersion: 0.3.0
+version: 0.4.0
+appVersion: 0.4.0
 home: https://github.com/utkuozdemir/pv-migrate
 keywords:
   - pv-migrate
