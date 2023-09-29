@@ -2,3 +2,5 @@ Port 22
 PasswordAuthentication no
 ChallengeResponseAuthentication no
 PermitRootLogin yes
+ClientAliveInterval 300
+ClientAliveCountMax 3
