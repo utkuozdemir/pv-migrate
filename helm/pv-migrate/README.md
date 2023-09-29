@@ -27,6 +27,7 @@ The helm chart of pv-migrate
 | rsync.command | string | `""` | Full Rsync command and flags |
 | rsync.enabled | bool | `false` | Enable creation of Rsync job |
 | rsync.extraArgs | string | `""` | Extra args to be appended to the rsync command. Setting this might cause the tool to not function properly. |
+| rsync.fixPrivateKeyPerms | bool | `false` | Enable fixing permissions on the private key prior to running rsync |
 | rsync.image.pullPolicy | string | `"IfNotPresent"` | Rsync image pull policy |
 | rsync.image.repository | string | `"docker.io/utkuozdemir/pv-migrate-rsync"` | Rsync image repository |
 | rsync.image.tag | string | `"1.0.0"` | Rsync image tag |

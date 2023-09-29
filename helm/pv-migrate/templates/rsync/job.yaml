@@ -38,6 +38,9 @@ spec:
               rc=1
               retries={{ .Values.rsync.maxRetries }}
               period={{ .Values.rsync.retryPeriodSeconds }}
+              {{- if .Values.rsync.fixPrivateKeyPerms -}}
+              chmod 400 {{ .Values.rsync.privateKeyMountPath }}
+              {{- end }}
               until [ "$n" -ge "$retries" ]
               do
                 {{ required ".Values.rsync.command is required!" .Values.rsync.command }} {{ .Values.rsync.extraArgs }} && rc=0 && break
