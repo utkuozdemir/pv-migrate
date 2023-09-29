@@ -38,7 +38,7 @@ spec:
               rc=1
               retries={{ .Values.rsync.maxRetries }}
               period={{ .Values.rsync.retryPeriodSeconds }}
-              {{- if .Values.rsync.fixPrivateKeyPerms -}}
+              {{ if .Values.rsync.fixPrivateKeyPerms -}}
               chmod 400 {{ .Values.rsync.privateKeyMountPath }}
               {{- end }}
               until [ "$n" -ge "$retries" ]
