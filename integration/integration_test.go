@@ -53,7 +53,7 @@ const (
 		"--helm-set rsync.networkPolicy.enabled=true " +
 		"--helm-set sshd.networkPolicy.enabled=true"
         migrateCmdlineWithNetpolsAndRsyncFixPrivateKeyPerms = migrateCmdlineWithNetpols +
-                "--helm-set rsync.fixPrivateKeyPerms=true"
+                " --helm-set rsync.fixPrivateKeyPerms=true"
 )
 
 var (
