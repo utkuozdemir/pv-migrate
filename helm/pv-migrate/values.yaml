@@ -12,7 +12,7 @@ sshd:
     # -- SSHD image pull policy
     pullPolicy: IfNotPresent
     # -- SSHD image tag
-    tag: 1.0.0
+    tag: 1.1.0
   # -- SSHD image pull secrets
   imagePullSecrets: []
   serviceAccount:

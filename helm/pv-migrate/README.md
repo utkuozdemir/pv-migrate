@@ -1,6 +1,6 @@
 # pv-migrate
 
-![Version: 0.4.0](https://img.shields.io/badge/Version-0.4.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.4.0](https://img.shields.io/badge/AppVersion-0.4.0-informational?style=flat-square)
+![Version: 0.5.0](https://img.shields.io/badge/Version-0.5.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.5.0](https://img.shields.io/badge/AppVersion-0.5.0-informational?style=flat-square)
 
 The helm chart of pv-migrate
 
@@ -55,7 +55,7 @@ The helm chart of pv-migrate
 | sshd.enabled | bool | `false` | Enable SSHD server deployment |
 | sshd.image.pullPolicy | string | `"IfNotPresent"` | SSHD image pull policy |
 | sshd.image.repository | string | `"docker.io/utkuozdemir/pv-migrate-sshd"` | SSHD image repository |
-| sshd.image.tag | string | `"1.0.0"` | SSHD image tag |
+| sshd.image.tag | string | `"1.1.0"` | SSHD image tag |
 | sshd.imagePullSecrets | list | `[]` | SSHD image pull secrets |
 | sshd.namespace | string | `""` | Namespace to run SSHD pod in |
 | sshd.networkPolicy.enabled | bool | `false` | Enable SSHD network policy |
