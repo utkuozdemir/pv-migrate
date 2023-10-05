@@ -38,8 +38,12 @@ spec:
               rc=1
               retries={{ .Values.rsync.maxRetries }}
               period={{ .Values.rsync.retryPeriodSeconds }}
-              {{ if .Values.rsync.fixPrivateKeyPerms -}}
-              chmod 400 {{ .Values.rsync.privateKeyMountPath }}
+              {{ if .Values.rsync.privateKeyMount -}}
+              privateKeyFilename=$(basename {{ .Values.rsync.privateKeyMountPath }})
+              mkdir -p ~/.ssh
+              chmod 700 ~/.ssh
+              cp -v {{ .Values.rsync.privateKeyMountPath }} ~/.ssh/
+              chmod 400 ~/.ssh/$privateKeyFilename
               {{- end }}
               until [ "$n" -ge "$retries" ]
               do

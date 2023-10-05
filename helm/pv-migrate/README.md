@@ -27,7 +27,6 @@ The helm chart of pv-migrate
 | rsync.command | string | `""` | Full Rsync command and flags |
 | rsync.enabled | bool | `false` | Enable creation of Rsync job |
 | rsync.extraArgs | string | `""` | Extra args to be appended to the rsync command. Setting this might cause the tool to not function properly. |
-| rsync.fixPrivateKeyPerms | bool | `false` | Enable fixing permissions on the private key prior to running rsync |
 | rsync.image.pullPolicy | string | `"IfNotPresent"` | Rsync image pull policy |
 | rsync.image.repository | string | `"docker.io/utkuozdemir/pv-migrate-rsync"` | Rsync image repository |
 | rsync.image.tag | string | `"1.0.0"` | Rsync image tag |
@@ -41,7 +40,7 @@ The helm chart of pv-migrate
 | rsync.podSecurityContext | object | `{}` | Rsync pod security context |
 | rsync.privateKey | string | `""` | The private key content |
 | rsync.privateKeyMount | bool | `false` | Mount a private key into the Rsync pod |
-| rsync.privateKeyMountPath | string | `"/root/.ssh/id_ed25519"` | The path to mount the private key |
+| rsync.privateKeyMountPath | string | `"/tmp/id_ed25519"` | The path to mount the private key |
 | rsync.pvcMounts | list | `[]` | PVC mounts into the Rsync pod. For examples, see [values.yaml](values.yaml) |
 | rsync.resources | object | `{}` | Rsync pod resources |
 | rsync.restartPolicy | string | `"Never"` |  |
@@ -65,7 +64,7 @@ The helm chart of pv-migrate
 | sshd.podSecurityContext | object | `{}` | SSHD pod security context |
 | sshd.privateKey | string | `""` | The private key content |
 | sshd.privateKeyMount | bool | `false` | Mount a private key into the SSHD pod |
-| sshd.privateKeyMountPath | string | `"/root/.ssh/id_ed25519"` | The path to mount the private key |
+| sshd.privateKeyMountPath | string | `"/tmp/id_ed25519"` | The path to mount the private key |
 | sshd.publicKey | string | `""` | The public key content |
 | sshd.publicKeyMount | bool | `true` | Mount a public key into the SSHD pod |
 | sshd.publicKeyMountPath | string | `"/root/.ssh/authorized_keys"` | The path to mount the public key |

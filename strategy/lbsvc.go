@@ -29,7 +29,7 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt) error {
 		return fmt.Errorf("failed to create ssh key pair: %w", err)
 	}
 
-	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
+	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
 
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"

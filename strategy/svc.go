@@ -69,7 +69,7 @@ func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string
 		return nil, fmt.Errorf("failed to create ssh key pair: %w", err)
 	}
 
-	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
+	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
 
 	sshTargetHost := helmReleaseName + "-sshd." + sourceNs
 	if mig.Request.DestHostOverride != "" {

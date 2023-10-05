@@ -73,7 +73,7 @@ sshd:
   # -- Mount a private key into the SSHD pod
   privateKeyMount: false
   # -- The path to mount the private key
-  privateKeyMountPath: /root/.ssh/id_ed25519
+  privateKeyMountPath: /tmp/id_ed25519
   # -- The private key content
   privateKey: ""
 
@@ -143,11 +143,9 @@ rsync:
   # -- Mount a private key into the Rsync pod
   privateKeyMount: false
   # -- The path to mount the private key
-  privateKeyMountPath: /root/.ssh/id_ed25519
+  privateKeyMountPath: /tmp/id_ed25519
   # -- The private key content
   privateKey: ""
-  # -- Enable fixing permissions on the private key prior to running rsync
-  fixPrivateKeyPerms: false
   # -- Number of retries to run rsync command
   maxRetries: 10
   # -- Waiting time between retries
