@@ -152,7 +152,7 @@ func (r *Local) installLocalReleases(attempt *migration.Attempt) (string, string
 		return "", "", "", fmt.Errorf("failed to generate SSH key pair: %w", err)
 	}
 
-	privateKeyMountPath := "/root/.ssh/id_" + keyAlgorithm
+	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
 
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"

@@ -4,7 +4,7 @@ rsync:
   mountSource: false
 
   privateKeyMount: true
-  privateKeyMountPath: /root/.ssh/id_ed25519
+  privateKeyMountPath: /tmp/id_ed25519
   privateKey: asdf
 
   sshRemoteHost: REMOTE_HOST

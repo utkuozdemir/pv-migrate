@@ -3,7 +3,7 @@ rsync:
   deleteExtraneousFiles: false
   noChown: false
   privateKeyMount: true
-  privateKeyMountPath: /root/.ssh/id_ed25519
+  privateKeyMountPath: /tmp/id_ed25519
   privateKey: |
     -----BEGIN OPENSSH PRIVATE KEY-----
     b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtz

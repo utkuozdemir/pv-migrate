@@ -52,8 +52,6 @@ const (
 	migrateCmdlineWithNetpols = migrateCmdline +
 		"--helm-set rsync.networkPolicy.enabled=true " +
 		"--helm-set sshd.networkPolicy.enabled=true"
-        migrateCmdlineWithNetpolsAndRsyncFixPrivateKeyPerms = migrateCmdlineWithNetpols +
-                " --helm-set rsync.fixPrivateKeyPerms=true"
 )
 
 var (
@@ -179,7 +177,7 @@ func TestSameNSLbSvc(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	assert.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s --lbsvc-timeout 5m source dest", migrateCmdlineWithNetpolsAndRsyncFixPrivateKeyPerms, ns1, ns1)
+	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s --lbsvc-timeout 5m source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	assert.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
