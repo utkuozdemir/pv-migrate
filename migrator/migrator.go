@@ -1,14 +1,18 @@
 package migrator
 
 import (
-	"bytes"
 	"context"
-	_ "embed" // we embed the helm chart
+	"embed" // we embed the helm chart
 	"errors"
 	"fmt"
+	"io"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
+	"helm.sh/helm/v3/pkg/chart"
 	"helm.sh/helm/v3/pkg/chart/loader"
 
 	"github.com/utkuozdemir/pv-migrate/k8s"
@@ -18,8 +22,8 @@ import (
 	"github.com/utkuozdemir/pv-migrate/util"
 )
 
-//go:embed helm-chart.tgz
-var chartBytes []byte
+//go:embed pv-migrate
+var chartFS embed.FS
 
 const (
 	attemptIDLength = 5
@@ -97,7 +101,7 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request) error {
 }
 
 func (m *Migrator) buildMigration(ctx context.Context, request *migration.Request) (*migration.Migration, error) {
-	chart, err := loader.LoadArchive(bytes.NewReader(chartBytes))
+	helmChart, err := loadChart()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load helm chart: %w", err)
 	}
@@ -147,7 +151,7 @@ func (m *Migrator) buildMigration(ctx context.Context, request *migration.Reques
 	}
 
 	mig := migration.Migration{
-		Chart:      chart,
+		Chart:      helmChart,
 		Request:    request,
 		Logger:     logger,
 		SourceInfo: sourcePvcInfo,
@@ -207,4 +211,84 @@ func handleMounted(logger *log.Entry, info *pvc.Info, ignoreMounted bool) error 
 
 	return fmt.Errorf("PVC is mounted to a node and ignore-mounted is not requested: "+
 		"node: %s claim %s", info.MountedNode, info.Claim.Name)
+}
+
+//nolint:nonamedreturns
+func loadChart() (helmChart *chart.Chart, retErr error) {
+	tempDir, err := os.MkdirTemp("", "pv-migrate-chart-")
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
+	}
+
+	defer func() {
+		if removeErr := os.RemoveAll(tempDir); removeErr != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("failed to remove temporary directory: %w", removeErr))
+		}
+	}()
+
+	if err = copyEmbeddedChartToDir(tempDir); err != nil {
+		return nil, fmt.Errorf("failed to copy embedded chart to temporary directory: %w", err)
+	}
+
+	helmChart, err = loader.LoadDir(filepath.Join(tempDir, "pv-migrate"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load helm chart: %w", err)
+	}
+
+	return helmChart, nil
+}
+
+func copyEmbeddedChartToDir(targetDir string) error {
+	// Walk through the embedded file system and copy its contents to the temporary directory
+	err := fs.WalkDir(chartFS, ".", func(path string, entry fs.DirEntry, err error) (retErr error) {
+		if err != nil {
+			return fmt.Errorf("failed during walk: %w", err)
+		}
+
+		// Calculate the destination path within the temporary directory
+		destPath := filepath.Join(targetDir, path)
+
+		// If it's a directory, create it in the temporary directory
+		if entry.IsDir() {
+			if mkdirErr := os.MkdirAll(destPath, 0o755); mkdirErr != nil {
+				return fmt.Errorf("failed to create directory: %w", mkdirErr)
+			}
+
+			return nil
+		}
+
+		// If it's a file, copy it to the temporary directory
+		srcFile, err := chartFS.Open(path)
+		if err != nil {
+			return fmt.Errorf("failed to open embedded file: %w", err)
+		}
+
+		defer func() {
+			if closeErr := srcFile.Close(); closeErr != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("failed to close source file: %w", closeErr))
+			}
+		}()
+
+		destFile, err := os.Create(destPath)
+		if err != nil {
+			return fmt.Errorf("failed to create destination file: %w", err)
+		}
+
+		defer func() {
+			if closeErr := destFile.Close(); closeErr != nil {
+				retErr = errors.Join(retErr, fmt.Errorf("failed to close destination file: %w", closeErr))
+			}
+		}()
+
+		if _, err = io.Copy(destFile, srcFile); err != nil {
+			return fmt.Errorf("failed to copy file: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("failed to walk embedded file system: %w", err)
+	}
+
+	return nil
 }

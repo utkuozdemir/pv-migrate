@@ -15,14 +15,7 @@ tasks:
     desc: lint code
     cmds:
       - golangci-lint run ./...
-      - helm lint helm/pv-migrate
-
-  update-chart:
-    desc: update the helm chart
-    cmds:
-      - helm-docs -c helm/pv-migrate/
-      - helm package helm/pv-migrate/
-      - mv pv-migrate-*.tgz migrator/helm-chart.tgz
+      - helm lint migrator/pv-migrate
 
   clean:
     desc: clean
