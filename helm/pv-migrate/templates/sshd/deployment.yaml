@@ -40,9 +40,9 @@ spec:
               set -x
               {{ if .Values.sshd.privateKeyMount -}}
               privateKeyFilename=$(basename "{{ .Values.sshd.privateKeyMountPath }}")
-              mkdir -p $HOME/.ssh
-              chmod 700 $HOME/.ssh
-              cp -v "{{ .Values.sshd.privateKeyMountPath }}" $HOME/.ssh/
+              mkdir -p "$HOME/.ssh"
+              chmod 700 "$HOME/.ssh"
+              cp -v "{{ .Values.sshd.privateKeyMountPath }}" "$HOME/.ssh/"
               chmod 400 "$HOME/.ssh/$privateKeyFilename"
               {{- end }}
               /usr/sbin/sshd -D -e -f /etc/ssh/sshd_config

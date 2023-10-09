@@ -40,9 +40,9 @@ spec:
               period={{ .Values.rsync.retryPeriodSeconds }}
               {{ if .Values.rsync.privateKeyMount -}}
               privateKeyFilename=$(basename "{{ .Values.rsync.privateKeyMountPath }}")
-              mkdir -p $HOME/.ssh
-              chmod 700 $HOME/.ssh
-              cp -v "{{ .Values.rsync.privateKeyMountPath }}" $HOME/.ssh/
+              mkdir -p "$HOME/.ssh"
+              chmod 700 "$HOME/.ssh"
+              cp -v "{{ .Values.rsync.privateKeyMountPath }}" "$HOME/.ssh/"
               chmod 400 "$HOME/.ssh/$privateKeyFilename"
               {{- end }}
               until [ "$n" -ge "$retries" ]
