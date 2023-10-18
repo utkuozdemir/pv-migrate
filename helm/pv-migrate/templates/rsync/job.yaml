@@ -37,6 +37,7 @@ spec:
               n=0
               rc=1
               retries={{ .Values.rsync.maxRetries }}
+              attempts=$((retries+1))
               period={{ .Values.rsync.retryPeriodSeconds }}
               {{ if .Values.rsync.privateKeyMount -}}
               privateKeyFilename=$(basename "{{ .Values.rsync.privateKeyMountPath }}")
@@ -45,11 +46,11 @@ spec:
               cp -v "{{ .Values.rsync.privateKeyMountPath }}" "$HOME/.ssh/"
               chmod 400 "$HOME/.ssh/$privateKeyFilename"
               {{- end }}
-              until [ "$n" -ge "$retries" ]
+              while [ "$n" -le "$retries" ]
               do
                 {{ required ".Values.rsync.command is required!" .Values.rsync.command }} {{ .Values.rsync.extraArgs }} && rc=0 && break
                 n=$((n+1))
-                echo "rsync attempt $n/$retries failed, waiting $period seconds before trying again"
+                echo "rsync attempt $n/$attempts failed, waiting $period seconds before trying again"
                 sleep $period
               done
 
