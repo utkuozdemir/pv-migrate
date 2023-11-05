@@ -6,6 +6,7 @@ import (
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,7 +37,7 @@ func TestBuildTask(t *testing.T) {
 	m := Migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(true)
 	tsk, err := m.buildMigration(ctx, mig)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	sourceInfo := tsk.SourceInfo
 	destInfo := tsk.DestInfo
@@ -65,7 +66,7 @@ func TestBuildTaskMounted(t *testing.T) {
 	mig := buildMigration(false)
 	tsk, err := m.buildMigration(ctx, mig)
 	assert.Nil(t, tsk)
-	assert.Error(t, err)
+	require.Error(t, err)
 }
 
 func TestRunStrategiesInOrder(t *testing.T) {
@@ -115,7 +116,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	mig := buildMigrationRequestWithStrategies(strs, true)
 
 	err := migrator.Run(ctx, mig)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []int{3, 1, 2}, result)
 }
 

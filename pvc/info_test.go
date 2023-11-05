@@ -38,9 +38,9 @@ func TestNew(t *testing.T) {
 		assert.Equal(t, "test", pvcInfo.Claim.Name)
 		assert.Equal(t, "testns", pvcInfo.Claim.Namespace)
 		assert.Equal(t, "node-2", pvcInfo.MountedNode)
-		assert.Equal(t, true, pvcInfo.SupportsRWO)
-		assert.Equal(t, false, pvcInfo.SupportsROX)
-		assert.Equal(t, false, pvcInfo.SupportsRWX)
+		assert.True(t, pvcInfo.SupportsRWO)
+		assert.False(t, pvcInfo.SupportsROX)
+		assert.False(t, pvcInfo.SupportsRWX)
 		assert.Equal(t, map[string]any{
 			"nodeAffinity": map[string]any{
 				"requiredDuringSchedulingIgnoredDuringExecution": map[string]any{
@@ -72,9 +72,9 @@ func TestNew(t *testing.T) {
 		assert.Equal(t, "test", pvcInfo.Claim.Name)
 		assert.Equal(t, "testns", pvcInfo.Claim.Namespace)
 		assert.Equal(t, "node-2", pvcInfo.MountedNode)
-		assert.Equal(t, true, pvcInfo.SupportsRWO)
-		assert.Equal(t, true, pvcInfo.SupportsROX)
-		assert.Equal(t, false, pvcInfo.SupportsRWX)
+		assert.True(t, pvcInfo.SupportsRWO)
+		assert.True(t, pvcInfo.SupportsROX)
+		assert.False(t, pvcInfo.SupportsRWX)
 		assert.Equal(t, map[string]any{
 			"nodeAffinity": map[string]any{
 				"preferredDuringSchedulingIgnoredDuringExecution": []map[string]any{
