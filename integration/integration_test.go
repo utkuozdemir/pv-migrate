@@ -17,6 +17,7 @@ import (
 	"github.com/hashicorp/go-multierror"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -109,16 +110,16 @@ func TestSameNS(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -132,7 +133,7 @@ func TestSameNS(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 // TestCustomRsyncArgs is the same as TestSameNS except it also passes custom args to rsync.
@@ -140,18 +141,18 @@ func TestCustomRsyncArgs(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", migrateCmdlineWithNetpols, ns1, ns1))
 	cmdArgs = append(cmdArgs, "--helm-set", "rsync.extraArgs=--partial --inplace --sparse", "source", "dest")
 
-	assert.NoError(t, runCliAppWithArgs(ctx, cmdArgs...))
+	require.NoError(t, runCliAppWithArgs(ctx, cmdArgs...))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -165,23 +166,23 @@ func TestCustomRsyncArgs(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestSameNSLbSvc(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s --lbsvc-timeout 5m source dest", migrateCmdlineWithNetpols, ns1, ns1)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -195,23 +196,23 @@ func TestSameNSLbSvc(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestNoChown(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -i -o -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -225,23 +226,23 @@ func TestNoChown(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestDeleteExtraneousFiles(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -d -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -255,7 +256,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "No such file or directory")
 }
 
@@ -263,14 +264,14 @@ func TestMountedError(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
 	err = runCliApp(ctx, cmd)
-	assert.Error(t, err)
+	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ignore-mounted is not requested")
 }
 
@@ -278,16 +279,16 @@ func TestDifferentNS(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -301,27 +302,27 @@ func TestDifferentNS(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestFailWithoutNetworkPolicies(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdline, ns1, ns2)
-	assert.Error(t, runCliApp(ctx, cmd))
+	require.Error(t, runCliApp(ctx, cmd))
 }
 
 func TestLbSvcDestHostOverride(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	svcName := "alternative-svc"
 	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(context.Background(),
@@ -344,18 +345,18 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 				},
 			},
 		}, metav1.CreateOptions{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
 		"%s -i -n %s -N %s -H %s source dest", migrateCmdlineWithNetpols, ns1, ns2, destHostOverride)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -369,23 +370,23 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestRSA(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -399,24 +400,24 @@ func TestRSA(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestDifferentCluster(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s source dest", migrateCmdlineWithNetpols,
 		extraClusterKubeconfig, ns1, ns3)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -430,24 +431,24 @@ func TestDifferentCluster(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestLocal(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
-	assert.NoError(t, clearDests(ctx))
+	require.NoError(t, clearDests(ctx))
 
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s source dest", migrateCmdlineWithNetpols,
 		extraClusterKubeconfig, ns1, ns3)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)
@@ -461,7 +462,7 @@ func TestLocal(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	_, err = execInPod(ctx, extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestLongPVCNames(t *testing.T) {
@@ -469,14 +470,14 @@ func TestLongPVCNames(t *testing.T) {
 	t.Cleanup(cancel)
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "long-dest", clearDataShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -i -n %s -N %s %s %s",
 		migrateCmdlineWithNetpols, ns1, ns1, longSourcePvcName, longDestPvcName)
-	assert.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "long-dest", printDataUIDGIDContentShellCommand)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
 	assert.Equal(t, len(parts), 3)

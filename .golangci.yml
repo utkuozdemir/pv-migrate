@@ -22,4 +22,5 @@ linters-settings:
   goimports:
     local-prefixes: github.com/utkuozdemir/pv-migrate
   goconst:
+    min-occurrences: 5
     ignore-tests: true
