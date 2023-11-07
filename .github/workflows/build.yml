@@ -55,7 +55,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v5.0.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v1.21.2
+          version: v1.22.0
           args: build --snapshot --clean --single-target
   test:
     runs-on: ubuntu-22.04
@@ -74,7 +74,7 @@ jobs:
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
-          CILIUM_CLI_VERSION: v0.15.12
+          CILIUM_CLI_VERSION: v0.15.13
         run: |
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
