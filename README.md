@@ -68,7 +68,7 @@ See [USAGE.md](USAGE.md) for the CLI reference and examples.
 
 # Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=utkuozdemir/pv-migrate&type=Date)](https://star-history.com/#deckarep/golang-set&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=utkuozdemir/pv-migrate&type=Date)](https://star-history.com/#utkuozdemir/pv-migrate&Date)
 
 # Contributing
 
