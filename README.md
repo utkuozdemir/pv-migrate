@@ -66,10 +66,9 @@ See [INSTALL.md](INSTALL.md) for various installation methods and shell completi
 See [USAGE.md](USAGE.md) for the CLI reference and examples.
 
 
-# Stargazers over time
+# Star History
 
-[![Stargazers over time](https://starchart.cc/utkuozdemir/pv-migrate.svg)](https://starchart.cc/utkuozdemir/pv-migrate)
-
+[![Star History Chart](https://api.star-history.com/svg?repos=utkuozdemir/pv-migrate&type=Date)](https://star-history.com/#deckarep/golang-set&Date)
 
 # Contributing
 
