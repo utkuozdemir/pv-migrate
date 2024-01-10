@@ -52,6 +52,114 @@ func TestCanDoSameNode(t *testing.T) {
 	assert.True(t, canDo)
 }
 
+func TestCanDoSourceUnmounted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sourceNS := "namespace1"
+	sourcePVC := "pvc1"
+	sourcePod := "pod1"
+	sourceNode := ""
+	sourceModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	destNS := "namespace1"
+	destPvc := "pvc2"
+	destPod := "pod2"
+	destNode := "node1"
+	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	s := Mnt2{}
+	canDo := s.canDo(&mig)
+	assert.True(t, canDo)
+}
+
+func TestCanDoDestUnmounted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sourceNS := "namespace1"
+	sourcePVC := "pvc1"
+	sourcePod := "pod1"
+	sourceNode := "node1"
+	sourceModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	destNS := "namespace1"
+	destPvc := "pvc2"
+	destPod := "pod2"
+	destNode := ""
+	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	s := Mnt2{}
+	canDo := s.canDo(&mig)
+	assert.True(t, canDo)
+}
+
+func TestCanDoBothUnmounted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sourceNS := "namespace1"
+	sourcePVC := "pvc1"
+	sourcePod := "pod1"
+	sourceNode := ""
+	sourceModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	destNS := "namespace1"
+	destPvc := "pvc2"
+	destPod := "pod2"
+	destNode := ""
+	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	s := Mnt2{}
+	canDo := s.canDo(&mig)
+	assert.True(t, canDo)
+}
+
 func TestCanDoDestRWX(t *testing.T) {
 	t.Parallel()
 
@@ -197,7 +305,7 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	assert.False(t, canDo)
 }
 
-func TestDetermineTargetNodeROXToTWO(t *testing.T) {
+func TestDetermineTargetNodeROXToRWO(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -232,6 +340,76 @@ func TestDetermineTargetNodeROXToTWO(t *testing.T) {
 	assert.Equal(t, destNode, targetNode)
 }
 
+func TestDetermineTargetNodeROXToRWOSourceUnmounted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sourceNS := "namespace1"
+	sourcePVC := "pvc1"
+	sourcePod := "pod1"
+	sourceNode := ""
+	sourceModes := []v1.PersistentVolumeAccessMode{v1.ReadOnlyMany}
+
+	destNS := "namespace1"
+	destPvc := "pvc2"
+	destPod := "pod2"
+	destNode := "node2"
+	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	targetNode := determineTargetNode(&mig)
+	assert.Equal(t, destNode, targetNode)
+}
+
+func TestDetermineTargetNodeROXToRWODestUnmounted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sourceNS := "namespace1"
+	sourcePVC := "pvc1"
+	sourcePod := "pod1"
+	sourceNode := "node1"
+	sourceModes := []v1.PersistentVolumeAccessMode{v1.ReadOnlyMany}
+
+	destNS := "namespace1"
+	destPvc := "pvc2"
+	destPod := "pod2"
+	destNode := ""
+	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	targetNode := determineTargetNode(&mig)
+	assert.Equal(t, sourceNode, targetNode)
+}
+
 func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 	t.Parallel()
 
@@ -249,6 +427,146 @@ func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 	destPod := "pod2"
 	destNode := "node2"
 	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteMany}
+
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	targetNode := determineTargetNode(&mig)
+	assert.Equal(t, sourceNode, targetNode)
+}
+
+func TestDetermineTargetNodeRWOToRWXSourceUnmounted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sourceNS := "namespace1"
+	sourcePVC := "pvc1"
+	sourcePod := "pod1"
+	sourceNode := ""
+	sourceModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	destNS := "namespace1"
+	destPvc := "pvc2"
+	destPod := "pod2"
+	destNode := "node2"
+	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteMany}
+
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	targetNode := determineTargetNode(&mig)
+	assert.Equal(t, destNode, targetNode)
+}
+
+func TestDetermineTargetNodeRWOToRWXDestUnmounted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sourceNS := "namespace1"
+	sourcePVC := "pvc1"
+	sourcePod := "pod1"
+	sourceNode := "node1"
+	sourceModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	destNS := "namespace1"
+	destPvc := "pvc2"
+	destPod := "pod2"
+	destNode := ""
+	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteMany}
+
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	targetNode := determineTargetNode(&mig)
+	assert.Equal(t, sourceNode, targetNode)
+}
+
+func TestDetermineTargetNodeSourceUnmounted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sourceNS := "namespace1"
+	sourcePVC := "pvc1"
+	sourcePod := "pod1"
+	sourceNode := ""
+	sourceModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	destNS := "namespace1"
+	destPvc := "pvc2"
+	destPod := "pod2"
+	destNode := "node2"
+	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
+	pvcB := buildTestPVC(destNS, destPvc, destModes...)
+	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
+	podB := buildTestPod(destNS, destPod, destNode, destPvc)
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+	src, _ := pvc.New(ctx, c, sourceNS, sourcePVC)
+	dst, _ := pvc.New(ctx, c, destNS, destPvc)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	targetNode := determineTargetNode(&mig)
+	assert.Equal(t, destNode, targetNode)
+}
+
+func TestDetermineTargetNodeDestUnmounted(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+
+	sourceNS := "namespace1"
+	sourcePVC := "pvc1"
+	sourcePod := "pod1"
+	sourceNode := "node1"
+	sourceModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
+
+	destNS := "namespace1"
+	destPvc := "pvc2"
+	destPod := "pod2"
+	destNode := ""
+	destModes := []v1.PersistentVolumeAccessMode{v1.ReadWriteOnce}
 
 	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceModes...)
 	pvcB := buildTestPVC(destNS, destPvc, destModes...)

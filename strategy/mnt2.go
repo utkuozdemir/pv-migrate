@@ -26,8 +26,9 @@ func (r *Mnt2) canDo(t *migration.Migration) bool {
 	}
 
 	sameNode := sourceInfo.MountedNode == destInfo.MountedNode
+	oneUnmounted := sourceInfo.MountedNode == "" || destInfo.MountedNode == ""
 
-	return sameNode || sourceInfo.SupportsROX || sourceInfo.SupportsRWX || destInfo.SupportsRWX
+	return sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX || destInfo.SupportsRWX
 }
 
 func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt) error {
@@ -113,11 +114,15 @@ func determineTargetNode(t *migration.Migration) string {
 	sourceInfo := t.SourceInfo
 	destInfo := t.DestInfo
 
-	if (sourceInfo.SupportsROX || sourceInfo.SupportsRWX) && destInfo.SupportsRWX {
-		return ""
+	if sourceInfo.MountedNode != "" && !sourceInfo.SupportsROX && !sourceInfo.SupportsRWX {
+		return sourceInfo.MountedNode
 	}
 
-	if !sourceInfo.SupportsROX && !sourceInfo.SupportsRWX {
+	if destInfo.MountedNode != "" && !destInfo.SupportsROX && !destInfo.SupportsRWX {
+		return destInfo.MountedNode
+	}
+
+	if sourceInfo.MountedNode != "" {
 		return sourceInfo.MountedNode
 	}
 
