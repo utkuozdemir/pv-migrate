@@ -48,7 +48,9 @@ func (c *HelmRESTClientGetter) ToRESTMapper() (meta.RESTMapper, error) {
 	}
 
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
-	expander := restmapper.NewShortcutExpander(mapper, discoveryClient)
+
+	//nolint:godox
+	expander := restmapper.NewShortcutExpander(mapper, discoveryClient, nil) // todo: fix during logger rework
 
 	return expander, nil
 }

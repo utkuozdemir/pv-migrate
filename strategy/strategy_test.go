@@ -35,7 +35,7 @@ func buildTestPVC(namespace string, name string,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: accessModes,
-			Resources: corev1.ResourceRequirements{
+			Resources: corev1.VolumeResourceRequirements{
 				Requests: map[corev1.ResourceName]resource.Quantity{
 					"storage": resource.MustParse("512Mi"),
 				},
