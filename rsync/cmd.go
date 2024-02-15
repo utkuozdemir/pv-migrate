@@ -1,6 +1,7 @@
 package rsync
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -23,7 +24,7 @@ type Cmd struct {
 
 func (c *Cmd) Build() (string, error) {
 	if c.SrcUseSSH && c.DestUseSSH {
-		return "", fmt.Errorf("cannot use ssh on both source and destination")
+		return "", errors.New("cannot use ssh on both source and destination")
 	}
 
 	cmd := "rsync"

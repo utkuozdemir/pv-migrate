@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -34,7 +35,7 @@ type Local struct{}
 func (r *Local) Run(ctx context.Context, attempt *migration.Attempt) error {
 	_, err := exec.LookPath("ssh")
 	if err != nil {
-		return fmt.Errorf("ssh binary not found")
+		return errors.New("ssh binary not found")
 	}
 
 	mig := attempt.Migration
@@ -305,7 +306,7 @@ func portForwardToSshd(ctx context.Context, logger *log.Entry,
 	case <-readyChan:
 		return port, stopChan, nil
 	case <-time.After(portForwardTimeout):
-		return 0, nil, fmt.Errorf("timed out waiting for port-forward to be ready")
+		return 0, nil, errors.New("timed out waiting for port-forward to be ready")
 	}
 }
 
@@ -325,7 +326,7 @@ func getFreePort() (int, error) {
 
 	tcpAddr, ok := listener.Addr().(*net.TCPAddr)
 	if !ok {
-		return 0, fmt.Errorf("error casting listener address to tcp address")
+		return 0, errors.New("error casting listener address to tcp address")
 	}
 
 	return tcpAddr.Port, nil

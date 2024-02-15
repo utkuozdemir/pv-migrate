@@ -2,6 +2,7 @@ package rsync
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"regexp"
@@ -150,7 +151,7 @@ func parseLine(line *string) (*progress, error) {
 
 	prMatches := findNamedMatches(progressRegex, line)
 	if len(prMatches) == 0 {
-		return nil, fmt.Errorf("no match")
+		return nil, errors.New("no match")
 	}
 
 	percentage, err := strconv.Atoi(prMatches["percentage"])

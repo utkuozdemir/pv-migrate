@@ -10,6 +10,7 @@ tasks:
       - go mod tidy
       - gci write -s standard -s default -s "prefix({{.MODULE}})" .
       - gofumpt -w -l .
+      - golangci-lint run --fix ./...
 
   lint:
     desc: lint code
