@@ -49,9 +49,7 @@ const (
 	lbSvcTimeoutDefault = 2 * time.Minute
 )
 
-var completionFuncNoFileComplete = func(cmd *cobra.Command, args []string,
-	toComplete string,
-) ([]string, cobra.ShellCompDirective) {
+var completionFuncNoFileComplete = func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
@@ -114,8 +112,7 @@ func setMigrateCmdFlags(cmd *cobra.Command) {
 	flags.StringSliceP(FlagStrategies, "s", strategy.DefaultStrategies,
 		"the comma-separated list of strategies to be used in the given order")
 	flags.StringP(FlagSSHKeyAlgorithm, "a", ssh.Ed25519KeyAlgorithm,
-		fmt.Sprintf("ssh key algorithm to be used. Valid values are %s",
-			strings.Join(ssh.KeyAlgorithms, ",")))
+		"ssh key algorithm to be used. Valid values are "+strings.Join(ssh.KeyAlgorithms, ","))
 	flags.StringP(FlagDestHostOverride, "H", "",
 		"the override for the rsync host destination when it is run over SSH, "+
 			"in cases when you need to target a different destination IP on rsync for some reason. "+

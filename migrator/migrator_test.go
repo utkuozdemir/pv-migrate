@@ -103,7 +103,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 
 	migrator := Migrator{
 		getKubeClient: fakeClusterClientGetter(),
-		getStrategyMap: func(names []string) (map[string]strategy.Strategy, error) {
+		getStrategyMap: func([]string) (map[string]strategy.Strategy, error) {
 			return map[string]strategy.Strategy{
 				"str1": &str1,
 				"str2": &str2,
@@ -146,7 +146,7 @@ func fakeClusterClientGetter() clusterClientGetter {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPVC)
 
-	return func(kubeconfigPath string, context string) (*k8s.ClusterClient, error) {
+	return func(string, string) (*k8s.ClusterClient, error) {
 		return &k8s.ClusterClient{
 			KubeClient: fake.NewSimpleClientset(pvcA, pvcB, podA, podB),
 		}, nil

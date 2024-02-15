@@ -93,7 +93,7 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request) error {
 		return nil
 	}
 
-	return fmt.Errorf("all strategies failed for this migration")
+	return errors.New("all strategies failed for this migration")
 }
 
 func (m *Migrator) buildMigration(ctx context.Context, request *migration.Request) (*migration.Migration, error) {
@@ -143,7 +143,7 @@ func (m *Migrator) buildMigration(ctx context.Context, request *migration.Reques
 	}
 
 	if !(destPvcInfo.SupportsRWO || destPvcInfo.SupportsRWX) {
-		return nil, fmt.Errorf("destination PVC is not writable")
+		return nil, errors.New("destination PVC is not writable")
 	}
 
 	mig := migration.Migration{
