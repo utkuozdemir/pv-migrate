@@ -1,7 +1,7 @@
 module github.com/utkuozdemir/pv-migrate
 
 // renovate: go
-go 1.22.1
+go 1.22.2
 
 require (
 	github.com/forPelevin/gomoji v1.2.0
