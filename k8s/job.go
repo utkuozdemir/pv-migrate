@@ -16,7 +16,7 @@ import (
 func WaitForJobCompletion(ctx context.Context, logger *log.Entry, cli kubernetes.Interface,
 	namespace string, name string, progressBarRequested bool,
 ) error {
-	s := fmt.Sprintf("job-name=%s", name)
+	s := "job-name=" + name
 
 	pod, err := WaitForPod(ctx, cli, namespace, s)
 	if err != nil {

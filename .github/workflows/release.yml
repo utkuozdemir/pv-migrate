@@ -21,7 +21,7 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Login to DockerHub
-        uses: docker/login-action@v3.0.0
+        uses: docker/login-action@v3.1.0
         with:
           username: utkuozdemir
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -29,7 +29,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v5.0.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v1.23.0
+          version: v1.24.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

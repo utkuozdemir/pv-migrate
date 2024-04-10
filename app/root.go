@@ -19,7 +19,7 @@ func buildRootCmd(version string, commit string, date string) *cobra.Command {
 		Use:     appName,
 		Short:   "A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another",
 		Version: fmt.Sprintf("%s (commit: %s) (build date: %s)", version, commit, date),
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			f := cmd.Flags()
 			loglvl, _ := f.GetString(FlagLogLevel)
 			logfmt, _ := f.GetString(FlagLogFormat)
@@ -33,10 +33,8 @@ func buildRootCmd(version string, commit string, date string) *cobra.Command {
 	}
 
 	pf := cmd.PersistentFlags()
-	pf.String(FlagLogLevel, applog.LevelInfo,
-		fmt.Sprintf("log level, must be one of: %s", strings.Join(applog.Levels, ", ")))
-	pf.String(FlagLogFormat, applog.FormatFancy,
-		fmt.Sprintf("log format, must be one of: %s", strings.Join(applog.Formats, ", ")))
+	pf.String(FlagLogLevel, applog.LevelInfo, "log level, must be one of: "+strings.Join(applog.Levels, ", "))
+	pf.String(FlagLogFormat, applog.FormatFancy, "log format, must be one of: "+strings.Join(applog.Formats, ", "))
 
 	cmd.AddCommand(buildMigrateCmd())
 	cmd.AddCommand(buildCompletionCmd())

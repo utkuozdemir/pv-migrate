@@ -82,9 +82,9 @@ func buildCompletionCmd() *cobra.Command {
 	}
 }
 
-func buildKubeContextCompletionFunc(kubeconfigFlag string) func(cmd *cobra.Command,
-	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildKubeContextCompletionFunc(kubeconfigFlag string) func(*cobra.Command, []string,
+	string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		srcKubeconfig, _ := cmd.Flags().GetString(kubeconfigFlag)
 
 		contexts, err := k8s.GetContexts(srcKubeconfig)
@@ -98,9 +98,10 @@ func buildKubeContextCompletionFunc(kubeconfigFlag string) func(cmd *cobra.Comma
 	}
 }
 
-func buildKubeNSCompletionFunc(ctx context.Context, kubeconfigFlag string, contextFlag string) func(cmd *cobra.Command,
-	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildKubeNSCompletionFunc(ctx context.Context, kubeconfigFlag string,
+	contextFlag string,
+) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		srcKubeconfig, _ := cmd.Flags().GetString(kubeconfigFlag)
 		srcContext, _ := cmd.Flags().GetString(contextFlag)
 
@@ -115,16 +116,16 @@ func buildKubeNSCompletionFunc(ctx context.Context, kubeconfigFlag string, conte
 	}
 }
 
-func buildStaticSliceCompletionFunc(values []string) func(cmd *cobra.Command,
-	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildStaticSliceCompletionFunc(values []string) func(*cobra.Command,
+	[]string, string) ([]string, cobra.ShellCompDirective) {
+	return func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 		return values, cobra.ShellCompDirectiveNoFileComp
 	}
 }
 
-func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command,
-	args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildSliceCompletionFunc(values []string) func(*cobra.Command,
+	[]string, string) ([]string, cobra.ShellCompDirective) {
+	return func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		remaining := make(map[string]struct{}, len(values))
 		for _, value := range values {
 			remaining[value] = struct{}{}
@@ -160,9 +161,8 @@ func buildSliceCompletionFunc(values []string) func(cmd *cobra.Command,
 	}
 }
 
-func buildPVCsCompletionFunc() func(cmd *cobra.Command, args []string,
-	toComplete string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+func buildPVCsCompletionFunc() func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 		if len(args) >= migrateCmdNumArgs {
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}

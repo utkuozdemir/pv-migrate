@@ -45,17 +45,17 @@ jobs:
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
       - name: Run linters
-        uses: golangci/golangci-lint-action@v3.7.0
+        uses: golangci/golangci-lint-action@v4.0.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v1.55.2
+          version: v1.56.2
           args: --timeout=10m0s
       - name: Build with Goreleaser
         if: ${{ always() }}
         uses: goreleaser/goreleaser-action@v5.0.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v1.23.0
+          version: v1.24.0
           args: build --snapshot --clean --single-target
   test:
     runs-on: ubuntu-22.04
@@ -74,18 +74,18 @@ jobs:
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
-          CILIUM_CLI_VERSION: v0.15.20
+          CILIUM_CLI_VERSION: v0.16.3
         run: |
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
       - name: kind-1 - Create cluster
-        uses: helm/kind-action@v1.8.0
+        uses: helm/kind-action@v1.9.0
         with:
           cluster_name: kind-1
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.20.0
+          version: v0.22.0
           config: test/kind-config.yaml
       - name: kind-1 - Create metallb-system namespace
         run: kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
@@ -99,7 +99,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 4.11.1
+          METALLB_CHART_VERSION: 5.0.0
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
@@ -132,13 +132,13 @@ jobs:
           done
 
       - name: kind-2 - Create cluster
-        uses: helm/kind-action@v1.8.0
+        uses: helm/kind-action@v1.9.0
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
         with:
           cluster_name: kind-2
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.20.0
+          version: v0.22.0
           config: test/kind-config.yaml
       - name: kind-2 - Install allow-all network policies on system namespaces
         env:
@@ -166,6 +166,6 @@ jobs:
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: richgo test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
       - name: Send coverage
-        uses: codecov/codecov-action@v4.0.0
+        uses: codecov/codecov-action@v4.1.0
         with:
           files: coverage.txt
