@@ -48,8 +48,9 @@ jobs:
         uses: golangci/golangci-lint-action@v4.0.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v1.56.2
+          version: v1.57.2
           args: --timeout=10m0s
+          install-mode: goinstall
       - name: Build with Goreleaser
         if: ${{ always() }}
         uses: goreleaser/goreleaser-action@v5.0.0
