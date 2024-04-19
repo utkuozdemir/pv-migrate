@@ -196,13 +196,15 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 	}
 
 	mig := attempt.Migration
+	req := mig.Request
 
 	install := action.NewInstall(helmActionConfig)
 	install.Namespace = pvcInfo.Claim.Namespace
 	install.ReleaseName = name
 	install.Wait = true
-	if req := attempt.Migration.Request; req.HelmTimeout < attempt.Migration.Request.LBSvcTimeout {
-		install.Timeout = attempt.Migration.Request.LBSvcTimeout
+
+	if req.HelmTimeout < req.LBSvcTimeout {
+		install.Timeout = req.LBSvcTimeout
 	} else {
 		install.Timeout = req.HelmTimeout
 	}

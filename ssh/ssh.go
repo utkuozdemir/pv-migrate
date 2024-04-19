@@ -124,7 +124,7 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 	padLen := (bs - (blockLen % bs)) % bs
 	pk1.Pad = make([]byte, padLen)
 
-	for i := 0; i < padLen; i++ {
+	for i := range padLen {
 		pk1.Pad[i] = byte(i + 1)
 	}
 
