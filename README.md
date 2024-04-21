@@ -46,6 +46,11 @@ Simply create the PVC with the same name and manifest in `ns-b` and use `pv-migr
 and you need to move the data from one Kubernetes cluster to the other.  
 Just use `pv-migrate` to copy the data **securely over the internet**.
 
+:arrow_right: You need to change the `StorageClass` of a volume, for instance,
+from a `ReadWriteOnce` one like `local-path`) to a `ReadWriteMany` like NFS.
+As the `storageClass` is not editable, you can use `pv-migrate` to transfer
+the data from the old PVC to the new one with the desired StorageClass.
+
 ## Highlights
 
 - Supports in-namespace, in-cluster as well as cross-cluster migrations
