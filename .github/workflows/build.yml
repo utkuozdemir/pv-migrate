@@ -1,6 +1,14 @@
 ---
 name: build
 
+permissions:
+  # Required: allow read access to the content for analysis.
+  contents: read
+  # Optional: allow read access to pull request. Use with `only-new-issues` option.
+  pull-requests: read
+  # Optional: Allow write access to checks to allow the action to annotate code in the PR.
+  checks: write
+
 on:
   push:
     branches:
@@ -36,14 +44,18 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     steps:
+
       - name: Checkout
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@v4.1.1
+
       - name: Install go
         uses: actions/setup-go@v5.0.0
         with:
           go-version-file: go.mod
+
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
+
       - name: Run linters
         uses: golangci/golangci-lint-action@v5.0.0
         with:
@@ -51,6 +63,7 @@ jobs:
           version: v1.57.2
           args: --timeout=10m0s
           install-mode: goinstall
+
       - name: Build with Goreleaser
         if: ${{ always() }}
         uses: goreleaser/goreleaser-action@v5.0.0
@@ -58,20 +71,31 @@ jobs:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
           version: v1.25.1
           args: build --snapshot --clean --single-target
+
   test:
     runs-on: ubuntu-22.04
     steps:
+
       - name: Checkout
-        uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
+        uses: actions/checkout@v4.1.1
+
       - name: Install go
         uses: actions/setup-go@v5.0.0
         with:
           go-version-file: go.mod
-      - name: Install richgo
-        # renovate: depName=kyoh86/richgo
-        run: go install github.com/kyoh86/richgo@v0.3.12
-      - name: Install helm
-        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Set up gotestfmt
+        uses: gotesttools/gotestfmt-action@v2.2.0
+        with:
+          # Optional: pass GITHUB_TOKEN to avoid rate limiting.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          # renovate: depName=cilium/cilium-cli datasource=github-releases
+          version: v3.14.4
+
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
@@ -88,15 +112,19 @@ jobs:
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
           version: v0.22.0
           config: test/kind-config.yaml
+
       - name: kind-1 - Create metallb-system namespace
         run: kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
+
       - name: kind-1 - Install allow-all network policies on system namespaces
         run: |
           kubectl -n kube-system apply -f test/netpol-allow-all.yaml
           kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
           kubectl -n metallb-system apply -f test/netpol-allow-all.yaml
+
       - name: kind-1 - Install Cilium with default-deny policy
         run: cilium install --set policyEnforcementMode=always
+
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
@@ -141,16 +169,19 @@ jobs:
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
           version: v0.22.0
           config: test/kind-config.yaml
+
       - name: kind-2 - Install allow-all network policies on system namespaces
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: |
           kubectl -n kube-system apply -f test/netpol-allow-all.yaml
           kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
+
       - name: kind-2 - Install Cilium with default-deny policy
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: cilium install --set policyEnforcementMode=always
+
       - name: kind-2 - Wait for all pods in the cluster to be ready
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
@@ -163,10 +194,24 @@ jobs:
 
       - name: Run tests
         env:
-          RICHGO_FORCE_COLOR: "1"
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: richgo test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
+        run: |
+          set -euo pipefail
+          go test -json -v -tags integration -race -coverpkg=./... \
+            -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./... 2>&1 \
+            | tee /tmp/gotest.log \
+            | gotestfmt
+
       - name: Send coverage
         uses: codecov/codecov-action@v4.3.0
         with:
           files: coverage.txt
+
+      # Upload the original test log to the artifacts
+      - name: Upload test log
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-log
+          path: /tmp/gotest.log
+          if-no-files-found: error

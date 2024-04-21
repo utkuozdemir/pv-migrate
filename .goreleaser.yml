@@ -30,7 +30,6 @@ builds:
 
 archives:
   - id: pv-migrate-archive
-    rlcp: true
     # default name template except we use .Tag instead of .Version to keep the "v" prefix
     name_template: >-
       {{ .ProjectName }}_
@@ -107,14 +106,14 @@ docker_manifests:
 #  disable: true
 
 brews:
-  - tap:
+  - repository:
       owner: utkuozdemir
       name: homebrew-pv-migrate
       token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"
     commit_author:
       name: Utku Ozdemir
       email: uoz@protonmail.com
-    folder: Formula
+    directory: Formula
     goarm: "7"
     homepage: https://github.com/utkuozdemir/pv-migrate
     description: Persistent volume migration plugin for Kubernetes
@@ -128,7 +127,7 @@ brews:
       fish_completion.install "completions/pv-migrate.fish"
 
 scoops:
-  - bucket:
+  - repository:
       owner: utkuozdemir
       name: scoop-pv-migrate
       token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"

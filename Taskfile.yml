@@ -1,6 +1,15 @@
 version: "3"
 
 tasks:
+  install-tools:
+    desc: install tools
+    cmds:
+      - go install mvdan.cc/gofumpt@latest
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - go install github.com/goreleaser/goreleaser@latest
+      - go install github.com/daixiang0/gci@latest
+      - go install github.com/caarlos0/svu@latest
+
   fmt:
     desc: format code
     vars:
@@ -17,6 +26,7 @@ tasks:
     cmds:
       - golangci-lint run ./...
       - helm lint helm/pv-migrate
+      - goreleaser check
 
   clean:
     desc: clean
