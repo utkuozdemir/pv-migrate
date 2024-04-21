@@ -46,14 +46,10 @@ Simply create the PVC with the same name and manifest in `ns-b` and use `pv-migr
 and you need to move the data from one Kubernetes cluster to the other.  
 Just use `pv-migrate` to copy the data **securely over the internet**.
 
-:arrow_right: You want to change the StorageClass of a volume from a 
-class that only supports ReadWriteOnce and you need it be capable of 
-ReadWriteMany. You want to change the StorageClass from a class that 
-stores data locally on a node (e.g., local-path) to one that stores 
-the data on the network (e.g., NFS). There is no native automatic way 
-to change the StorageClass of a volume, nor can it be changed in-place. 
-You can use `pv-migrate` to migrate from your PVC to a new one with the 
-desired StorageClass.
+:arrow_right: You need to change the `StorageClass` of a volume, for instance,
+from a `ReadWriteOnce` one like `local-path`) to a `ReadWriteMany` like NFS.
+As the `storageClass` is not editable, you can use `pv-migrate` to transfer
+the data from the old PVC to the new one with the desired StorageClass.
 
 ## Highlights
 
