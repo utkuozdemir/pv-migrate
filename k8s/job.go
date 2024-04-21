@@ -2,63 +2,66 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 
-	log "github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
-	applog "github.com/utkuozdemir/pv-migrate/log"
-	"github.com/utkuozdemir/pv-migrate/rsync"
+	"github.com/utkuozdemir/pv-migrate/rsync/progress"
 )
 
-func WaitForJobCompletion(ctx context.Context, logger *log.Entry, cli kubernetes.Interface,
-	namespace string, name string, progressBarRequested bool,
-) error {
-	s := "job-name=" + name
+// WaitForJobCompletion waits for the Kubernetes job to complete.
+//
 
-	pod, err := WaitForPod(ctx, cli, namespace, s)
+func WaitForJobCompletion(ctx context.Context, cli kubernetes.Interface,
+	namespace string, name string, progressBarRequested bool, logger *slog.Logger,
+) (retErr error) {
+	_, usingPlaintextLogger := logger.Handler().(*slog.TextHandler)
+	showProgressBar := progressBarRequested && usingPlaintextLogger
+	labelSelector := "job-name=" + name
+
+	pod, err := WaitForPod(ctx, cli, namespace, labelSelector)
 	if err != nil {
 		return err
 	}
 
-	successCh := make(chan bool, 1)
+	var eg errgroup.Group //nolint:varnamelen
 
-	showProgressBar := progressBarRequested &&
-		logger.Context.Value(applog.FormatContextKey) == applog.FormatFancy
+	defer func() {
+		retErr = errors.Join(retErr, eg.Wait())
+	}()
 
-	logTail := rsync.LogTail{
-		LogReaderFunc: func() (io.ReadCloser, error) {
-			stream, streamErr := cli.CoreV1().Pods(namespace).GetLogs(pod.Name,
-				&corev1.PodLogOptions{Follow: true}).Stream(ctx)
-			if streamErr != nil {
-				return nil, fmt.Errorf("failed to stream logs from pod %s/%s: %w", namespace, pod.Name, streamErr)
-			}
+	tailCtx, tailCancel := context.WithCancel(ctx)
+	defer tailCancel()
 
-			return stream, nil
-		},
-		SuccessCh:       successCh,
+	progressLogger := progress.NewLogger(progress.LoggerOptions{
 		ShowProgressBar: showProgressBar,
-		Logger:          logger,
-	}
+		LogStreamFunc: func(ctx context.Context) (io.ReadCloser, error) {
+			return cli.CoreV1().Pods(namespace).GetLogs(pod.Name,
+				&corev1.PodLogOptions{Follow: true}).Stream(ctx)
+		},
+	})
 
-	go logTail.Start()
+	eg.Go(func() error {
+		return progressLogger.Start(tailCtx, logger)
+	})
 
-	terminatedPod, err := waitForPodTermination(ctx, cli, pod.Namespace, pod.Name)
+	phase, err := waitForPodTermination(ctx, cli, pod.Namespace, pod.Name)
 	if err != nil {
-		successCh <- false
-
 		return err
 	}
 
-	if *terminatedPod != corev1.PodSucceeded {
-		successCh <- false
-
+	if *phase != corev1.PodSucceeded {
 		return fmt.Errorf("job %s/%s failed", pod.Namespace, pod.Name)
 	}
 
-	successCh <- true
+	if err = progressLogger.MarkAsComplete(ctx); err != nil {
+		return fmt.Errorf("failed to mark progress logger as complete: %w", err)
+	}
 
 	return nil
 }

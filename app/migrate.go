@@ -1,7 +1,9 @@
 package app
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -53,31 +55,35 @@ var completionFuncNoFileComplete = func(*cobra.Command, []string, string) ([]str
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
-func buildMigrateCmd() *cobra.Command {
+func buildMigrateCmd(ctx context.Context, logger *slog.Logger) *cobra.Command {
 	cmd := cobra.Command{
 		Use:               CommandMigrate + " <source-pvc> <dest-pvc>",
 		Aliases:           []string{"m"},
 		Short:             "Migrate data from one Kubernetes PersistentVolumeClaim to another",
 		Args:              cobra.ExactArgs(migrateCmdNumArgs),
-		ValidArgsFunction: buildPVCsCompletionFunc(),
+		ValidArgsFunction: buildPVCsCompletionFunc(ctx, logger),
 		RunE:              runMigration,
 	}
 
+	cmd.SetContext(ctx)
+
 	setMigrateCmdFlags(&cmd)
-	setMigrateCmdCompletion(&cmd)
+	setMigrateCmdCompletion(ctx, &cmd, logger)
 
 	return &cmd
 }
 
-func setMigrateCmdCompletion(cmd *cobra.Command) {
-	_ = cmd.RegisterFlagCompletionFunc(FlagSourceContext, buildKubeContextCompletionFunc(FlagSourceKubeconfig))
+func setMigrateCmdCompletion(ctx context.Context, cmd *cobra.Command, logger *slog.Logger) {
+	_ = cmd.RegisterFlagCompletionFunc(FlagSourceContext,
+		buildKubeContextCompletionFunc(FlagSourceKubeconfig, logger))
 	_ = cmd.RegisterFlagCompletionFunc(FlagSourceNamespace,
-		buildKubeNSCompletionFunc(cmd.Context(), FlagSourceKubeconfig, FlagSourceContext))
+		buildKubeNSCompletionFunc(ctx, FlagSourceKubeconfig, FlagSourceContext, logger))
 	_ = cmd.RegisterFlagCompletionFunc(FlagSourcePath, completionFuncNoFileComplete)
 
-	_ = cmd.RegisterFlagCompletionFunc(FlagDestContext, buildKubeContextCompletionFunc(FlagDestKubeconfig))
+	_ = cmd.RegisterFlagCompletionFunc(FlagDestContext,
+		buildKubeContextCompletionFunc(FlagDestKubeconfig, logger))
 	_ = cmd.RegisterFlagCompletionFunc(FlagDestNamespace,
-		buildKubeNSCompletionFunc(cmd.Context(), FlagDestKubeconfig, FlagDestContext))
+		buildKubeNSCompletionFunc(ctx, FlagDestKubeconfig, FlagDestContext, logger))
 	_ = cmd.RegisterFlagCompletionFunc(FlagDestPath, completionFuncNoFileComplete)
 
 	_ = cmd.RegisterFlagCompletionFunc(FlagStrategies, buildSliceCompletionFunc(strategy.AllStrategies))
@@ -169,8 +175,9 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		Strategies:            strs,
 		DestHostOverride:      destHostOverride,
 		LBSvcTimeout:          lbSvcTimeout,
-		Logger:                logger,
 	}
+
+	logger := slog.Default()
 
 	logger.Info("🚀 Starting migration")
 
@@ -178,7 +185,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		logger.Info("❕ Extraneous files will be deleted from the destination")
 	}
 
-	if err := migrator.New().Run(cmd.Context(), &request); err != nil {
+	if err := migrator.New().Run(cmd.Context(), &request, logger); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 

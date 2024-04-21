@@ -1,20 +1,25 @@
 package app
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	applog "github.com/utkuozdemir/pv-migrate/log"
 )
 
 const (
 	FlagLogLevel  = "log-level"
 	FlagLogFormat = "log-format"
+
+	logFormatText = "text"
+	logFormatJSON = "json"
 )
 
-func buildRootCmd(version string, commit string, date string) *cobra.Command {
+//nolint:funlen
+func buildRootCmd(ctx context.Context, version string, commit string, date string) *cobra.Command {
 	cmd := cobra.Command{
 		Use:     appName,
 		Short:   "A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another",
@@ -23,24 +28,63 @@ func buildRootCmd(version string, commit string, date string) *cobra.Command {
 			f := cmd.Flags()
 			loglvl, _ := f.GetString(FlagLogLevel)
 			logfmt, _ := f.GetString(FlagLogFormat)
-			err := applog.Configure(logger, loglvl, logfmt)
-			if err != nil {
-				return fmt.Errorf("failed to configure logger: %w", err)
+
+			var level slog.Level
+			var logHandler slog.Handler
+
+			if err := level.UnmarshalText([]byte(loglvl)); err != nil {
+				return fmt.Errorf("failed to parse log level: %w", err)
 			}
+
+			handlerOpts := &slog.HandlerOptions{
+				Level: level,
+			}
+
+			switch logfmt {
+			case logFormatJSON:
+				logHandler = slog.NewJSONHandler(os.Stderr, handlerOpts)
+			case logFormatText, "fancy":
+				logHandler = slog.NewTextHandler(os.Stderr, handlerOpts)
+			default:
+				return fmt.Errorf("unknown log format: %s", logfmt)
+			}
+
+			logger := slog.New(logHandler)
+
+			slog.SetLogLoggerLevel(level)
+			slog.SetDefault(logger)
 
 			return nil
 		},
 	}
 
-	pf := cmd.PersistentFlags()
-	pf.String(FlagLogLevel, applog.LevelInfo, "log level, must be one of: "+strings.Join(applog.Levels, ", "))
-	pf.String(FlagLogFormat, applog.FormatFancy, "log format, must be one of: "+strings.Join(applog.Formats, ", "))
+	cmd.SetContext(ctx)
 
-	cmd.AddCommand(buildMigrateCmd())
+	levels := []string{
+		slog.LevelDebug.String(),
+		slog.LevelInfo.String(),
+		slog.LevelWarn.String(),
+		slog.LevelError.String(),
+	}
+	formats := []string{
+		logFormatText,
+		logFormatJSON,
+	}
+
+	pf := cmd.PersistentFlags()
+	pf.String(FlagLogLevel, slog.LevelInfo.String(),
+		"log level, must be one of \""+strings.Join(levels, ", ")+
+			"\" or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText")
+	pf.String(FlagLogFormat, logFormatText,
+		"log format, must be one of: "+strings.Join(formats, ", "))
+
+	logger := slog.Default()
+
+	cmd.AddCommand(buildMigrateCmd(ctx, logger))
 	cmd.AddCommand(buildCompletionCmd())
 
-	_ = cmd.RegisterFlagCompletionFunc(FlagLogLevel, buildStaticSliceCompletionFunc(applog.Levels))
-	_ = cmd.RegisterFlagCompletionFunc(FlagLogFormat, buildStaticSliceCompletionFunc(applog.Formats))
+	_ = cmd.RegisterFlagCompletionFunc(FlagLogLevel, buildStaticSliceCompletionFunc(levels))
+	_ = cmd.RegisterFlagCompletionFunc(FlagLogFormat, buildStaticSliceCompletionFunc(formats))
 
 	return &cmd
 }

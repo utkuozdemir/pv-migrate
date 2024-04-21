@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/neilotoole/slogt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +19,9 @@ func TestGetClusterClient(t *testing.T) {
 	c := prepareKubeconfig()
 	defer func() { _ = os.Remove(c) }()
 
-	clusterClient, err := GetClusterClient(c, "context-1")
+	logger := slogt.New(t)
+
+	clusterClient, err := GetClusterClient(c, "context-1", logger)
 
 	require.NoError(t, err)
 
@@ -49,15 +52,17 @@ func TestBuildK8sConfig(t *testing.T) {
 		_ = os.Remove(conf)
 	}()
 
-	config, _, namespace, err := buildK8sConfig(conf, "")
+	logger := slogt.New(t)
+
+	config, _, namespace, err := buildK8sConfig(conf, "", logger)
 	assert.NotNil(t, config)
 	assert.Equal(t, "namespace1", namespace)
 	require.NoError(t, err)
-	config, _, namespace, err = buildK8sConfig(conf, "context-2")
+	config, _, namespace, err = buildK8sConfig(conf, "context-2", logger)
 	require.NoError(t, err)
 	assert.Equal(t, "namespace2", namespace)
 	assert.NotNil(t, config)
-	config, _, namespace, err = buildK8sConfig(conf, "context-nonexistent")
+	config, _, namespace, err = buildK8sConfig(conf, "context-nonexistent", logger)
 	assert.Nil(t, config)
 	assert.Equal(t, "", namespace)
 	require.Error(t, err)

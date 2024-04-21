@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"fmt"
+	"log/slog"
 
 	"k8s.io/cli-runtime/pkg/genericclioptions"
 	"k8s.io/client-go/kubernetes"
@@ -16,8 +17,8 @@ type ClusterClient struct {
 	NsInContext      string
 }
 
-func GetClusterClient(kubeconfigPath string, context string) (*ClusterClient, error) {
-	config, rcGetter, namespace, err := buildK8sConfig(kubeconfigPath, context)
+func GetClusterClient(kubeconfigPath string, context string, logger *slog.Logger) (*ClusterClient, error) {
+	config, rcGetter, namespace, err := buildK8sConfig(kubeconfigPath, context, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -36,7 +37,7 @@ func GetClusterClient(kubeconfigPath string, context string) (*ClusterClient, er
 }
 
 //nolint:ireturn,nolintlint
-func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config,
+func buildK8sConfig(kubeconfigPath string, context string, logger *slog.Logger) (*rest.Config,
 	genericclioptions.RESTClientGetter, string, error,
 ) {
 	clientConfigLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
@@ -60,7 +61,7 @@ func buildK8sConfig(kubeconfigPath string, context string) (*rest.Config,
 		return nil, nil, "", fmt.Errorf("failed to create kubernetes client config: %w", err)
 	}
 
-	rcGetter := NewRESTClientGetter(clientConfig, config)
+	rcGetter := NewRESTClientGetter(clientConfig, config, logger)
 
 	return clientConfig, rcGetter, namespace, nil
 }

@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/utkuozdemir/pv-migrate/helm"
 	"github.com/utkuozdemir/pv-migrate/k8s"
@@ -22,7 +21,7 @@ const (
 
 type (
 	strategyMapGetter   func(names []string) (map[string]strategy.Strategy, error)
-	clusterClientGetter func(kubeconfigPath string, context string) (*k8s.ClusterClient, error)
+	clusterClientGetter func(kubeconfigPath, context string, logger *slog.Logger) (*k8s.ClusterClient, error)
 )
 
 type Migrator struct {
@@ -38,52 +37,53 @@ func New() *Migrator {
 	}
 }
 
-func (m *Migrator) Run(ctx context.Context, request *migration.Request) error {
+func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *slog.Logger) error {
 	nameToStrategyMap, err := m.getStrategyMap(request.Strategies)
 	if err != nil {
 		return err
 	}
 
-	mig, err := m.buildMigration(ctx, request)
+	logger = logger.With("source", request.Source.Namespace+"/"+request.Source.Name,
+		"dest", request.Dest.Namespace+"/"+request.Dest.Name)
+
+	mig, err := m.buildMigration(ctx, request, logger)
 	if err != nil {
 		return err
 	}
 
 	strs := strings.Join(request.Strategies, ", ")
-	mig.Logger.
-		WithField("strategies", strs).
-		Infof("💭 Will attempt %v strategies: %s",
-			len(nameToStrategyMap), strs)
+
+	logger.Info("💭 Attempting migration", "strategies", strs)
 
 	for _, name := range request.Strategies {
-		id := util.RandomHexadecimalString(attemptIDLength)
+		attemptID := util.RandomHexadecimalString(attemptIDLength)
+
+		logger = logger.With("attempt_id", attemptID, "strategy", name)
+
+		logger.Info("🚁 Attempt using strategy")
+
 		attempt := migration.Attempt{
-			ID:                    id,
-			HelmReleaseNamePrefix: "pv-migrate-" + id,
+			ID:                    attemptID,
+			HelmReleaseNamePrefix: "pv-migrate-" + attemptID,
 			Migration:             mig,
-			Logger:                mig.Logger.WithField("id", id),
 		}
 
-		sLogger := attempt.Logger.WithField("strategy", name)
-		sLogger.Infof("🚁 Attempting strategy: %s", name)
 		s := nameToStrategyMap[name]
 
-		if runErr := s.Run(ctx, &attempt); runErr != nil {
+		if runErr := s.Run(ctx, &attempt, logger); runErr != nil {
 			if errors.Is(err, strategy.ErrUnaccepted) {
-				sLogger.Infof("🦊 Strategy '%s' cannot handle this migration, "+
-					"will try the next one", name)
+				logger.Info("🦊 This strategy cannot handle this migration, will try the next one")
 
 				continue
 			}
 
-			sLogger.WithError(runErr).
-				Warn("🔶 Migration failed with this strategy, " +
-					"will try with the remaining strategies")
+			logger.Warn("🔶 Migration failed with this strategy, "+
+				"will try with the remaining strategies", "error", runErr)
 
 			continue
 		}
 
-		sLogger.Info("✅ Migration succeeded")
+		logger.Info("✅ Migration succeeded")
 
 		return nil
 	}
@@ -91,7 +91,9 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request) error {
 	return errors.New("all strategies failed for this migration")
 }
 
-func (m *Migrator) buildMigration(ctx context.Context, request *migration.Request) (*migration.Migration, error) {
+func (m *Migrator) buildMigration(ctx context.Context, request *migration.Request,
+	logger *slog.Logger,
+) (*migration.Migration, error) {
 	chart, err := helm.LoadChart()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load helm chart: %w", err)
@@ -100,7 +102,7 @@ func (m *Migrator) buildMigration(ctx context.Context, request *migration.Reques
 	source := request.Source
 	dest := request.Dest
 
-	sourceClient, destClient, err := m.getClusterClients(request)
+	sourceClient, destClient, err := m.getClusterClients(request, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -125,14 +127,7 @@ func (m *Migrator) buildMigration(ctx context.Context, request *migration.Reques
 		return nil, fmt.Errorf("failed to get PVC info for destination PVC: %w", err)
 	}
 
-	logger := request.Logger.WithFields(log.Fields{
-		"source_ns": source.Namespace,
-		"source":    source.Name,
-		"dest_ns":   dest.Namespace,
-		"dest":      dest.Name,
-	})
-
-	err = handleMountedPVCs(logger, request, sourcePvcInfo, destPvcInfo)
+	err = handleMountedPVCs(request, sourcePvcInfo, destPvcInfo, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +139,6 @@ func (m *Migrator) buildMigration(ctx context.Context, request *migration.Reques
 	mig := migration.Migration{
 		Chart:      chart,
 		Request:    request,
-		Logger:     logger,
 		SourceInfo: sourcePvcInfo,
 		DestInfo:   destPvcInfo,
 	}
@@ -152,18 +146,20 @@ func (m *Migrator) buildMigration(ctx context.Context, request *migration.Reques
 	return &mig, nil
 }
 
-func (m *Migrator) getClusterClients(r *migration.Request) (*k8s.ClusterClient, *k8s.ClusterClient, error) {
+func (m *Migrator) getClusterClients(r *migration.Request,
+	logger *slog.Logger,
+) (*k8s.ClusterClient, *k8s.ClusterClient, error) {
 	source := r.Source
 	dest := r.Dest
 
-	sourceClient, err := m.getKubeClient(source.KubeconfigPath, source.Context)
+	sourceClient, err := m.getKubeClient(source.KubeconfigPath, source.Context, logger)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	destClient := sourceClient
 	if source.KubeconfigPath != dest.KubeconfigPath || source.Context != dest.Context {
-		destClient, err = m.getKubeClient(dest.KubeconfigPath, dest.Context)
+		destClient, err = m.getKubeClient(dest.KubeconfigPath, dest.Context, logger)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -172,15 +168,15 @@ func (m *Migrator) getClusterClients(r *migration.Request) (*k8s.ClusterClient, 
 	return sourceClient, destClient, nil
 }
 
-func handleMountedPVCs(logger *log.Entry, r *migration.Request, sourcePvcInfo, destPvcInfo *pvc.Info) error {
+func handleMountedPVCs(r *migration.Request, sourcePvcInfo, destPvcInfo *pvc.Info, logger *slog.Logger) error {
 	ignoreMounted := r.IgnoreMounted
 
-	err := handleMounted(logger, sourcePvcInfo, ignoreMounted)
+	err := handleMounted(sourcePvcInfo, ignoreMounted, logger)
 	if err != nil {
 		return err
 	}
 
-	err = handleMounted(logger, destPvcInfo, ignoreMounted)
+	err = handleMounted(destPvcInfo, ignoreMounted, logger)
 	if err != nil {
 		return err
 	}
@@ -188,18 +184,18 @@ func handleMountedPVCs(logger *log.Entry, r *migration.Request, sourcePvcInfo, d
 	return nil
 }
 
-func handleMounted(logger *log.Entry, info *pvc.Info, ignoreMounted bool) error {
+func handleMounted(info *pvc.Info, ignoreMounted bool, logger *slog.Logger) error {
 	if info.MountedNode == "" {
 		return nil
 	}
 
 	if ignoreMounted {
-		logger.Infof("💡 PVC %s is mounted to node %s, ignoring...",
-			info.Claim.Name, info.MountedNode)
+		logger.Info("💡 PVC is mounted to a node, but --ignore-mounted is requested, ignoring...",
+			"pvc", info.Claim.Namespace+"/"+info.Claim.Name, "mounted_node", info.MountedNode)
 
 		return nil
 	}
 
-	return fmt.Errorf("PVC is mounted to a node and ignore-mounted is not requested: "+
+	return fmt.Errorf("PVC is mounted to a node and --ignore-mounted is not requested: "+
 		"node: %s claim %s", info.MountedNode, info.Claim.Name)
 }
