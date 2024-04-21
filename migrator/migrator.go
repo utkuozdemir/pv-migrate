@@ -1,25 +1,20 @@
 package migrator
 
 import (
-	"bytes"
 	"context"
-	_ "embed" // we embed the helm chart
 	"errors"
 	"fmt"
 	"strings"
 
 	log "github.com/sirupsen/logrus"
-	"helm.sh/helm/v3/pkg/chart/loader"
 
+	"github.com/utkuozdemir/pv-migrate/helm"
 	"github.com/utkuozdemir/pv-migrate/k8s"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	"github.com/utkuozdemir/pv-migrate/pvc"
 	"github.com/utkuozdemir/pv-migrate/strategy"
 	"github.com/utkuozdemir/pv-migrate/util"
 )
-
-//go:embed helm-chart.tgz
-var chartBytes []byte
 
 const (
 	attemptIDLength = 5
@@ -97,7 +92,7 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request) error {
 }
 
 func (m *Migrator) buildMigration(ctx context.Context, request *migration.Request) (*migration.Migration, error) {
-	chart, err := loader.LoadArchive(bytes.NewReader(chartBytes))
+	chart, err := helm.LoadChart()
 	if err != nil {
 		return nil, fmt.Errorf("failed to load helm chart: %w", err)
 	}
