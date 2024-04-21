@@ -3,6 +3,7 @@ package strategy
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/utkuozdemir/pv-migrate/k8s"
 	"github.com/utkuozdemir/pv-migrate/migration"
@@ -13,7 +14,7 @@ import (
 
 type LbSvc struct{}
 
-func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt) error {
+func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 
 	sourceInfo := mig.SourceInfo
@@ -21,7 +22,8 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt) error {
 	sourceNs := sourceInfo.Claim.Namespace
 	destNs := destInfo.Claim.Namespace
 
-	mig.Logger.Info("🔑 Generating SSH key pair")
+	logger.Info("🔑 Generating SSH key pair")
+
 	keyAlgorithm := mig.Request.KeyAlgorithm
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
@@ -35,10 +37,10 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt) error {
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
 	releaseNames := []string{srcReleaseName, destReleaseName}
 
-	doneCh := registerCleanupHook(attempt, releaseNames)
-	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
+	doneCh := registerCleanupHook(attempt, releaseNames, logger)
+	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installOnSource(attempt, srcReleaseName, publicKey, srcMountPath)
+	err = installOnSource(attempt, srcReleaseName, publicKey, srcMountPath, logger)
 	if err != nil {
 		return fmt.Errorf("failed to install on source: %w", err)
 	}
@@ -57,7 +59,7 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt) error {
 	}
 
 	err = installOnDest(attempt, destReleaseName, privateKey, privateKeyMountPath,
-		sshTargetHost, srcMountPath, destMountPath)
+		sshTargetHost, srcMountPath, destMountPath, logger)
 	if err != nil {
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
@@ -66,14 +68,16 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt) error {
 	kubeClient := destInfo.ClusterClient.KubeClient
 	jobName := destReleaseName + "-rsync"
 
-	if err = k8s.WaitForJobCompletion(ctx, attempt.Logger, kubeClient, destNs, jobName, showProgressBar); err != nil {
+	if err = k8s.WaitForJobCompletion(ctx, kubeClient, destNs, jobName, showProgressBar, logger); err != nil {
 		return fmt.Errorf("failed to wait for job completion: %w", err)
 	}
 
 	return nil
 }
 
-func installOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMountPath string) error {
+func installOnSource(attempt *migration.Attempt, releaseName,
+	publicKey, srcMountPath string, logger *slog.Logger,
+) error {
 	mig := attempt.Migration
 	sourceInfo := mig.SourceInfo
 	namespace := sourceInfo.Claim.Namespace
@@ -97,11 +101,11 @@ func installOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMoun
 		},
 	}
 
-	return installHelmChart(attempt, sourceInfo, releaseName, vals)
+	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
 }
 
 func installOnDest(attempt *migration.Attempt, releaseName, privateKey,
-	privateKeyMountPath, sshHost, srcMountPath, destMountPath string,
+	privateKeyMountPath, sshHost, srcMountPath, destMountPath string, logger *slog.Logger,
 ) error {
 	mig := attempt.Migration
 	destInfo := mig.DestInfo
@@ -142,7 +146,7 @@ func installOnDest(attempt *migration.Attempt, releaseName, privateKey,
 		},
 	}
 
-	return installHelmChart(attempt, destInfo, releaseName, vals)
+	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
 }
 
 func formatSSHTargetHost(host string) string {

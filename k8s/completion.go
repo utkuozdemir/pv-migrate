@@ -3,12 +3,13 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func GetContexts(kubeconfigPath string) ([]string, error) {
-	client, err := GetClusterClient(kubeconfigPath, "")
+func GetContexts(kubeconfigPath string, logger *slog.Logger) ([]string, error) {
+	client, err := GetClusterClient(kubeconfigPath, "", logger)
 	if err != nil {
 		return nil, err
 	}
@@ -32,8 +33,8 @@ func GetContexts(kubeconfigPath string) ([]string, error) {
 	return contextNames, nil
 }
 
-func GetNamespaces(ctx context.Context, kubeconfigPath string, kubectx string) ([]string, error) {
-	client, err := GetClusterClient(kubeconfigPath, kubectx)
+func GetNamespaces(ctx context.Context, kubeconfigPath, kubectx string, logger *slog.Logger) ([]string, error) {
+	client, err := GetClusterClient(kubeconfigPath, kubectx, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -52,8 +53,8 @@ func GetNamespaces(ctx context.Context, kubeconfigPath string, kubectx string) (
 	return nsNames, nil
 }
 
-func GetPVCs(ctx context.Context, kubeconfigPath string, kubectx string, namespace string) ([]string, error) {
-	client, err := GetClusterClient(kubeconfigPath, kubectx)
+func GetPVCs(ctx context.Context, kubeconfigPath, kubectx, namespace string, logger *slog.Logger) ([]string, error) {
+	client, err := GetClusterClient(kubeconfigPath, kubectx, logger)
 	if err != nil {
 		return nil, err
 	}

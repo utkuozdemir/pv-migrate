@@ -3,6 +3,7 @@ package strategy
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/utkuozdemir/pv-migrate/k8s"
 	"github.com/utkuozdemir/pv-migrate/migration"
@@ -20,7 +21,7 @@ func (r *Svc) canDo(t *migration.Migration) bool {
 	return sameCluster
 }
 
-func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt) error {
+func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	if !r.canDo(mig) {
 		return ErrUnaccepted
@@ -29,15 +30,15 @@ func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt) error {
 	releaseName := attempt.HelmReleaseNamePrefix
 	releaseNames := []string{releaseName}
 
-	helmVals, err := buildHelmVals(mig, releaseName)
+	helmVals, err := buildHelmVals(mig, releaseName, logger)
 	if err != nil {
 		return fmt.Errorf("failed to build helm values: %w", err)
 	}
 
-	doneCh := registerCleanupHook(attempt, releaseNames)
-	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
+	doneCh := registerCleanupHook(attempt, releaseNames, logger)
+	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installHelmChart(attempt, mig.DestInfo, releaseName, helmVals)
+	err = installHelmChart(attempt, mig.DestInfo, releaseName, helmVals, logger)
 	if err != nil {
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
@@ -46,8 +47,8 @@ func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt) error {
 	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
 	jobName := releaseName + "-rsync"
 
-	if err = k8s.WaitForJobCompletion(ctx, attempt.Logger, kubeClient,
-		mig.DestInfo.Claim.Namespace, jobName, showProgressBar); err != nil {
+	if err = k8s.WaitForJobCompletion(ctx, kubeClient,
+		mig.DestInfo.Claim.Namespace, jobName, showProgressBar, logger); err != nil {
 		return fmt.Errorf("failed to wait for job completion: %w", err)
 	}
 
@@ -55,13 +56,14 @@ func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt) error {
 }
 
 //nolint:funlen
-func buildHelmVals(mig *migration.Migration, helmReleaseName string) (map[string]any, error) {
+func buildHelmVals(mig *migration.Migration, helmReleaseName string, logger *slog.Logger) (map[string]any, error) {
 	sourceInfo := mig.SourceInfo
 	destInfo := mig.DestInfo
 	sourceNs := sourceInfo.Claim.Namespace
 	destNs := destInfo.Claim.Namespace
 
-	mig.Logger.Info("🔑 Generating SSH key pair")
+	logger.Info("🔑 Generating SSH key pair")
+
 	keyAlgorithm := mig.Request.KeyAlgorithm
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)

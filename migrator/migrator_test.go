@@ -2,9 +2,10 @@ package migrator
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/neilotoole/slogt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -34,9 +35,11 @@ func TestBuildTask(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
+	logger := slogt.New(t)
+
 	m := Migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(true)
-	tsk, err := m.buildMigration(ctx, mig)
+	tsk, err := m.buildMigration(ctx, mig, logger)
 	require.NoError(t, err)
 
 	sourceInfo := tsk.SourceInfo
@@ -62,9 +65,11 @@ func TestBuildTaskMounted(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 
+	logger := slogt.New(t)
+
 	m := Migrator{getKubeClient: fakeClusterClientGetter()}
 	mig := buildMigration(false)
-	tsk, err := m.buildMigration(ctx, mig)
+	tsk, err := m.buildMigration(ctx, mig, logger)
 	assert.Nil(t, tsk)
 	require.Error(t, err)
 }
@@ -74,6 +79,8 @@ func TestRunStrategiesInOrder(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
+
+	logger := slogt.New(t)
 
 	var result []int
 
@@ -115,7 +122,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	strs := []string{"str3", "str1", "str2"}
 	mig := buildMigrationRequestWithStrategies(strs, true)
 
-	err := migrator.Run(ctx, mig)
+	err := migrator.Run(ctx, mig, logger)
 	require.NoError(t, err)
 	assert.Equal(t, []int{3, 1, 2}, result)
 }
@@ -136,7 +143,6 @@ func buildMigrationRequestWithStrategies(strategies []string, ignoreMounted bool
 		},
 		IgnoreMounted: ignoreMounted,
 		Strategies:    strategies,
-		Logger:        log.NewEntry(log.New()),
 	}
 }
 
@@ -146,7 +152,7 @@ func fakeClusterClientGetter() clusterClientGetter {
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPVC)
 
-	return func(string, string) (*k8s.ClusterClient, error) {
+	return func(string, string, *slog.Logger) (*k8s.ClusterClient, error) {
 		return &k8s.ClusterClient{
 			KubeClient: fake.NewSimpleClientset(pvcA, pvcB, podA, podB),
 		}, nil
@@ -195,6 +201,6 @@ type mockStrategy struct {
 	runFunc func(context.Context, *migration.Attempt) error
 }
 
-func (m *mockStrategy) Run(ctx context.Context, a *migration.Attempt) error {
-	return m.runFunc(ctx, a)
+func (m *mockStrategy) Run(ctx context.Context, attempt *migration.Attempt, _ *slog.Logger) error {
+	return m.runFunc(ctx, attempt)
 }

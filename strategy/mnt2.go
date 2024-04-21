@@ -3,6 +3,7 @@ package strategy
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/utkuozdemir/pv-migrate/k8s"
 	"github.com/utkuozdemir/pv-migrate/migration"
@@ -31,7 +32,7 @@ func (r *Mnt2) canDo(t *migration.Migration) bool {
 	return sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX || destInfo.SupportsRWX
 }
 
-func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt) error {
+func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	if !r.canDo(mig) {
 		return ErrUnaccepted
@@ -72,10 +73,10 @@ func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt) error {
 	releaseName := attempt.HelmReleaseNamePrefix
 	releaseNames := []string{releaseName}
 
-	doneCh := registerCleanupHook(attempt, releaseNames)
-	defer cleanupAndReleaseHook(attempt, releaseNames, doneCh)
+	doneCh := registerCleanupHook(attempt, releaseNames, logger)
+	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installHelmChart(attempt, sourceInfo, releaseName, vals)
+	err = installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
 	if err != nil {
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
@@ -84,7 +85,7 @@ func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt) error {
 	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
 	jobName := attempt.HelmReleaseNamePrefix + "-rsync"
 
-	if err = k8s.WaitForJobCompletion(ctx, attempt.Logger, kubeClient, namespace, jobName, showProgressBar); err != nil {
+	if err = k8s.WaitForJobCompletion(ctx, kubeClient, namespace, jobName, showProgressBar, logger); err != nil {
 		return fmt.Errorf("failed to wait for job completion: %w", err)
 	}
 

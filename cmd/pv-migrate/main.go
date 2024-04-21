@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"os"
 
 	// load all auth plugins - needed for gcp, azure etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"github.com/utkuozdemir/pv-migrate/app"
-	applog "github.com/utkuozdemir/pv-migrate/log"
 )
 
 var (
@@ -29,18 +28,10 @@ func run() int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	logger, err := applog.New(ctx)
-	if err != nil {
-		fmt.Printf("❌ Error: %s\n", err.Error()) //nolint:forbidigo
+	rootCmd := app.New(ctx, version, commit, date)
 
-		return 1
-	}
-
-	rootCmd := app.New(logger, version, commit, date)
-
-	err = rootCmd.ExecuteContext(ctx)
-	if err != nil {
-		logger.Errorf("❌ Error: %s", err.Error())
+	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		slog.Default().Error("❌ Failed to run", "error", err.Error())
 
 		return 1
 	}

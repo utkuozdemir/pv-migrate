@@ -1,6 +1,8 @@
 package k8s
 
 import (
+	"log/slog"
+
 	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/client-go/discovery"
 	"k8s.io/client-go/discovery/cached/memory"
@@ -12,14 +14,16 @@ import (
 type HelmRESTClientGetter struct {
 	restConfig   *rest.Config
 	clientConfig clientcmd.ClientConfig
+	logger       *slog.Logger
 }
 
 func NewRESTClientGetter(restConfig *rest.Config,
-	clientConfig clientcmd.ClientConfig,
+	clientConfig clientcmd.ClientConfig, logger *slog.Logger,
 ) *HelmRESTClientGetter {
 	return &HelmRESTClientGetter{
 		restConfig:   restConfig,
 		clientConfig: clientConfig,
+		logger:       logger,
 	}
 }
 
@@ -50,7 +54,9 @@ func (c *HelmRESTClientGetter) ToRESTMapper() (meta.RESTMapper, error) {
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(discoveryClient)
 
 	//nolint:godox
-	expander := restmapper.NewShortcutExpander(mapper, discoveryClient, nil) // todo: fix during logger rework
+	expander := restmapper.NewShortcutExpander(mapper, discoveryClient, func(warning string) {
+		c.logger.Debug("warning from shortcut expander", "warning", warning)
+	})
 
 	return expander, nil
 }

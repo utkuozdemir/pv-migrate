@@ -3,7 +3,6 @@ package migration
 import (
 	"time"
 
-	log "github.com/sirupsen/logrus"
 	"helm.sh/helm/v3/pkg/chart"
 
 	"github.com/utkuozdemir/pv-migrate/pvc"
@@ -33,7 +32,6 @@ type Request struct {
 	HelmFileValues        []string
 	HelmStringValues      []string
 	Strategies            []string
-	Logger                *log.Entry
 	DestHostOverride      string
 	LBSvcTimeout          time.Duration
 }
@@ -41,7 +39,6 @@ type Request struct {
 type Migration struct {
 	Chart      *chart.Chart
 	Request    *Request
-	Logger     *log.Entry
 	SourceInfo *pvc.Info
 	DestInfo   *pvc.Info
 }
@@ -50,5 +47,4 @@ type Attempt struct {
 	ID                    string
 	HelmReleaseNamePrefix string
 	Migration             *Migration
-	Logger                *log.Entry
 }

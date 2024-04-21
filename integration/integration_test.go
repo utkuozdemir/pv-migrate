@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/user"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +33,6 @@ import (
 
 	"github.com/utkuozdemir/pv-migrate/app"
 	"github.com/utkuozdemir/pv-migrate/k8s"
-	applog "github.com/utkuozdemir/pv-migrate/log"
 	"github.com/utkuozdemir/pv-migrate/util"
 )
 
@@ -83,24 +82,27 @@ var (
 	ErrUnexpectedTypePodWatch = errors.New("unexpected type while watching pod")
 )
 
+// todo: replace with a test suite? then we can also use slogt.New(t) for logging
 func TestMain(m *testing.M) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	err := setup(ctx)
-	if err != nil {
+	logger := slog.Default()
+
+	if err := setup(ctx, logger); err != nil {
 		if teardownErr := teardown(ctx); teardownErr != nil {
-			log.Errorf("failed to tearddown after test context init failure: %v", teardownErr)
+			logger.Error("failed to tearddown after test context init failure", "error", teardownErr)
 		}
 
-		log.Fatalf("failed to initialize test context: %v", err)
+		logger.Error("failed to setup test context", "error", err)
+
+		os.Exit(1)
 	}
 
 	code := m.Run()
 
-	err = teardown(ctx)
-	if err != nil {
-		log.Errorf("failed to teardown after tests: %v", err)
+	if err := teardown(ctx); err != nil {
+		logger.Error("failed to teardown after tests", "error", err)
 	}
 
 	os.Exit(code)
@@ -340,7 +342,7 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 					{
 						Name:       "ssh",
 						Port:       22,
-						TargetPort: intstr.FromInt(22),
+						TargetPort: intstr.FromInt32(22),
 					},
 				},
 			},
@@ -491,7 +493,7 @@ func TestLongPVCNames(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 }
 
-func setup(ctx context.Context) error {
+func setup(ctx context.Context, logger *slog.Logger) error {
 	homeDir, err := userHomeDir()
 	if err != nil {
 		return err
@@ -499,14 +501,14 @@ func setup(ctx context.Context) error {
 
 	extraClusterKubeconfig = env.GetString("PVMIG_TEST_EXTRA_KUBECONFIG", homeDir+"/.kube/config")
 
-	mainCli, err := k8s.GetClusterClient("", "")
+	mainCli, err := k8s.GetClusterClient("", "", logger)
 	if err != nil {
 		return fmt.Errorf("failed to get main cluster client: %w", err)
 	}
 
 	mainClusterCli = mainCli
 
-	extraCli, err := k8s.GetClusterClient(extraClusterKubeconfig, "")
+	extraCli, err := k8s.GetClusterClient(extraClusterKubeconfig, "", logger)
 	if err != nil {
 		return fmt.Errorf("failed to get extra cluster client: %w", err)
 	}
@@ -514,7 +516,7 @@ func setup(ctx context.Context) error {
 	extraClusterCli = extraCli
 
 	if mainCli.RestConfig.Host == extraCli.RestConfig.Host {
-		log.Warnf("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
+		logger.Warn("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
 	}
 
 	ns1 = "pv-migrate-test-1-" + util.RandomHexadecimalString(5)
@@ -968,15 +970,10 @@ func runCliApp(ctx context.Context, cmd string) error {
 }
 
 func runCliAppWithArgs(ctx context.Context, args ...string) error {
-	logger, err := applog.New(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to create logger: %w", err)
-	}
-
-	cliApp := app.New(logger, "", "", "")
+	cliApp := app.New(nil, "", "", "")
 	cliApp.SetArgs(args)
 
-	if err = cliApp.Execute(); err != nil {
+	if err := cliApp.Execute(); err != nil {
 		return fmt.Errorf("failed to execute command: %w", err)
 	}
 

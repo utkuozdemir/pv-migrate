@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
-	log "github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
@@ -55,7 +55,7 @@ type Strategy interface {
 	// Run runs the migration for the given task execution.
 	//
 	// This is the actual implementation of the migration.
-	Run(ctx context.Context, a *migration.Attempt) error
+	Run(ctx context.Context, a *migration.Attempt, logger *slog.Logger) error
 }
 
 func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
@@ -73,7 +73,7 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func registerCleanupHook(attempt *migration.Attempt, releaseNames []string) chan<- bool {
+func registerCleanupHook(attempt *migration.Attempt, releaseNames []string, logger *slog.Logger) chan<- bool {
 	doneCh := make(chan bool)
 	signalCh := make(chan os.Signal, 1)
 
@@ -82,8 +82,10 @@ func registerCleanupHook(attempt *migration.Attempt, releaseNames []string) chan
 	go func() {
 		select {
 		case <-signalCh:
-			attempt.Logger.Warn("🔶 Received termination signal")
-			cleanup(attempt, releaseNames)
+			logger.Warn("🔶 Received termination signal")
+
+			cleanup(attempt, releaseNames, logger)
+
 			os.Exit(1)
 		case <-doneCh:
 			return
@@ -93,37 +95,43 @@ func registerCleanupHook(attempt *migration.Attempt, releaseNames []string) chan
 	return doneCh
 }
 
-func cleanupAndReleaseHook(a *migration.Attempt, releaseNames []string, doneCh chan<- bool) {
-	cleanup(a, releaseNames)
-	doneCh <- true
+func cleanupAndReleaseHook(ctx context.Context, a *migration.Attempt,
+	releaseNames []string, doneCh chan<- bool, logger *slog.Logger,
+) {
+	cleanup(a, releaseNames, logger)
+
+	select {
+	case <-ctx.Done():
+		logger.Warn("🔶 Context cancelled")
+	case doneCh <- true:
+	}
 }
 
-func cleanup(attempt *migration.Attempt, releaseNames []string) {
+func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Logger) {
 	if attempt.Migration.Request.SkipCleanup {
-		attempt.Logger.Info("🧹 Cleanup skipped")
+		logger.Info("🧹 Cleanup skipped")
 
 		return
 	}
 
 	mig := attempt.Migration
 	req := mig.Request
-	logger := attempt.Logger
+
 	logger.Info("🧹 Cleaning up")
 
-	var result *multierror.Error
+	var errs error
 
 	for _, info := range []*pvc.Info{mig.SourceInfo, mig.DestInfo} {
 		for _, name := range releaseNames {
-			err := cleanupForPVC(logger, name, req.HelmTimeout, info)
+			err := cleanupForPVC(name, req.HelmTimeout, info, logger)
 			if err != nil {
-				result = multierror.Append(result, err)
+				errs = multierror.Append(errs, err)
 			}
 		}
 	}
 
-	if err := result.ErrorOrNil(); err != nil {
-		logger.WithError(err).
-			Warn("🔶 Cleanup failed, you might want to clean up manually")
+	if errs != nil {
+		logger.Warn("🔶 Cleanup failed, you might want to clean up manually", "error", errs)
 
 		return
 	}
@@ -131,10 +139,10 @@ func cleanup(attempt *migration.Attempt, releaseNames []string) {
 	logger.Info("✨ Cleanup done")
 }
 
-func cleanupForPVC(logger *log.Entry, helmReleaseName string,
-	helmUninstallTimeout time.Duration, pvcInfo *pvc.Info,
+func cleanupForPVC(helmReleaseName string, helmUninstallTimeout time.Duration,
+	pvcInfo *pvc.Info, logger *slog.Logger,
 ) error {
-	ac, err := initHelmActionConfig(logger, pvcInfo)
+	ac, err := initHelmActionConfig(pvcInfo, logger)
 	if err != nil {
 		return err
 	}
@@ -151,11 +159,13 @@ func cleanupForPVC(logger *log.Entry, helmReleaseName string,
 	return nil
 }
 
-func initHelmActionConfig(logger *log.Entry, pvcInfo *pvc.Info) (*action.Configuration, error) {
+func initHelmActionConfig(pvcInfo *pvc.Info, logger *slog.Logger) (*action.Configuration, error) {
 	actionConfig := new(action.Configuration)
 
 	err := actionConfig.Init(pvcInfo.ClusterClient.RESTClientGetter,
-		pvcInfo.Claim.Namespace, os.Getenv("HELM_DRIVER"), logger.Debugf)
+		pvcInfo.Claim.Namespace, os.Getenv("HELM_DRIVER"), func(format string, v ...any) {
+			logger.Debug(fmt.Sprintf(format, v...))
+		})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize helm action config: %w", err)
 	}
@@ -181,7 +191,7 @@ func getMergedHelmValues(helmValuesFile string, request *migration.Request) (map
 }
 
 func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string,
-	values map[string]any,
+	values map[string]any, logger *slog.Logger,
 ) error {
 	helmValuesFile, err := writeHelmValuesToTempFile(attempt.ID, values)
 	if err != nil {
@@ -190,7 +200,7 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 
 	defer func() { _ = os.Remove(helmValuesFile) }()
 
-	helmActionConfig, err := initHelmActionConfig(attempt.Logger, pvcInfo)
+	helmActionConfig, err := initHelmActionConfig(pvcInfo, logger)
 	if err != nil {
 		return fmt.Errorf("failed to init helm action config: %w", err)
 	}

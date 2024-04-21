@@ -2,12 +2,11 @@ package k8s
 
 import (
 	"fmt"
-	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"path"
 
-	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
@@ -22,10 +21,9 @@ type PortForwardRequest struct {
 	PodPort    int
 	StopCh     <-chan struct{}
 	ReadyCh    chan struct{}
-	Logger     *log.Entry
 }
 
-func PortForward(req *PortForwardRequest) error {
+func PortForward(req *PortForwardRequest, logger *slog.Logger) error {
 	targetURL, err := url.Parse(req.RestConfig.Host)
 	if err != nil {
 		return fmt.Errorf("failed to parse target url: %w", err)
@@ -40,19 +38,13 @@ func PortForward(req *PortForwardRequest) error {
 		return fmt.Errorf("failed to initialize roundtripper: %w", err)
 	}
 
-	logger := req.Logger
-
-	outWriter := logger.WriterLevel(log.DebugLevel)
-	defer tryClose(logger, outWriter)
-
-	errWriter := logger.WriterLevel(log.DebugLevel)
-	defer tryClose(logger, errWriter)
+	outWriter := &slogDebugWriter{logger: logger}
 
 	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, targetURL)
 
 	ports := []string{fmt.Sprintf("%d:%d", req.LocalPort, req.PodPort)}
 
-	forwarder, err := portforward.New(dialer, ports, req.StopCh, req.ReadyCh, outWriter, errWriter)
+	forwarder, err := portforward.New(dialer, ports, req.StopCh, req.ReadyCh, outWriter, outWriter)
 	if err != nil {
 		return fmt.Errorf("failed to initialize portforward: %w", err)
 	}
@@ -64,8 +56,12 @@ func PortForward(req *PortForwardRequest) error {
 	return nil
 }
 
-func tryClose(logger *log.Entry, w io.Closer) {
-	if err := w.Close(); err != nil {
-		logger.Debug("failed to close port-forward output stream")
-	}
+type slogDebugWriter struct {
+	logger *slog.Logger
+}
+
+func (w *slogDebugWriter) Write(p []byte) (int, error) {
+	w.logger.Debug(string(p))
+
+	return len(p), nil
 }
