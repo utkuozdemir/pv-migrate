@@ -82,7 +82,7 @@ jobs:
           rm cilium-linux-amd64.tar.gz
 
       - name: kind-1 - Create cluster
-        uses: helm/kind-action@v1.9.0
+        uses: helm/kind-action@v1.10.0
         with:
           cluster_name: kind-1
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
@@ -100,7 +100,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 6.0.1
+          METALLB_CHART_VERSION: 6.1.0
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
@@ -133,7 +133,7 @@ jobs:
           done
 
       - name: kind-2 - Create cluster
-        uses: helm/kind-action@v1.9.0
+        uses: helm/kind-action@v1.10.0
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
         with:
