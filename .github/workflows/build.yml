@@ -45,7 +45,7 @@ jobs:
       - name: Ensure go.mod is already tidied
         run: go mod tidy && git diff --no-patch --exit-code
       - name: Run linters
-        uses: golangci/golangci-lint-action@v5.0.0
+        uses: golangci/golangci-lint-action@v5.1.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
           version: v1.57.2
