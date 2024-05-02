@@ -39,7 +39,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
       - name: Install go
-        uses: actions/setup-go@v5.0.0
+        uses: actions/setup-go@v5.0.1
         with:
           go-version-file: go.mod
       - name: Ensure go.mod is already tidied
@@ -64,7 +64,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@0ad4b8fadaa221de15dcec353f45205ec38ea70b # v4.1.4
       - name: Install go
-        uses: actions/setup-go@v5.0.0
+        uses: actions/setup-go@v5.0.1
         with:
           go-version-file: go.mod
       - name: Install richgo
@@ -100,7 +100,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 6.1.2
+          METALLB_CHART_VERSION: 6.1.3
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
