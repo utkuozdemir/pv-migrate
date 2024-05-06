@@ -170,3 +170,4 @@ jobs:
         uses: codecov/codecov-action@v4.3.1
         with:
           files: coverage.txt
+          token: ${{ secrets.CODECOV_TOKEN }}
