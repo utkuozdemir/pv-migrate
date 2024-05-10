@@ -11,12 +11,13 @@ tasks:
       - gci write -s standard -s default -s "prefix({{.MODULE}})" .
       - gofumpt -w -l .
       - golangci-lint run --fix ./...
-
+      - shfmt -l -i 2 -ci -sr -w .
   lint:
     desc: lint code
     cmds:
       - golangci-lint run ./...
       - helm lint helm/pv-migrate
+      - shfmt -l -i 2 -ci -sr .
 
   clean:
     desc: clean

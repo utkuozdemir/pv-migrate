@@ -198,7 +198,9 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 		return fmt.Errorf("failed to write helm values to temp file: %w", err)
 	}
 
-	defer func() { _ = os.Remove(helmValuesFile) }()
+	defer func() {
+		os.Remove(helmValuesFile)
+	}()
 
 	helmActionConfig, err := initHelmActionConfig(pvcInfo, logger)
 	if err != nil {

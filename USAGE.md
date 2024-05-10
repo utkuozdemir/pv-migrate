@@ -1,36 +1,20 @@
 # Usage
 
-Help command:
-```
-A command-line utility to migrate data from one Kubernetes PersistentVolumeClaim to another
+Root command:
 
-Usage:
-  pv-migrate [command]
-
-Available Commands:
-  completion  Generate the autocompletion script for the specified shell
-  help        Help about any command
-  migrate     Migrate data from one Kubernetes PersistentVolumeClaim to another
-
-Flags:
-  -h, --help                help for pv-migrate
-      --log-format string   log format, must be one of: json, fancy (default "fancy")
-      --log-level string    log level, must be one of: trace, debug, info, warn, error, fatal, panic (default "info")
-  -v, --version             version for pv-migrate
-```
-
-
-Command `migrate`:
 ```
 Migrate data from one Kubernetes PersistentVolumeClaim to another
 
 Usage:
-  pv-migrate migrate <source-pvc> <dest-pvc> [flags]
+  pv-migrate [--source-namespace=<source-ns>] --source=<source-pvc> [--dest-namespace=<dest-ns>] --dest=<dest-pvc> [flags]
+  pv-migrate [command]
 
-Aliases:
-  migrate, m
+Available Commands:
+  completion  Generate completion script
+  help        Help about any command
 
 Flags:
+      --dest string                    destination PVC name
   -C, --dest-context string            context in the kubeconfig file of the destination PVC
   -d, --dest-delete-extraneous-files   delete extraneous files on the destination by using rsync's '--delete' flag
   -H, --dest-host-override string      the override for the rsync host destination when it is run over SSH, in cases when you need to target a different destination IP on rsync for some reason. By default, it is determined by used strategy and differs across strategies. Has no effect for mnt2 and local strategies
@@ -40,14 +24,17 @@ Flags:
       --helm-set strings               set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
       --helm-set-file strings          set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)
       --helm-set-string strings        set additional Helm STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
-  -f, --helm-values strings            set additional Helm values by a YAML file or a URL (can specify multiple)
   -t, --helm-timeout duration          install/uninstall timeout for helm releases (default 1m0s)
-  -h, --help                           help for migrate
+  -f, --helm-values strings            set additional Helm values by a YAML file or a URL (can specify multiple)
+  -h, --help                           help for pv-migrate
   -i, --ignore-mounted                 do not fail if the source or destination PVC is mounted
       --lbsvc-timeout duration         timeout for the load balancer service to receive an external IP. Only used by the lbsvc strategy (default 2m0s)
+      --log-format string              log format, must be one of: text, json (default "text")
+      --log-level string               log level, must be one of "DEBUG, INFO, WARN, ERROR" or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText (default "INFO")
   -o, --no-chown                       omit chown on rsync
   -b, --no-progress-bar                do not display a progress bar
   -x, --skip-cleanup                   skip cleanup of the migration
+      --source string                  source PVC name
   -c, --source-context string          context in the kubeconfig file of the source PVC
   -k, --source-kubeconfig string       path of the kubeconfig file of the source PVC
   -R, --source-mount-read-only         mount the source PVC in ReadOnly mode (default true)
@@ -55,10 +42,9 @@ Flags:
   -p, --source-path string             the filesystem path to migrate in the source PVC (default "/")
   -a, --ssh-key-algorithm string       ssh key algorithm to be used. Valid values are rsa,ed25519 (default "ed25519")
   -s, --strategies strings             the comma-separated list of strategies to be used in the given order (default [mnt2,svc,lbsvc])
+  -v, --version                        version for pv-migrate
 
-Global Flags:
-      --log-format string   log format, must be one of: json, fancy (default "fancy")
-      --log-level string    log level, must be one of: trace, debug, info, warn, error, fatal, panic (default "info")
+Use "pv-migrate [command] --help" for more information about a command.
 ```
 
 The Kubernetes resources created by pv-migrate are sourced from a [Helm chart](helm/pv-migrate).
@@ -85,60 +71,60 @@ See the various examples below which copy the contents of the `old-pvc` into the
 ### Example 1: In a single namespace (minimal example)
 
 ```bash
-$ pv-migrate migrate old-pvc new-pvc
+$ pv-migrate --source old-pvc --dest new-pvc
 ```
 
 ### Example 2: Between namespaces
+
 ```bash
-$ pv-migrate migrate \
-  --source-namespace source-ns \
-  --dest-namespace dest-ns \
-  old-pvc new-pvc
+$ pv-migrate \
+  --source-namespace source-ns --source old-pvc \
+  --dest-namespace dest-ns --dest new-pvc
 ```
 
 ### Example 3: Between different clusters
 
 ```bash
-pv-migrate migrate \
+pv-migrate \
   --source-kubeconfig /path/to/source/kubeconfig \
   --source-context some-context \
   --source-namespace source-ns \
+  --source old-pvc \
   --dest-kubeconfig /path/to/dest/kubeconfig \
   --dest-context some-other-context \
   --dest-namespace dest-ns \
   --dest-delete-extraneous-files \
-  old-pvc new-pvc
+  --dest new-pvc
 ```
 
 ### Example 4: Using custom container images from custom repository
 
 ```bash
-$ pv-migrate migrate \
+$ pv-migrate \
   --helm-set rsync.image.repository=mycustomrepo/rsync \
   --helm-set rsync.image.tag=v1.2.3 \
   --helm-set sshd.image.repository=mycustomrepo/sshd \
   --helm-set sshd.image.tag=v1.2.3 \
-  old-pvc new-pvc
+  --source old-pvc \
+  --dest new-pvc
 ```
 
 ### Example 5: Enabling network policies (on clusters with deny-all traffic rules)
 
 ```bash
-$ pv-migrate migrate \
+$ pv-migrate \
   --helm-set sshd.networkPolicy.enabled=true \
   --helm-set rsync.networkPolicy.enabled=true \
-  --source-namespace source-ns \
-  --dest-namespace dest-ns \
-  old-pvc new-pvc
+  --source-namespace source-ns --source old-pvc \
+  --dest-namespace dest-ns --dest new-pvc
 ```
 
 ### Example 6: Passing additional rsync arguments
 
 ```bash
-$ pv-migrate migrate \
+$ pv-migrate \
   --helm-set rsync.extraArgs="--partial --inplace" \
-  old-pvc new-pvc
+  --source old-pvc --dest new-pvc
 ```
-
 
 **For further customization on the rendered manifests** (custom labels, annotations etc.), see the [Helm chart values](helm/pv-migrate).

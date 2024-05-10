@@ -125,7 +125,7 @@ func buildAffinityHelmValues(nodeName string, required bool) map[string]any {
 		"nodeAffinity": map[string]any{
 			"preferredDuringSchedulingIgnoredDuringExecution": []map[string]any{
 				{
-					"weight":     100,
+					"weight":     100, //nolint:mnd
 					"preference": terms,
 				},
 			},

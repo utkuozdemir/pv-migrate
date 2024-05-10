@@ -28,7 +28,7 @@ func run() int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	rootCmd := app.New(ctx, version, commit, date)
+	rootCmd := app.BuildMigrateCmd(ctx, version, commit, date, false)
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		slog.Default().Error("❌ Failed to run", "error", err.Error())

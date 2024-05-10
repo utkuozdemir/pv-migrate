@@ -72,7 +72,9 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 		return fmt.Errorf("failed to write private key to temp file: %w", err)
 	}
 
-	defer func() { _ = os.Remove(privateKeyFile) }()
+	defer func() {
+		os.Remove(privateKeyFile)
+	}()
 
 	rsyncCmd, err := buildRsyncCmdLocal(mig)
 	if err != nil {

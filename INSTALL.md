@@ -48,7 +48,7 @@ Alternatively, you can use the
 [official Docker images](https://hub.docker.com/repository/docker/utkuozdemir/pv-migrate)
 that come with the `pv-migrate` binary pre-installed:
 ```bash
-docker run --rm -it utkuozdemir/pv-migrate:<IMAGE_TAG> pv-migrate migrate ...
+docker run --rm -it utkuozdemir/pv-migrate:<IMAGE_TAG> pv-migrate --source <source-pvc> --dest <dest-pvc> ...
 ```
 
 ## Installing Shell Completion
