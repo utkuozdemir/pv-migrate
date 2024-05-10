@@ -48,10 +48,13 @@ const (
 	longDestPvcName = "dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-" +
 		"dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest"
 
-	migrateCmdline            = "--log-level debug --log-format json migrate "
-	migrateCmdlineWithNetpols = migrateCmdline +
-		"--helm-set rsync.networkPolicy.enabled=true " +
-		"--helm-set sshd.networkPolicy.enabled=true"
+	logConfigCmdline = "--log-level debug --log-format json "
+	netpolsCmdline   = "--helm-set rsync.networkPolicy.enabled=true --helm-set sshd.networkPolicy.enabled=true "
+
+	migrateLegacyCmdline = logConfigCmdline + "migrate " + netpolsCmdline
+
+	migrateWithoutNetpolsCmdline = logConfigCmdline
+	migrateCmdline               = migrateWithoutNetpolsCmdline + netpolsCmdline
 )
 
 var (
@@ -117,7 +120,7 @@ func TestSameNS(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
+	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -148,7 +151,7 @@ func TestCustomRsyncArgs(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", migrateCmdlineWithNetpols, ns1, ns1))
+	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", migrateLegacyCmdline, ns1, ns1))
 	cmdArgs = append(cmdArgs, "--helm-set", "rsync.extraArgs=--partial --inplace --sparse", "source", "dest")
 
 	require.NoError(t, runCliAppWithArgs(ctx, cmdArgs...))
@@ -180,7 +183,7 @@ func TestSameNSLbSvc(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s --lbsvc-timeout 5m source dest", migrateCmdlineWithNetpols, ns1, ns1)
+	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s --lbsvc-timeout 5m source dest", migrateLegacyCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -210,7 +213,7 @@ func TestNoChown(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -o -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
+	cmd := fmt.Sprintf("%s -i -o -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -240,7 +243,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -d -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
+	cmd := fmt.Sprintf("%s -d -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -271,7 +274,7 @@ func TestMountedError(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns1)
+	cmd := fmt.Sprintf("%s -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
 	err = runCliApp(ctx, cmd)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "ignore-mounted is not requested")
@@ -286,7 +289,7 @@ func TestDifferentNS(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
+	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns2)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
@@ -316,7 +319,7 @@ func TestFailWithoutNetworkPolicies(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateCmdline, ns1, ns2)
+	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest", migrateWithoutNetpolsCmdline, ns1, ns2)
 	require.Error(t, runCliApp(ctx, cmd))
 }
 
@@ -354,7 +357,7 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
-		"%s -i -n %s -N %s -H %s source dest", migrateCmdlineWithNetpols, ns1, ns2, destHostOverride)
+		"%s -i -n %s -N %s -H %s source dest", migrateLegacyCmdline, ns1, ns2, destHostOverride)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
@@ -384,7 +387,7 @@ func TestRSA(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s source dest", migrateCmdlineWithNetpols, ns1, ns2)
+	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns2)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
@@ -414,7 +417,7 @@ func TestDifferentCluster(t *testing.T) {
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s source dest", migrateCmdlineWithNetpols,
+	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s source dest", migrateLegacyCmdline,
 		extraClusterKubeconfig, ns1, ns3)
 	require.NoError(t, runCliApp(ctx, cmd))
 
@@ -445,7 +448,7 @@ func TestLocal(t *testing.T) {
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s source dest", migrateCmdlineWithNetpols,
+	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s source dest", migrateLegacyCmdline,
 		extraClusterKubeconfig, ns1, ns3)
 	require.NoError(t, runCliApp(ctx, cmd))
 
@@ -475,7 +478,7 @@ func TestLongPVCNames(t *testing.T) {
 	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -i -n %s -N %s %s %s",
-		migrateCmdlineWithNetpols, ns1, ns1, longSourcePvcName, longDestPvcName)
+		migrateLegacyCmdline, ns1, ns1, longSourcePvcName, longDestPvcName)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "long-dest", printDataUIDGIDContentShellCommand)
@@ -970,7 +973,7 @@ func runCliApp(ctx context.Context, cmd string) error {
 }
 
 func runCliAppWithArgs(ctx context.Context, args ...string) error {
-	cliApp := app.New(nil, "", "", "")
+	cliApp := app.BuildMigrateCmd(ctx, "", "", "", false)
 	cliApp.SetArgs(args)
 
 	if err := cliApp.Execute(); err != nil {

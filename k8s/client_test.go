@@ -11,17 +11,19 @@ import (
 )
 
 //go:embed testdata/_kubeconfig_test.yaml
-var kubeconfig string
+var kubeconfigContent string
 
 func TestGetClusterClient(t *testing.T) {
 	t.Parallel()
 
-	c := prepareKubeconfig()
-	defer func() { _ = os.Remove(c) }()
+	kubeconfig := prepareKubeconfig()
+	defer func() {
+		os.Remove(kubeconfig)
+	}()
 
 	logger := slogt.New(t)
 
-	clusterClient, err := GetClusterClient(c, "context-1", logger)
+	clusterClient, err := GetClusterClient(kubeconfig, "context-1", logger)
 
 	require.NoError(t, err)
 
@@ -70,7 +72,8 @@ func TestBuildK8sConfig(t *testing.T) {
 
 func prepareKubeconfig() string {
 	testConfig, _ := os.CreateTemp("", "pv-migrate-testconfig-*.yaml")
-	_, _ = testConfig.WriteString(kubeconfig)
+
+	testConfig.WriteString(kubeconfigContent) //nolint:errcheck
 
 	return testConfig.Name()
 }

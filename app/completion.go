@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os"
 	"strings"
 
@@ -83,9 +82,14 @@ func buildCompletionCmd() *cobra.Command {
 	}
 }
 
-func buildKubeContextCompletionFunc(kubeconfigFlag string, logger *slog.Logger) func(*cobra.Command, []string,
-	string) ([]string, cobra.ShellCompDirective) {
+func buildKubeContextCompletionFunc(kubeconfigFlag string) func(*cobra.Command,
+	[]string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		logger, err := buildLogger(cmd.Flags())
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+
 		srcKubeconfig, _ := cmd.Flags().GetString(kubeconfigFlag)
 
 		contexts, err := k8s.GetContexts(srcKubeconfig, logger)
@@ -100,9 +104,14 @@ func buildKubeContextCompletionFunc(kubeconfigFlag string, logger *slog.Logger) 
 }
 
 func buildKubeNSCompletionFunc(ctx context.Context, kubeconfigFlag string,
-	contextFlag string, logger *slog.Logger,
+	contextFlag string,
 ) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		logger, err := buildLogger(cmd.Flags())
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+
 		srcKubeconfig, _ := cmd.Flags().GetString(kubeconfigFlag)
 		srcContext, _ := cmd.Flags().GetString(contextFlag)
 
@@ -162,18 +171,33 @@ func buildSliceCompletionFunc(values []string) func(*cobra.Command,
 	}
 }
 
-func buildPVCsCompletionFunc(ctx context.Context, logger *slog.Logger) func(*cobra.Command,
+func buildLegacyPVCsCompletionFunc(ctx context.Context) func(*cobra.Command,
 	[]string, string) ([]string, cobra.ShellCompDirective) {
-	return func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
-		if len(args) >= migrateCmdNumArgs {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) >= 2 { //nolint:mnd
 			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+
+		isDestPVC := len(args) == 1
+
+		return buildPVCCompletionFunc(ctx, isDestPVC)(cmd, args, toComplete)
+	}
+}
+
+func buildPVCCompletionFunc(ctx context.Context,
+	isDestPVC bool,
+) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+	return func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
+		logger, err := buildLogger(cmd.Flags())
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
 		}
 
 		kubeconfig, _ := cmd.Flags().GetString(FlagSourceKubeconfig)
 		useContext, _ := cmd.Flags().GetString(FlagSourceContext)
 		namespace, _ := cmd.Flags().GetString(FlagSourceNamespace)
 
-		if len(args) == 1 {
+		if isDestPVC {
 			kubeconfig, _ = cmd.Flags().GetString(FlagDestKubeconfig)
 			useContext, _ = cmd.Flags().GetString(FlagDestContext)
 			namespace, _ = cmd.Flags().GetString(FlagDestNamespace)

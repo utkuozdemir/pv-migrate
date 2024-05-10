@@ -125,7 +125,7 @@ func handleLogs(ctx context.Context, logCh <-chan string, successCh <-chan struc
 			progressbar.OptionSetRenderBlankState(true),
 			progressbar.OptionFullWidth(),
 			progressbar.OptionOnCompletion(func() {
-				_, _ = fmt.Fprintln(os.Stderr)
+				fmt.Fprintln(os.Stderr)
 			}),
 			progressbar.OptionSetDescription("📂 Copying data..."),
 		)
@@ -160,7 +160,7 @@ func handleLogs(ctx context.Context, logCh <-chan string, successCh <-chan struc
 				}
 			}
 
-			if progress.Percentage >= 100 {
+			if progress.Percentage >= 100 { //nolint:mnd
 				return nil
 			}
 		}
