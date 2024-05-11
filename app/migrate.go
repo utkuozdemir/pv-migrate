@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lmittmann/tint"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 
@@ -308,15 +310,16 @@ func buildLogger(flags *flag.FlagSet) (*slog.Logger, error) {
 		return nil, fmt.Errorf("failed to parse log level: %w", err)
 	}
 
-	handlerOpts := &slog.HandlerOptions{
-		Level: level,
-	}
+	writer := os.Stderr
 
 	switch logfmt {
 	case logFormatJSON:
-		handler = slog.NewJSONHandler(os.Stderr, handlerOpts)
+		handler = slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level})
 	case logFormatText, "fancy":
-		handler = slog.NewTextHandler(os.Stderr, handlerOpts)
+		handler = tint.NewHandler(writer, &tint.Options{
+			Level:   level,
+			NoColor: !isatty.IsTerminal(writer.Fd()),
+		})
 	default:
 		return nil, fmt.Errorf("unknown log format: %s", logfmt)
 	}

@@ -48,13 +48,8 @@ const (
 	longDestPvcName = "dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-" +
 		"dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest"
 
-	logConfigCmdline = "--log-level debug --log-format json "
-	netpolsCmdline   = "--helm-set rsync.networkPolicy.enabled=true --helm-set sshd.networkPolicy.enabled=true "
-
-	migrateLegacyCmdline = logConfigCmdline + "migrate " + netpolsCmdline
-
-	migrateWithoutNetpolsCmdline = logConfigCmdline
-	migrateCmdline               = migrateWithoutNetpolsCmdline + netpolsCmdline
+	migrateCmdline       = "--helm-set rsync.networkPolicy.enabled=true --helm-set sshd.networkPolicy.enabled=true"
+	migrateLegacyCmdline = "migrate " + migrateCmdline
 )
 
 var (
@@ -319,7 +314,7 @@ func TestFailWithoutNetworkPolicies(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest", migrateWithoutNetpolsCmdline, ns1, ns2)
+	cmd := fmt.Sprintf("--log-level debug --log-format json -i -n %s -N %s --source source --dest dest", ns1, ns2)
 	require.Error(t, runCliApp(ctx, cmd))
 }
 
