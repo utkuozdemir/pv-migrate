@@ -71,7 +71,7 @@ the data from the old PVC to the new one with the desired StorageClass.
 
 ## Installation
 
-See [INSTALL.md](INSTALL.md) for various installation methods and shell completion configuration.
+See [INSTALL.md](INSTALL.md.gotmpl) for various installation methods and shell completion configuration.
 
 ## Usage
 

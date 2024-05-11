@@ -48,6 +48,7 @@ const (
 	FlagSourceMountReadOnly       = "source-mount-read-only"
 	FlagStrategies                = "strategies"
 	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
+	FlagCompress                  = "compress"
 
 	FlagHelmTimeout   = "helm-timeout"
 	FlagHelmValues    = "helm-values"
@@ -207,6 +208,7 @@ func setMigrateCmdFlags(cmd *cobra.Command, logLevels, logFormats []string, lega
 			"Has no effect for mnt2 and local strategies")
 	flags.Duration(FlagLBSvcTimeout, lbSvcTimeoutDefault, fmt.Sprintf("timeout for the load balancer service to "+
 		"receive an external IP. Only used by the %s strategy", strategy.LbSvcStrategy))
+	flags.Bool(FlagCompress, true, "compress data during migration ('-z' flag of rsync)")
 
 	flags.DurationP(FlagHelmTimeout, "t", 1*time.Minute, "install/uninstall timeout for helm releases")
 	flags.StringSliceP(FlagHelmValues, "f", nil,
@@ -256,6 +258,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 	strs, _ := flags.GetStringSlice(FlagStrategies)
 	destHostOverride, _ := flags.GetString(FlagDestHostOverride)
 	lbSvcTimeout, _ := flags.GetDuration(FlagLBSvcTimeout)
+	compress, _ := flags.GetBool(FlagCompress)
 
 	deleteExtraneousFiles, _ := flags.GetBool(FlagDestDeleteExtraneousFiles)
 	request := migration.Request{
@@ -276,6 +279,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		Strategies:            strs,
 		DestHostOverride:      destHostOverride,
 		LBSvcTimeout:          lbSvcTimeout,
+		Compress:              compress,
 	}
 
 	logger.Info("🚀 Starting migration")

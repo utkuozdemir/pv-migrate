@@ -243,7 +243,7 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -d -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s --compress=false -d -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
