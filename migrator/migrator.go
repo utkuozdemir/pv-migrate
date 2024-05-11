@@ -58,9 +58,9 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 	for _, name := range request.Strategies {
 		attemptID := util.RandomHexadecimalString(attemptIDLength)
 
-		logger = logger.With("attempt_id", attemptID, "strategy", name)
+		attemptLogger := logger.With("attempt_id", attemptID, "strategy", name)
 
-		logger.Info("🚁 Attempt using strategy")
+		attemptLogger.Info("🚁 Attempt using strategy")
 
 		attempt := migration.Attempt{
 			ID:                    attemptID,
@@ -70,20 +70,20 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 
 		s := nameToStrategyMap[name]
 
-		if runErr := s.Run(ctx, &attempt, logger); runErr != nil {
+		if runErr := s.Run(ctx, &attempt, attemptLogger); runErr != nil {
 			if errors.Is(err, strategy.ErrUnaccepted) {
-				logger.Info("🦊 This strategy cannot handle this migration, will try the next one")
+				attemptLogger.Info("🦊 This strategy cannot handle this migration, will try the next one")
 
 				continue
 			}
 
-			logger.Warn("🔶 Migration failed with this strategy, "+
+			attemptLogger.Warn("🔶 Migration failed with this strategy, "+
 				"will try with the remaining strategies", "error", runErr)
 
 			continue
 		}
 
-		logger.Info("✅ Migration succeeded")
+		attemptLogger.Info("✅ Migration succeeded")
 
 		return nil
 	}
