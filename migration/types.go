@@ -34,6 +34,7 @@ type Request struct {
 	Strategies            []string
 	DestHostOverride      string
 	LBSvcTimeout          time.Duration
+	Compress              bool
 }
 
 type Migration struct {

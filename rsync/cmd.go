@@ -20,6 +20,7 @@ type Cmd struct {
 	DestSSHUser string
 	DestSSHHost string
 	DestPath    string
+	Compress    bool
 }
 
 func (c *Cmd) Build() (string, error) {
@@ -43,8 +44,12 @@ func (c *Cmd) Build() (string, error) {
 	sshArgsStr := fmt.Sprintf("\"%s\"", strings.Join(sshArgs, " "))
 
 	rsyncArgs := []string{
-		"-azv", "--info=progress2,misc0,flist0",
+		"-av", "--info=progress2,misc0,flist0",
 		"--no-inc-recursive", "-e", sshArgsStr,
+	}
+
+	if c.Compress {
+		rsyncArgs = append(rsyncArgs, "-z")
 	}
 
 	if c.NoChown {

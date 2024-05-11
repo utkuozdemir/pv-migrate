@@ -120,6 +120,7 @@ func installOnDest(attempt *migration.Attempt, releaseName, privateKey,
 		DestPath:   destPath,
 		SrcUseSSH:  true,
 		SrcSSHHost: sshHost,
+		Compress:   mig.Request.Compress,
 	}
 
 	rsyncCmdStr, err := rsyncCmd.Build()

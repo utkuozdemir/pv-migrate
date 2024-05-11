@@ -87,6 +87,7 @@ func buildHelmVals(mig *migration.Migration, helmReleaseName string, logger *slo
 		DestPath:   destPath,
 		SrcUseSSH:  true,
 		SrcSSHHost: sshTargetHost,
+		Compress:   mig.Request.Compress,
 	}
 
 	rsyncCmdStr, err := rsyncCmd.Build()

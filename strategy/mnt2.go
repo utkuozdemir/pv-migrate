@@ -101,6 +101,7 @@ func buildRsyncCmdMnt2(mig *migration.Migration) (string, error) {
 		Delete:   mig.Request.DeleteExtraneousFiles,
 		SrcPath:  srcPath,
 		DestPath: destPath,
+		Compress: mig.Request.Compress,
 	}
 
 	cmd, err := rsyncCmd.Build()
