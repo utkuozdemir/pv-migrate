@@ -20,6 +20,9 @@ const (
 	bytesTransferredInt64Bits = 64
 )
 
+// CanDisplayProgressBarContextKey is a context key for whether a progress bar can be displayed.
+type CanDisplayProgressBarContextKey struct{}
+
 type Progress struct {
 	Line        string
 	Percentage  int

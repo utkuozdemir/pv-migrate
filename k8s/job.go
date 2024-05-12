@@ -20,8 +20,8 @@ import (
 func WaitForJobCompletion(ctx context.Context, cli kubernetes.Interface,
 	namespace string, name string, progressBarRequested bool, logger *slog.Logger,
 ) (retErr error) {
-	_, usingPlaintextLogger := logger.Handler().(*slog.TextHandler)
-	showProgressBar := progressBarRequested && usingPlaintextLogger
+	canDisplayProgressBar := ctx.Value(progress.CanDisplayProgressBarContextKey{}) != nil
+	showProgressBar := progressBarRequested && canDisplayProgressBar
 	labelSelector := "job-name=" + name
 
 	pod, err := WaitForPod(ctx, cli, namespace, labelSelector)

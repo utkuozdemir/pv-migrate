@@ -105,9 +105,9 @@ func runCmdLocal(ctx context.Context, attempt *migration.Attempt, cmd *exec.Cmd,
 	//nolint:godox
 	go func() { errorCh <- cmd.Run() }() // todo: this is a mess, refactor
 
-	_, usingPlaintextLogger := logger.Handler().(*slog.TextHandler)
+	canDisplayProgressBar := ctx.Value(progress.CanDisplayProgressBarContextKey{}) != nil
 	progressBarRequested := !attempt.Migration.Request.NoProgressBar
-	showProgressBar := progressBarRequested && usingPlaintextLogger
+	showProgressBar := progressBarRequested && canDisplayProgressBar
 
 	progressLogger := progress.NewLogger(progress.LoggerOptions{
 		ShowProgressBar: showProgressBar,

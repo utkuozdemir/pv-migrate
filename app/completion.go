@@ -85,7 +85,7 @@ func buildCompletionCmd() *cobra.Command {
 func buildKubeContextCompletionFunc(kubeconfigFlag string) func(*cobra.Command,
 	[]string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		logger, err := buildLogger(cmd.Flags())
+		logger, _, err := buildLogger(cmd.Flags())
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}
@@ -107,7 +107,7 @@ func buildKubeNSCompletionFunc(ctx context.Context, kubeconfigFlag string,
 	contextFlag string,
 ) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		logger, err := buildLogger(cmd.Flags())
+		logger, _, err := buildLogger(cmd.Flags())
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}
@@ -188,7 +188,7 @@ func buildPVCCompletionFunc(ctx context.Context,
 	isDestPVC bool,
 ) func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 	return func(cmd *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-		logger, err := buildLogger(cmd.Flags())
+		logger, _, err := buildLogger(cmd.Flags())
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}

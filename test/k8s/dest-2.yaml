@@ -25,11 +25,11 @@ spec:
             - echo "generating some files and directories";
               mkdir -p /pv-migrate-test-dest-2/dir1/subdir1;
               mkdir -p /pv-migrate-test-dest-2/dir2;
-              fallocate -l $((50*1024*1024)) /pv-migrate-test-dest-2/d50mb.dat;
-              fallocate -l $((10*1024*1024)) /pv-migrate-test-dest-2/dir1/d10mb.dat;
-              fallocate -l $((20*1024*1024)) /pv-migrate-test-dest-2/dir1/d20mb.dat;
-              fallocate -l $((10*1024*1024)) /pv-migrate-test-dest-2/dir1/subdir1/d10mb.dat;
-              fallocate -l $((10*1024*1024)) /pv-migrate-test-dest-2/dir2/d50mb.dat;
+              dd if=/dev/urandom bs=1M count=50 of=/pv-migrate-test-dest-2/d50mb.dat;
+              dd if=/dev/urandom bs=1M count=10 of=/pv-migrate-test-dest-2/dir1/d10mb.dat;
+              dd if=/dev/urandom bs=1M count=20 of=/pv-migrate-test-dest-2/dir1/d20mb.dat;
+              dd if=/dev/urandom bs=1M count=10 of=/pv-migrate-test-dest-2/dir1/subdir1/d10mb.dat;
+              dd if=/dev/urandom bs=1M count=50 of=/pv-migrate-test-dest-2/dir2/d50mb.dat;
               echo "done";
               tail -f /dev/null;
           volumeMounts:
