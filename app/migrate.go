@@ -15,6 +15,7 @@ import (
 
 	"github.com/utkuozdemir/pv-migrate/migration"
 	"github.com/utkuozdemir/pv-migrate/migrator"
+	"github.com/utkuozdemir/pv-migrate/rsync/progress"
 	"github.com/utkuozdemir/pv-migrate/ssh"
 	"github.com/utkuozdemir/pv-migrate/strategy"
 )
@@ -227,9 +228,15 @@ func setMigrateCmdFlags(cmd *cobra.Command, logLevels, logFormats []string, lega
 func runMigration(cmd *cobra.Command, args []string) error {
 	flags := cmd.Flags()
 
-	logger, err := buildLogger(flags)
+	ctx := cmd.Context()
+
+	logger, canDisplayProgressBar, err := buildLogger(flags)
 	if err != nil {
 		return fmt.Errorf("failed to build logger: %w", err)
+	}
+
+	if canDisplayProgressBar {
+		ctx = context.WithValue(ctx, progress.CanDisplayProgressBarContextKey{}, struct{}{})
 	}
 
 	var src, dest string
@@ -290,14 +297,15 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		logger.Info("❕ Extraneous files will be deleted from the destination")
 	}
 
-	if err := migrator.New().Run(cmd.Context(), &request, logger); err != nil {
+	if err := migrator.New().Run(ctx, &request, logger); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
 	return nil
 }
 
-func buildLogger(flags *flag.FlagSet) (*slog.Logger, error) {
+//nolint:nonamedreturns
+func buildLogger(flags *flag.FlagSet) (logger *slog.Logger, canDisplayProgressBar bool, err error) {
 	loglvl, _ := flags.GetString(FlagLogLevel)
 	logfmt, _ := flags.GetString(FlagLogFormat)
 
@@ -306,8 +314,8 @@ func buildLogger(flags *flag.FlagSet) (*slog.Logger, error) {
 		handler slog.Handler
 	)
 
-	if err := level.UnmarshalText([]byte(loglvl)); err != nil {
-		return nil, fmt.Errorf("failed to parse log level: %w", err)
+	if err = level.UnmarshalText([]byte(loglvl)); err != nil {
+		return nil, false, fmt.Errorf("failed to parse log level: %w", err)
 	}
 
 	writer := os.Stderr
@@ -316,20 +324,24 @@ func buildLogger(flags *flag.FlagSet) (*slog.Logger, error) {
 	case logFormatJSON:
 		handler = slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level})
 	case logFormatText, "fancy":
+		isATTY := isatty.IsTerminal(writer.Fd())
+
+		canDisplayProgressBar = isATTY
+
 		handler = tint.NewHandler(writer, &tint.Options{
 			Level:   level,
-			NoColor: !isatty.IsTerminal(writer.Fd()),
+			NoColor: !isATTY,
 		})
 	default:
-		return nil, fmt.Errorf("unknown log format: %s", logfmt)
+		return nil, false, fmt.Errorf("unknown log format: %s", logfmt)
 	}
 
-	logger := slog.New(handler)
+	logger = slog.New(handler)
 
 	slog.SetLogLoggerLevel(level)
 	slog.SetDefault(logger)
 
-	return logger, nil
+	return logger, canDisplayProgressBar, nil
 }
 
 func buildSrcPVCInfo(flags *flag.FlagSet, name string) *migration.PVCInfo {
