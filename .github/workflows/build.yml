@@ -46,7 +46,7 @@ jobs:
         uses: arduino/setup-task@v2.0.0
         with:
           # renovate: depName=go-task/task datasource=github-releases
-          version: 3.37.1
+          version: 3.37.2
       - name: Tidy go.mod
         run: go mod tidy
       - name: Run linters
@@ -61,7 +61,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v5.1.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v1.25.1
+          version: v1.26.0
           args: build --snapshot --clean --single-target
       - name: Update usage
         run: task update-usage
