@@ -18,9 +18,7 @@ linters-settings:
     sections:
       - standard
       - default
-      - prefix(github.com/utkuozdemir/pv-migrate)
-  goimports:
-    local-prefixes: github.com/utkuozdemir/pv-migrate
+      - localmodule
   goconst:
     min-occurrences: 5
     ignore-tests: true

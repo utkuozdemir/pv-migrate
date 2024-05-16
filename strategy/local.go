@@ -169,7 +169,7 @@ func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
 func (r *Local) installLocalReleases(attempt *migration.Attempt, logger *slog.Logger) (string, string, string, error) {
 	keyAlgorithm := attempt.Migration.Request.KeyAlgorithm
 
-	logger.Info("🔑 Generating SSH key pair","algorithm", keyAlgorithm)
+	logger.Info("🔑 Generating SSH key pair", "algorithm", keyAlgorithm)
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
