@@ -61,10 +61,9 @@ func buildHelmVals(mig *migration.Migration, helmReleaseName string, logger *slo
 	destInfo := mig.DestInfo
 	sourceNs := sourceInfo.Claim.Namespace
 	destNs := destInfo.Claim.Namespace
-
-	logger.Info("🔑 Generating SSH key pair")
-
 	keyAlgorithm := mig.Request.KeyAlgorithm
+
+	logger.Info("🔑 Generating SSH key pair","algorithm", keyAlgorithm)
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
