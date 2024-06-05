@@ -58,10 +58,10 @@ jobs:
           install-mode: goinstall
       - name: Build with Goreleaser
         if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v5.1.0
+        uses: goreleaser/goreleaser-action@v6.0.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v1.26.2
+          version: v2.0.0
           args: build --snapshot --clean --single-target
       - name: Update usage
         run: task update-usage
