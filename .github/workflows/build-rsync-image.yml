@@ -30,7 +30,7 @@ jobs:
           username: utkuozdemir
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build and push
-        uses: docker/build-push-action@v5.3.0
+        uses: docker/build-push-action@v5.4.0
         with:
           context: ./docker/rsync/
           platforms: linux/amd64,linux/arm,linux/arm64
