@@ -5,7 +5,7 @@ go 1.22.5
 
 require (
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/lmittmann/tint v1.0.4
+	github.com/lmittmann/tint v1.0.5
 	github.com/mattn/go-isatty v0.0.20
 	github.com/neilotoole/slogt v1.1.0
 	github.com/schollz/progressbar/v3 v3.14.4
@@ -20,7 +20,7 @@ require (
 	k8s.io/apimachinery v0.30.2
 	k8s.io/cli-runtime v0.30.2
 	k8s.io/client-go v0.30.2
-	k8s.io/utils v0.0.0-20240710235135-d4aae2beeffc
+	k8s.io/utils v0.0.0-20240711033017-18e509b52bc8
 )
 
 require (
