@@ -1,7 +1,7 @@
 module github.com/utkuozdemir/pv-migrate
 
 // renovate: go
-go 1.23.0
+go 1.23.1
 
 require (
 	github.com/hashicorp/go-multierror v1.1.1
