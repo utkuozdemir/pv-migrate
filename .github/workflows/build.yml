@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.0
@@ -68,7 +68,7 @@ jobs:
       - name: Check for dirty files
         run: git diff --exit-code
   test:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4.2.0
