@@ -61,7 +61,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v6.0.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.4.3
+          version: v2.4.4
           args: build --snapshot --clean --single-target
       - name: Update usage
         run: task update-usage
