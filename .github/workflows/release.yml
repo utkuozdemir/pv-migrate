@@ -35,4 +35,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PRIVATE_ACCESS_TOKEN: ${{ secrets.PRIVATE_ACCESS_TOKEN }}
       - name: Update new version in krew-index
-        uses: rajatjindal/krew-release-bot@v0.0.46
+        uses: rajatjindal/krew-release-bot@v0.0.47
