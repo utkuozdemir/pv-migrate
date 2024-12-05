@@ -177,7 +177,7 @@ jobs:
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: richgo test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
       - name: Send coverage
-        uses: codecov/codecov-action@v5.0.7
+        uses: codecov/codecov-action@v5.1.1
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
