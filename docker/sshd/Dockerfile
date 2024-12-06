@@ -1,4 +1,4 @@
-FROM alpine:3.20.3
+FROM alpine:3.21.0
 
 # we unlock the root user for sshd
 # https://github.com/alpinelinux/docker-alpine/issues/28#issuecomment-510510532
