@@ -6,27 +6,9 @@ on:
     branches:
       - master
       - renovate/**
-    paths-ignore:
-      - "**.md"
-      - "img/**"
-      - "test/**"
-      - ".gitignore"
-      - "docker/**"
-      - "helm/**"
-      - "renovate.json"
-      - ".krew.yaml"
   pull_request:
     branches:
       - master
-    paths-ignore:
-      - "**.md"
-      - "img/**"
-      - "test/**"
-      - ".gitignore"
-      - "docker/**"
-      - "helm/**"
-      - "renovate.json"
-      - ".krew.yaml"
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
@@ -80,7 +62,7 @@ jobs:
         # renovate: depName=kyoh86/richgo
         run: go install github.com/kyoh86/richgo@v0.3.12
       - name: Install helm
-        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        uses: azure/setup-helm@v4.2.0
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
