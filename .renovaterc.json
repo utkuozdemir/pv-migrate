@@ -1,6 +1,6 @@
 {
   "extends": [
-    "config:base",
+    "config:recommended",
     ":automergeBranch",
     ":automergeMinor",
     ":automergeDigest",
@@ -26,14 +26,15 @@
       "extends": [
         ":automergeMajor"
       ],
-      "matchPaths": [
+      "matchFileNames": [
         ".github/workflows/**"
       ],
       "groupName": "github actions"
     }
   ],
-  "regexManagers": [
+  "customManagers": [
     {
+      "customType": "regex",
       "fileMatch": [
         "\\.github\\/workflows\\/.*"
       ],
@@ -44,6 +45,7 @@
       "versioningTemplate": "semver"
     },
     {
+      "customType": "regex",
       "fileMatch": [
         "go.mod",
         "\\.github\\/workflows\\/.*"
