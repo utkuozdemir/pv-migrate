@@ -59,6 +59,7 @@ changelog:
   filters:
     exclude:
       - '^build(\(.+\))?:'
+      - '^chore(\(.+\))?:'
       - '^cd(\(.+\))?:'
       - '^ci(\(.+\))?:'
       - '^cicd(\(.+\))?:'
