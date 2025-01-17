@@ -50,7 +50,7 @@ jobs:
       - name: Tidy go.mod
         run: go mod tidy
       - name: Run linters
-        uses: golangci/golangci-lint-action@v6.1.1
+        uses: golangci/golangci-lint-action@v6.2.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
           version: v1.63.4
