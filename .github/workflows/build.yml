@@ -61,7 +61,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v6.1.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.6.0
+          version: v2.6.1
           args: build --snapshot --clean --single-target
       - name: Update usage
         run: task update-usage
@@ -177,7 +177,7 @@ jobs:
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: richgo test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
       - name: Send coverage
-        uses: codecov/codecov-action@v5.1.2
+        uses: codecov/codecov-action@v5.3.0
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
