@@ -2,16 +2,12 @@
 linters:
   enable-all: true
   disable:
-    # not useful
-    - exhaustivestruct # pointless
     - exhaustruct # pointless
-    - gomnd # magic numbers are ok mostly
-    - goerr113 # no need to wrap all errors, too much work
-    # breaking things: https://github.com/atc0005/go-ci/issues/1024
-    - depguard
-    # todo: consider enabling:
-    - testpackage
-    - gochecknoglobals
+    - err113 # no need to wrap all errors, too much work
+    - depguard # breaking things: https://github.com/atc0005/go-ci/issues/1024
+    - gochecknoglobals # globals are sometimes ok
+    - testpackage # todo: consider enabling
+    - exportloopref # irrelevant since Go 1.23
 
 linters-settings:
   gci:

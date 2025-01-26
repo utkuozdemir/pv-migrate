@@ -128,4 +128,5 @@ $ pv-migrate \
   --source old-pvc --dest new-pvc
 ```
 
-**For further customization on the rendered manifests** (custom labels, annotations etc.), see the [Helm chart values](helm/pv-migrate).
+**For further customization on the rendered manifests**
+(custom labels, annotations, etc.), see the [Helm chart values](helm/pv-migrate).

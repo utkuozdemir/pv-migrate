@@ -7,6 +7,13 @@ metadata:
   labels:
     app.kubernetes.io/component: rsync
     {{- include "pv-migrate.labels" . | nindent 4 }}
+    {{- with .Values.rsync.jobLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.rsync.jobAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   backoffLimit: {{ .Values.rsync.backoffLimit }}
   template:
@@ -18,6 +25,9 @@ spec:
       labels:
         app.kubernetes.io/component: rsync
         {{- include "pv-migrate.selectorLabels" . | nindent 8 }}
+        {{- with .Values.rsync.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.rsync.imagePullSecrets }}
       imagePullSecrets:

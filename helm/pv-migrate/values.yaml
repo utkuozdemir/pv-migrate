@@ -24,6 +24,8 @@ sshd:
     name: ""
   # -- SSHD pod annotations
   podAnnotations: {}
+  # -- SSHD pod labels
+  podLabels: {}
   # -- SSHD pod security context
   podSecurityContext: {}
   # -- SSHD deployment security context
@@ -62,6 +64,10 @@ sshd:
   networkPolicy:
     # -- Enable SSHD network policy
     enabled: false
+  # -- SSHD deployment labels
+  deploymentLabels: {}
+  # -- SSHD deployment annotations
+  deploymentAnnotations: {}
 
   # -- Mount a public key into the SSHD pod
   publicKeyMount: true
@@ -109,6 +115,8 @@ rsync:
     name: ""
   # -- Rsync pod annotations
   podAnnotations: {}
+  # -- Rsync pod labels
+  podLabels: {}
   # -- Rsync pod security context
   podSecurityContext: {}
   # -- Rsync deployment security context
@@ -139,6 +147,10 @@ rsync:
   networkPolicy:
     # -- Enable Rsync network policy
     enabled: false
+  # -- Rsync job labels
+  jobLabels: {}
+  # -- Rsync job annotations
+  jobAnnotations: {}
 
   # -- Mount a private key into the Rsync pod
   privateKeyMount: false

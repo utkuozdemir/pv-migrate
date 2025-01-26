@@ -35,6 +35,12 @@ tasks:
         hairyhenderson/gomplate:stable
         --file /project/USAGE.md.gotmpl --out /project/USAGE.md
 
+  update-helm-chart-docs:
+    desc: update helm chart docs
+    dir: helm/pv-migrate
+    cmds:
+      - helm-docs
+
   build:
     desc: build
     cmds:
