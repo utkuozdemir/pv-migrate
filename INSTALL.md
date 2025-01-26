@@ -2,7 +2,7 @@
 
 There are various installation methods for different use cases.
 
-## Using Homebrew (MacOS/Linux)
+## Using Homebrew (macOS/Linux)
 If you have homebrew, the installation is as simple as:
 ```bash
 brew tap utkuozdemir/pv-migrate
@@ -26,14 +26,14 @@ $ kubectl krew update
 $ kubectl krew install pv-migrate
 ```
 
-## By downloading the binaries (MacOS/Linux/Windows)
+## By downloading the binaries (macOS/Linux/Windows)
 
 1. Go to the [releases](https://github.com/utkuozdemir/pv-migrate/releases) and download
    the latest release archive for your platform.
 2. Extract the archive.
 3. Move the binary to somewhere in your `PATH`.
 
-Sample steps for MacOS:
+Sample steps for macOS:
 ```bash
 $ VERSION=<VERSION_TAG>
 $ wget https://github.com/utkuozdemir/pv-migrate/releases/download/${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz

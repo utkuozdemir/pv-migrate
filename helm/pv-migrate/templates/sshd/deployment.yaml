@@ -7,6 +7,13 @@ metadata:
   labels:
     app.kubernetes.io/component: sshd
     {{- include "pv-migrate.labels" . | nindent 4 }}
+    {{- with .Values.sshd.deploymentLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.sshd.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   strategy:
     type: Recreate
@@ -23,6 +30,9 @@ spec:
       labels:
         app.kubernetes.io/component: sshd
         {{- include "pv-migrate.selectorLabels" . | nindent 8 }}
+        {{- with .Values.sshd.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.sshd.imagePullSecrets }}
       imagePullSecrets:

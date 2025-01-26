@@ -20,6 +20,6 @@ annotations:
   artifacthub.io/license: Apache-2.0
   artifacthub.io/images: |
     - name: utkuozdemir/pv-migrate-sshd
-      image: docker.io/utkuozdemir/pv-migrate-sshd:1.0.0
+      image: docker.io/utkuozdemir/pv-migrate-sshd:1.1.0
     - name: utkuozdemir/pv-migrate-rsync
-      image: docker.io/utkuozdemir/pv-migrate-rsync:1.0.0
+      image: docker.io/utkuozdemir/pv-migrate-rsync:1.1.0
