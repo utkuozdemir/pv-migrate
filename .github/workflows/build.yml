@@ -109,7 +109,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 6.4.3
+          METALLB_CHART_VERSION: 6.4.4
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
@@ -177,7 +177,7 @@ jobs:
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: richgo test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
       - name: Send coverage
-        uses: codecov/codecov-action@v5.3.0
+        uses: codecov/codecov-action@v5.3.1
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
