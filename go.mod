@@ -5,7 +5,7 @@ go 1.23.5
 
 require (
 	github.com/hashicorp/go-multierror v1.1.1
-	github.com/lmittmann/tint v1.0.6
+	github.com/lmittmann/tint v1.0.7
 	github.com/mattn/go-isatty v0.0.20
 	github.com/neilotoole/slogt v1.1.0
 	github.com/schollz/progressbar/v3 v3.18.0
