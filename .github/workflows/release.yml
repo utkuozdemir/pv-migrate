@@ -32,10 +32,10 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: GoReleaser
-        uses: goreleaser/goreleaser-action@v6.1.0
+        uses: goreleaser/goreleaser-action@v6.2.1
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.6.1
+          version: v2.7.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
