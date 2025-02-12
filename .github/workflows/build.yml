@@ -54,7 +54,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6.3.2
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v1.64.2
+          version: v1.64.4
           args: --timeout=10m0s
           install-mode: goinstall
       - name: Build with Goreleaser
@@ -110,7 +110,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 6.4.5
+          METALLB_CHART_VERSION: 6.4.6
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
