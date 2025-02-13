@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
+	"github.com/neilotoole/slogt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
@@ -75,42 +76,33 @@ var (
 		"pv-migrate-test": "true",
 	}
 
-	ErrPodExecStderr          = errors.New("pod exec stderr")
-	ErrUnexpectedTypePVCWatch = errors.New("unexpected type while watching PVC")
-	ErrUnexpectedTypePodWatch = errors.New("unexpected type while watching pod")
+	ErrPodExecStderr = errors.New("pod exec stderr")
 )
 
-// todo: replace with a test suite? then we can also use slogt.New(t) for logging
-func TestMain(m *testing.M) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+func TestIntegration(t *testing.T) {
+	logger := slogt.New(t)
 
-	logger := slog.Default()
+	setup(t, logger)
+	teardownOnCleanup(t, logger)
 
-	if err := setup(ctx, logger); err != nil {
-		if teardownErr := teardown(ctx); teardownErr != nil {
-			logger.Error("failed to tearddown after test context init failure", "error", teardownErr)
-		}
-
-		logger.Error("failed to setup test context", "error", err)
-
-		os.Exit(1)
-	}
-
-	code := m.Run()
-
-	if err := teardown(ctx); err != nil {
-		logger.Error("failed to teardown after tests", "error", err)
-	}
-
-	os.Exit(code)
+	t.Run("SameNS", testSameNS)
+	t.Run("CustomRsyncArgs", testCustomRsyncArgs)
+	t.Run("SameNSLbSvc", testSameNSLbSvc)
+	t.Run("NoChown", testNoChown)
+	t.Run("DeleteExtraneousFiles", testDeleteExtraneousFiles)
+	t.Run("MountedError", testMountedError)
+	t.Run("DifferentNS", testDifferentNS)
+	t.Run("FailWithoutNetworkPolicies", testFailWithoutNetworkPolicies)
+	t.Run("LbSvcDestHostOverride", testLbSvcDestHostOverride)
+	t.Run("RSA", testRSA)
+	t.Run("DifferentCluster", testDifferentCluster)
+	t.Run("Local", testLocal)
+	t.Run("LongPVCNames", testLongPVCNames)
 }
 
-func TestSameNS(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testSameNS(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
@@ -137,11 +129,9 @@ func TestSameNS(t *testing.T) {
 }
 
 // TestCustomRsyncArgs is the same as TestSameNS except it also passes custom args to rsync.
-func TestCustomRsyncArgs(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testCustomRsyncArgs(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
@@ -169,11 +159,9 @@ func TestCustomRsyncArgs(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestSameNSLbSvc(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testSameNSLbSvc(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
@@ -199,11 +187,9 @@ func TestSameNSLbSvc(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestNoChown(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testNoChown(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
@@ -229,11 +215,9 @@ func TestNoChown(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestDeleteExtraneousFiles(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testDeleteExtraneousFiles(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
@@ -260,26 +244,21 @@ func TestDeleteExtraneousFiles(t *testing.T) {
 	assert.Contains(t, err.Error(), "No such file or directory")
 }
 
-func TestMountedError(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testMountedError(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
 	err = runCliApp(ctx, cmd)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "ignore-mounted is not requested")
+	assert.ErrorContains(t, err, "ignore-mounted is not requested")
 }
 
-func TestDifferentNS(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testDifferentNS(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
@@ -305,24 +284,28 @@ func TestDifferentNS(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestFailWithoutNetworkPolicies(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+// testFailWithoutNetworkPolicies tests that the migration fails if network policies are not enabled.
+//
+// For this test to work as expected, the cluster MUST use a CNI with NetworkPolicy support,
+// AND it must be configured to block traffic across namespaces by default (unless an allowing NetworkPolicy is present).
+//
+// For example, Cilium with "policyEnforcementMode=always" (what we do in CI) meets these requirements:
+// See: https://docs.cilium.io/en/stable/security/network/policyenforcement/
+func testFailWithoutNetworkPolicies(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("--log-level debug --log-format json -i -n %s -N %s --source source --dest dest", ns1, ns2)
-	require.Error(t, runCliApp(ctx, cmd))
+	require.Error(t, runCliApp(ctx, cmd), "migration was expected to have failed without NetworkPolicies - "+
+		"does the cluster have a CNI that supports them and it is configured to enforce them?")
 }
 
-func TestLbSvcDestHostOverride(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testLbSvcDestHostOverride(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	svcName := "alternative-svc"
 	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(context.Background(),
@@ -373,11 +356,9 @@ func TestLbSvcDestHostOverride(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestRSA(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testRSA(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
@@ -403,11 +384,9 @@ func TestRSA(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestDifferentCluster(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testDifferentCluster(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
@@ -434,11 +413,9 @@ func TestDifferentCluster(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestLocal(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
-	require.NoError(t, clearDests(ctx))
+func testLocal(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
@@ -465,9 +442,9 @@ func TestLocal(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestLongPVCNames(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+func testLongPVCNames(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "long-dest", clearDataShellCommand)
 	require.NoError(t, err)
@@ -491,25 +468,23 @@ func TestLongPVCNames(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 }
 
-func setup(ctx context.Context, logger *slog.Logger) error {
-	homeDir, err := userHomeDir()
-	if err != nil {
-		return err
-	}
+func setup(t *testing.T, logger *slog.Logger) {
+	logger.Info("set up integration tests")
+
+	usr, err := user.Current()
+	require.NoError(t, err)
+
+	homeDir := usr.HomeDir
 
 	extraClusterKubeconfig = env.GetString("PVMIG_TEST_EXTRA_KUBECONFIG", homeDir+"/.kube/config")
 
 	mainCli, err := k8s.GetClusterClient("", "", logger)
-	if err != nil {
-		return fmt.Errorf("failed to get main cluster client: %w", err)
-	}
+	require.NoError(t, err)
 
 	mainClusterCli = mainCli
 
 	extraCli, err := k8s.GetClusterClient(extraClusterKubeconfig, "", logger)
-	if err != nil {
-		return fmt.Errorf("failed to get extra cluster client: %w", err)
-	}
+	require.NoError(t, err)
 
 	extraClusterCli = extraCli
 
@@ -521,188 +496,58 @@ func setup(ctx context.Context, logger *slog.Logger) error {
 	ns2 = "pv-migrate-test-2-" + util.RandomHexadecimalString(5)
 	ns3 = "pv-migrate-test-3-" + util.RandomHexadecimalString(5)
 
-	err = setupNSs(ctx)
-	if err != nil {
-		return err
-	}
+	createNS(t, mainClusterCli, ns1)
+	createNS(t, mainClusterCli, ns2)
+	createNS(t, extraClusterCli, ns3)
 
-	err = setupPVCs(ctx)
-	if err != nil {
-		return err
-	}
+	createPVC(t, mainClusterCli, ns1, longSourcePvcName)
+	createPVC(t, mainClusterCli, ns1, longDestPvcName)
+	createPVC(t, mainClusterCli, ns1, "source")
+	createPVC(t, mainClusterCli, ns1, "dest")
+	createPVC(t, mainClusterCli, ns2, "dest")
+	createPVC(t, extraClusterCli, ns3, "dest")
 
-	err = setupPods(ctx)
-	if err != nil {
-		return err
-	}
+	createPod(t, mainClusterCli, ns1, "long-source", longSourcePvcName)
+	createPod(t, mainClusterCli, ns1, "long-dest", longDestPvcName)
+	createPod(t, mainClusterCli, ns1, "source", "source")
+	createPod(t, mainClusterCli, ns1, "dest", "dest")
+	createPod(t, mainClusterCli, ns2, "dest", "dest")
+	createPod(t, extraClusterCli, ns3, "dest", "dest")
 
-	err = setupWaitForPVCs()
-	if err != nil {
-		return err
-	}
+	waitUntilPodIsRunning(t, mainClusterCli, ns1, "long-source")
+	waitUntilPodIsRunning(t, mainClusterCli, ns1, "long-dest")
+	waitUntilPodIsRunning(t, mainClusterCli, ns1, "source")
+	waitUntilPodIsRunning(t, mainClusterCli, ns1, "dest")
+	waitUntilPodIsRunning(t, mainClusterCli, ns2, "dest")
+	waitUntilPodIsRunning(t, extraClusterCli, ns3, "dest")
 
-	err = setupWaitForPods()
-	if err != nil {
-		return err
-	}
+	ctx := t.Context()
+
+	_, err = execInPod(ctx, mainClusterCli, ns1, "long-source", generateDataShellCommand)
+	require.NoError(t, err)
 
 	_, err = execInPod(ctx, mainClusterCli, ns1, "source", generateDataShellCommand)
+	require.NoError(t, err)
 
-	return err
+	logger.Info("set up integration tests done")
 }
 
-func setupNSs(ctx context.Context) error {
-	if err := createNS(ctx, mainClusterCli, ns1); err != nil {
-		return err
-	}
+func teardownOnCleanup(t *testing.T, logger *slog.Logger) {
+	t.Cleanup(func() {
+		logger.Info("tear down integration tests")
 
-	if err := createNS(ctx, mainClusterCli, ns2); err != nil {
-		return err
-	}
+		teardownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
 
-	return createNS(ctx, extraClusterCli, ns3)
+		deleteNS(teardownCtx, t, mainClusterCli, ns1)
+		deleteNS(teardownCtx, t, mainClusterCli, ns2)
+		deleteNS(teardownCtx, t, extraClusterCli, ns3)
+
+		logger.Info("tear down integration tests done")
+	})
 }
 
-func setupWaitForPVCs() error {
-	err := waitUntilPVCIsBound(mainClusterCli, ns1, "source")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(mainClusterCli, ns1, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPVCIsBound(mainClusterCli, ns2, "dest")
-	if err != nil {
-		return err
-	}
-
-	return waitUntilPVCIsBound(extraClusterCli, ns3, "dest")
-}
-
-func setupWaitForPods() error {
-	err := waitUntilPodIsRunning(mainClusterCli, ns1, "source")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(mainClusterCli, ns1, "dest")
-	if err != nil {
-		return err
-	}
-
-	err = waitUntilPodIsRunning(mainClusterCli, ns2, "dest")
-	if err != nil {
-		return err
-	}
-
-	return waitUntilPodIsRunning(extraClusterCli, ns3, "dest")
-}
-
-func setupPods(ctx context.Context) error {
-	if err := createPod(ctx, mainClusterCli, ns1, "source", "source"); err != nil {
-		return err
-	}
-
-	if err := createPod(ctx, mainClusterCli, ns1, "dest", "dest"); err != nil {
-		return err
-	}
-
-	if err := createPod(ctx, mainClusterCli, ns2, "dest", "dest"); err != nil {
-		return err
-	}
-
-	return createPod(ctx, extraClusterCli, ns3, "dest", "dest")
-}
-
-func setupPVCs(ctx context.Context) error {
-	err := setupPVCsWithLongName(ctx)
-	if err != nil {
-		return err
-	}
-
-	if err = createPVC(ctx, mainClusterCli, ns1, "source"); err != nil {
-		return err
-	}
-
-	if err = createPVC(ctx, mainClusterCli, ns1, "dest"); err != nil {
-		return err
-	}
-
-	if err = createPVC(ctx, mainClusterCli, ns2, "dest"); err != nil {
-		return err
-	}
-
-	return createPVC(ctx, extraClusterCli, ns3, "dest")
-}
-
-func setupPVCsWithLongName(ctx context.Context) error {
-	if err := createPVC(ctx, mainClusterCli, ns1, longSourcePvcName); err != nil {
-		return err
-	}
-
-	if err := createPVC(ctx, mainClusterCli, ns1, longDestPvcName); err != nil {
-		return err
-	}
-
-	if err := createPod(ctx, mainClusterCli, ns1, "long-source", longSourcePvcName); err != nil {
-		return err
-	}
-
-	if err := createPod(ctx, mainClusterCli, ns1, "long-dest", longDestPvcName); err != nil {
-		return err
-	}
-
-	if err := waitUntilPodIsRunning(mainClusterCli, ns1, "long-source"); err != nil {
-		return err
-	}
-
-	if err := waitUntilPodIsRunning(mainClusterCli, ns1, "long-dest"); err != nil {
-		return err
-	}
-
-	_, err := execInPod(ctx, mainClusterCli, ns1, "long-source", generateDataShellCommand)
-
-	return err
-}
-
-func teardown(ctx context.Context) error {
-	var result *multierror.Error
-
-	err := deleteNS(ctx, mainClusterCli, ns1)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-
-	err = deleteNS(ctx, mainClusterCli, ns2)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-
-	err = deleteNS(ctx, extraClusterCli, ns3)
-	if err != nil {
-		result = multierror.Append(result, err)
-	}
-
-	if err = result.ErrorOrNil(); err != nil {
-		return fmt.Errorf("failed to teardown: %w", err)
-	}
-
-	return nil
-}
-
-func userHomeDir() (string, error) {
-	usr, err := user.Current()
-	if err != nil {
-		return "", fmt.Errorf("failed to get current user: %w", err)
-	}
-
-	return usr.HomeDir, nil
-}
-
-func createPod(ctx context.Context, cli *k8s.ClusterClient, namespace string, name string, pvc string) error {
+func createPod(t *testing.T, cli *k8s.ClusterClient, namespace string, name string, pvc string) {
 	terminationGracePeriodSeconds := int64(0)
 	pod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -738,15 +583,13 @@ func createPod(ctx context.Context, cli *k8s.ClusterClient, namespace string, na
 		},
 	}
 
-	if _, err := cli.KubeClient.CoreV1().
-		Pods(namespace).Create(ctx, &pod, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("failed to create pod %s: %w", name, err)
-	}
+	ctx := t.Context()
 
-	return nil
+	_, err := cli.KubeClient.CoreV1().Pods(namespace).Create(ctx, &pod, metav1.CreateOptions{})
+	require.NoError(t, err)
 }
 
-func createPVC(ctx context.Context, cli *k8s.ClusterClient, namespace string, name string) error {
+func createPVC(t *testing.T, cli *k8s.ClusterClient, namespace string, name string) {
 	var storageClassRef *string
 
 	storageClass := os.Getenv("PVMIG_TEST_STORAGE_CLASS")
@@ -773,27 +616,23 @@ func createPVC(ctx context.Context, cli *k8s.ClusterClient, namespace string, na
 		},
 	}
 
-	if _, err := cli.KubeClient.CoreV1().PersistentVolumeClaims(namespace).
-		Create(ctx, &pvc, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("failed to create PVC: %w", err)
-	}
-
-	return nil
+	_, err := cli.KubeClient.CoreV1().PersistentVolumeClaims(namespace).Create(t.Context(), &pvc, metav1.CreateOptions{})
+	require.NoError(t, err)
 }
 
 //nolint:dupl
-func waitUntilPodIsRunning(cli *k8s.ClusterClient, namespace string, name string) error {
+func waitUntilPodIsRunning(t *testing.T, cli *k8s.ClusterClient, namespace string, name string) {
 	resCli := cli.KubeClient.CoreV1().Pods(namespace)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Minute)
 	defer cancel()
 
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
 
-			list, err := resCli.List(ctx, options)
+			list, err := resCli.List(t.Context(), options)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list pods: %w", err)
 			}
@@ -812,65 +651,14 @@ func waitUntilPodIsRunning(cli *k8s.ClusterClient, namespace string, name string
 		},
 	}
 
-	if _, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
+	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
-			if !ok {
-				return false, fmt.Errorf("%w: %s/%s", ErrUnexpectedTypePodWatch, namespace, name)
-			}
+			require.Truef(t, ok, "unexpected type while watching pod %T: %s/%s", event.Object, namespace, name)
 
 			return res.Status.Phase == corev1.PodRunning, nil
-		}); err != nil {
-		return fmt.Errorf("failed to wait until pod is running: %w", err)
-	}
-
-	return nil
-}
-
-//nolint:dupl
-func waitUntilPVCIsBound(cli *k8s.ClusterClient, namespace string, name string) error {
-	resCli := cli.KubeClient.CoreV1().PersistentVolumeClaims(namespace)
-	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-	defer cancel()
-
-	listWatch := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-			options.FieldSelector = fieldSelector
-
-			list, err := resCli.List(ctx, options)
-			if err != nil {
-				return nil, fmt.Errorf("failed to list PVC: %w", err)
-			}
-
-			return list, nil
-		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-			options.FieldSelector = fieldSelector
-
-			cliWatch, err := resCli.Watch(ctx, options)
-			if err != nil {
-				return nil, fmt.Errorf("failed to watch PVC: %w", err)
-			}
-
-			return cliWatch, nil
-		},
-	}
-
-	if _, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.PersistentVolumeClaim{}, nil,
-		func(event watch.Event) (bool, error) {
-			res, ok := event.Object.(*corev1.PersistentVolumeClaim)
-			if !ok {
-				return false, fmt.Errorf("%w: %s/%s", ErrUnexpectedTypePVCWatch, namespace, name)
-			}
-
-			return res.Status.Phase == corev1.ClaimBound, nil
-		}); err != nil {
-		return fmt.Errorf("failed to wait until PVC is bound: %w", err)
-	}
-
-	return nil
+		})
+	require.NoError(t, err)
 }
 
 func execInPod(ctx context.Context, cli *k8s.ClusterClient, ns string, name string, cmd string) (string, error) {
@@ -878,17 +666,14 @@ func execInPod(ctx context.Context, cli *k8s.ClusterClient, ns string, name stri
 	stderrBuffer := new(bytes.Buffer)
 
 	req := cli.KubeClient.CoreV1().RESTClient().Post().Resource("pods").
-		Name(name).Namespace(ns).SubResource("exec")
-	option := &corev1.PodExecOptions{
-		Command: []string{"sh", "-c", cmd},
-		Stdin:   false,
-		Stdout:  true,
-		Stderr:  true,
-		TTY:     false,
-	}
-
-	req.VersionedParams(
-		option,
+		Name(name).Namespace(ns).SubResource("exec").VersionedParams(
+		&corev1.PodExecOptions{
+			Command: []string{"sh", "-c", cmd},
+			Stdin:   false,
+			Stdout:  true,
+			Stderr:  true,
+			TTY:     false,
+		},
 		scheme.ParameterCodec,
 	)
 
@@ -923,44 +708,36 @@ func execInPod(ctx context.Context, cli *k8s.ClusterClient, ns string, name stri
 	return stdout, nil
 }
 
-func clearDests(ctx context.Context) error {
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", clearDataShellCommand)
-	if err != nil {
-		return err
-	}
+func clearDestsOnCleanup(t *testing.T) {
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
 
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", clearDataShellCommand)
-	if err != nil {
-		return err
-	}
+		_, err := execInPod(cleanupCtx, mainClusterCli, ns1, "dest", clearDataShellCommand)
+		require.NoError(t, err)
 
-	_, err = execInPod(ctx, extraClusterCli, ns3, "dest", clearDataShellCommand)
+		_, err = execInPod(cleanupCtx, mainClusterCli, ns2, "dest", clearDataShellCommand)
+		require.NoError(t, err)
 
-	return err
+		_, err = execInPod(cleanupCtx, extraClusterCli, ns3, "dest", clearDataShellCommand)
+		require.NoError(t, err)
+	})
 }
 
-func createNS(ctx context.Context, cli *k8s.ClusterClient, name string) error {
-	if _, err := cli.KubeClient.CoreV1().
-		Namespaces().Create(ctx, &corev1.Namespace{
+func createNS(t *testing.T, cli *k8s.ClusterClient, name string) {
+	_, err := cli.KubeClient.CoreV1().
+		Namespaces().Create(t.Context(), &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:   name,
 			Labels: resourceLabels,
 		},
-	}, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("failed to create namespace %s: %w", name, err)
-	}
-
-	return nil
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
 }
 
-func deleteNS(ctx context.Context, cli *k8s.ClusterClient, name string) error {
+func deleteNS(ctx context.Context, t *testing.T, cli *k8s.ClusterClient, name string) {
 	namespaces := cli.KubeClient.CoreV1().Namespaces()
-
-	if err := namespaces.Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
-		return fmt.Errorf("failed to delete namespace %s: %w", name, err)
-	}
-
-	return nil
+	require.NoError(t, namespaces.Delete(ctx, name, metav1.DeleteOptions{}))
 }
 
 func runCliApp(ctx context.Context, cmd string) error {

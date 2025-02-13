@@ -6,7 +6,6 @@
 package pvc_test
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,12 +22,10 @@ import (
 func TestNew(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
 	t.Run("should have required affinity when only RWO is supported", func(t *testing.T) {
 		t.Parallel()
 
+		ctx := t.Context()
 		clusterClient := buildClusterClient("node-2", corev1.ReadWriteOnce)
 
 		pvcInfo, err := pvc.New(ctx, clusterClient, "testns", "test")
@@ -63,6 +60,7 @@ func TestNew(t *testing.T) {
 	t.Run("should have preferred affinity if it supports ROX", func(t *testing.T) {
 		t.Parallel()
 
+		ctx := t.Context()
 		clusterClient := buildClusterClient("node-2", corev1.ReadWriteOnce, corev1.ReadOnlyMany)
 
 		pvcInfo, err := pvc.New(ctx, clusterClient, "testns", "test")
@@ -98,6 +96,7 @@ func TestNew(t *testing.T) {
 	t.Run("ReadWriteOncePod with mounting pod is not supported", func(t *testing.T) {
 		t.Parallel()
 
+		ctx := t.Context()
 		clusterClient := buildClusterClient("node-2", corev1.ReadWriteOncePod)
 
 		_, err := pvc.New(ctx, clusterClient, "testns", "test")
@@ -107,6 +106,7 @@ func TestNew(t *testing.T) {
 	t.Run("ReadWriteOncePod with no mounting pod is supported", func(t *testing.T) {
 		t.Parallel()
 
+		ctx := t.Context()
 		clusterClient := buildClusterClient("", corev1.ReadWriteOncePod)
 
 		pvcInfo, err := pvc.New(ctx, clusterClient, "testns", "test")

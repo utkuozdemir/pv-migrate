@@ -7,7 +7,7 @@ linters:
     - depguard # breaking things: https://github.com/atc0005/go-ci/issues/1024
     - gochecknoglobals # globals are sometimes ok
     - testpackage # todo: consider enabling
-    - exportloopref # irrelevant since Go 1.23
+    - tenv # replaced by usetesting
 
 linters-settings:
   gci:

@@ -1,4 +1,3 @@
-//nolint:dupl
 package strategy
 
 import (
@@ -15,7 +14,7 @@ import (
 func TestSvcCanDoSameCluster(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
 	sourceNS := "namespace1"
