@@ -32,8 +32,7 @@ const (
 func TestBuildTask(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	logger := slogt.New(t)
 
@@ -62,9 +61,7 @@ func TestBuildTask(t *testing.T) {
 func TestBuildTaskMounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
-
+	ctx := t.Context()
 	logger := slogt.New(t)
 
 	m := Migrator{getKubeClient: fakeClusterClientGetter()}
@@ -77,8 +74,7 @@ func TestBuildTaskMounted(t *testing.T) {
 func TestRunStrategiesInOrder(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	logger := slogt.New(t)
 

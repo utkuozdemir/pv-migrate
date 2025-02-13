@@ -2,7 +2,6 @@
 package strategy
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,8 +18,7 @@ import (
 func TestCanDoSameNode(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -55,8 +53,7 @@ func TestCanDoSameNode(t *testing.T) {
 func TestCanDoSourceUnmounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -91,8 +88,7 @@ func TestCanDoSourceUnmounted(t *testing.T) {
 func TestCanDoDestUnmounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -127,8 +123,7 @@ func TestCanDoDestUnmounted(t *testing.T) {
 func TestCanDoBothUnmounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -163,8 +158,7 @@ func TestCanDoBothUnmounted(t *testing.T) {
 func TestCanDoDestRWX(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -199,8 +193,7 @@ func TestCanDoDestRWX(t *testing.T) {
 func TestCanDoSourceROX(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -235,8 +228,7 @@ func TestCanDoSourceROX(t *testing.T) {
 func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -271,8 +263,7 @@ func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -308,8 +299,7 @@ func TestMnt2CannotDoDifferentCluster(t *testing.T) {
 func TestDetermineTargetNodeROXToRWO(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -343,8 +333,7 @@ func TestDetermineTargetNodeROXToRWO(t *testing.T) {
 func TestDetermineTargetNodeROXToRWOSourceUnmounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -378,8 +367,7 @@ func TestDetermineTargetNodeROXToRWOSourceUnmounted(t *testing.T) {
 func TestDetermineTargetNodeROXToRWODestUnmounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -413,8 +401,7 @@ func TestDetermineTargetNodeROXToRWODestUnmounted(t *testing.T) {
 func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -448,8 +435,7 @@ func TestDetermineTargetNodeRWOToRWX(t *testing.T) {
 func TestDetermineTargetNodeRWOToRWXSourceUnmounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -483,8 +469,7 @@ func TestDetermineTargetNodeRWOToRWXSourceUnmounted(t *testing.T) {
 func TestDetermineTargetNodeRWOToRWXDestUnmounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -518,8 +503,7 @@ func TestDetermineTargetNodeRWOToRWXDestUnmounted(t *testing.T) {
 func TestDetermineTargetNodeSourceUnmounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
@@ -553,8 +537,7 @@ func TestDetermineTargetNodeSourceUnmounted(t *testing.T) {
 func TestDetermineTargetNodeDestUnmounted(t *testing.T) {
 	t.Parallel()
 
-	ctx, cancel := context.WithCancel(context.Background())
-	t.Cleanup(cancel)
+	ctx := t.Context()
 
 	sourceNS := "namespace1"
 	sourcePVC := "pvc1"
