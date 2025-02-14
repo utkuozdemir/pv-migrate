@@ -51,10 +51,10 @@ jobs:
       - name: Tidy go.mod
         run: go mod tidy
       - name: Run linters
-        uses: golangci/golangci-lint-action@v6.3.3
+        uses: golangci/golangci-lint-action@v6.4.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v1.64.4
+          version: v1.64.5
           args: --timeout=10m0s
           install-mode: goinstall
       - name: Build with Goreleaser
