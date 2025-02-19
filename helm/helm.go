@@ -58,6 +58,9 @@ func chartAsBufferedFiles() ([]*loader.BufferedFile, error) {
 			return fmt.Errorf("failed to relativize path %q: %w", path, err)
 		}
 
+		// fix for Windows - the Helm client library expects templates to be under "templates/", i.e., with forward-slash
+		relativePath = filepath.ToSlash(relativePath)
+
 		files = append(files, &loader.BufferedFile{
 			Name: relativePath,
 			Data: data,

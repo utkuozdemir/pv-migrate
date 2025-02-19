@@ -13,7 +13,6 @@ on:
       - "test/**"
       - ".gitignore"
       - "docker/**"
-      - "helm/**"
       - "renovate.json"
       - ".krew.yaml"
   pull_request:
@@ -25,7 +24,6 @@ on:
       - "test/**"
       - ".gitignore"
       - "docker/**"
-      - "helm/**"
       - "renovate.json"
       - ".krew.yaml"
 
