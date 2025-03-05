@@ -69,7 +69,7 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 		s := nameToStrategyMap[name]
 
 		if runErr := s.Run(ctx, &attempt, attemptLogger); runErr != nil {
-			if errors.Is(err, strategy.ErrUnaccepted) {
+			if errors.Is(runErr, strategy.ErrUnaccepted) {
 				attemptLogger.Info("🦊 This strategy cannot handle this migration, will try the next one")
 
 				continue
