@@ -45,7 +45,7 @@ jobs:
         uses: arduino/setup-task@v2.0.0
         with:
           # renovate: depName=go-task/task datasource=github-releases
-          version: 3.41.0
+          version: 3.42.0
       - name: Tidy go.mod
         run: go mod tidy
       - name: Run linters
