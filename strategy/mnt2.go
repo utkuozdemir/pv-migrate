@@ -29,7 +29,8 @@ func (r *Mnt2) canDo(t *migration.Migration) bool {
 	sameNode := sourceInfo.MountedNode == destInfo.MountedNode
 	oneUnmounted := sourceInfo.MountedNode == "" || destInfo.MountedNode == ""
 
-	return sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX || destInfo.SupportsRWX
+	return sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX ||
+		destInfo.SupportsRWX
 }
 
 func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {

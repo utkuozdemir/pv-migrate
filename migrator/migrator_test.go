@@ -127,7 +127,10 @@ func buildMigration(ignoreMounted bool) *migration.Request {
 	return buildMigrationRequestWithStrategies(strategy.DefaultStrategies, ignoreMounted)
 }
 
-func buildMigrationRequestWithStrategies(strategies []string, ignoreMounted bool) *migration.Request {
+func buildMigrationRequestWithStrategies(
+	strategies []string,
+	ignoreMounted bool,
+) *migration.Request {
 	return &migration.Request{
 		Source: &migration.PVCInfo{
 			Namespace: sourceNS,

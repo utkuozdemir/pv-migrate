@@ -19,7 +19,11 @@ const (
 	podWatchTimeout = 2 * time.Minute
 )
 
-func WaitForPod(ctx context.Context, cli kubernetes.Interface, namespace, labelSelector string) (*corev1.Pod, error) {
+func WaitForPod(
+	ctx context.Context,
+	cli kubernetes.Interface,
+	namespace, labelSelector string,
+) (*corev1.Pod, error) {
 	var result *corev1.Pod
 
 	resCli := cli.CoreV1().Pods(namespace)

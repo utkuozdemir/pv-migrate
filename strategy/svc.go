@@ -55,8 +55,13 @@ func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.
 	return nil
 }
 
+//
 //nolint:funlen
-func buildHelmVals(mig *migration.Migration, helmReleaseName string, logger *slog.Logger) (map[string]any, error) {
+func buildHelmVals(
+	mig *migration.Migration,
+	helmReleaseName string,
+	logger *slog.Logger,
+) (map[string]any, error) {
 	sourceInfo := mig.SourceInfo
 	destInfo := mig.DestInfo
 	sourceNs := sourceInfo.Claim.Namespace

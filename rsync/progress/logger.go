@@ -110,7 +110,7 @@ func tailLogs(ctx context.Context, stream io.Reader, logCh chan<- string) error 
 	}
 }
 
-//nolint:cyclop
+//nolint:cyclop,funlen
 func handleLogs(ctx context.Context, logCh <-chan string, successCh <-chan struct{},
 	showProgressBar bool, logger *slog.Logger,
 ) error {
@@ -152,8 +152,19 @@ func handleLogs(ctx context.Context, logCh <-chan string, successCh <-chan struc
 			}
 
 			if !showProgressBar {
-				logger.Debug(logLine, slog.String("source", "rsync"), slog.Group("progress", "transferred",
-					progress.Transferred, "total", progress.Total, "percentage", progress.Percentage))
+				logger.Debug(
+					logLine,
+					slog.String("source", "rsync"),
+					slog.Group(
+						"progress",
+						"transferred",
+						progress.Transferred,
+						"total",
+						progress.Total,
+						"percentage",
+						progress.Percentage,
+					),
+				)
 			} else {
 				if err = updateProgressBar(progressBar, progress.Transferred, progress.Total); err != nil {
 					logger.Warn("failed to update progress bar", "error", err, "progress", progress)

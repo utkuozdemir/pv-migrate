@@ -14,6 +14,7 @@ import (
 
 type LbSvc struct{}
 
+//nolint:funlen
 func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 
@@ -47,7 +48,13 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	sourceKubeClient := attempt.Migration.SourceInfo.ClusterClient.KubeClient
 	svcName := srcReleaseName + "-sshd"
 
-	lbSvcAddress, err := k8s.GetServiceAddress(ctx, sourceKubeClient, sourceNs, svcName, mig.Request.LBSvcTimeout)
+	lbSvcAddress, err := k8s.GetServiceAddress(
+		ctx,
+		sourceKubeClient,
+		sourceNs,
+		svcName,
+		mig.Request.LBSvcTimeout,
+	)
 	if err != nil {
 		return fmt.Errorf("failed to get service address: %w", err)
 	}

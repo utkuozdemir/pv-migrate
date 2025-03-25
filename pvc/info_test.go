@@ -112,11 +112,14 @@ func TestNew(t *testing.T) {
 		pvcInfo, err := pvc.New(ctx, clusterClient, "testns", "test")
 		require.NoError(t, err)
 
-		assert.Equal(t, "", pvcInfo.MountedNode)
+		assert.Empty(t, pvcInfo.MountedNode)
 	})
 }
 
-func buildClusterClient(mountingNode string, pvcAccessModes ...corev1.PersistentVolumeAccessMode) *k8s.ClusterClient {
+func buildClusterClient(
+	mountingNode string,
+	pvcAccessModes ...corev1.PersistentVolumeAccessMode,
+) *k8s.ClusterClient {
 	testPVC := &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "test",

@@ -66,7 +66,7 @@ func TestBuildK8sConfig(t *testing.T) {
 	assert.NotNil(t, config)
 	config, _, namespace, err = buildK8sConfig(conf, "context-nonexistent", logger)
 	assert.Nil(t, config)
-	assert.Equal(t, "", namespace)
+	assert.Empty(t, namespace)
 	require.Error(t, err)
 }
 

@@ -73,7 +73,11 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func registerCleanupHook(attempt *migration.Attempt, releaseNames []string, logger *slog.Logger) chan<- bool {
+func registerCleanupHook(
+	attempt *migration.Attempt,
+	releaseNames []string,
+	logger *slog.Logger,
+) chan<- bool {
 	doneCh := make(chan bool)
 	signalCh := make(chan os.Signal, 1)
 
@@ -173,7 +177,10 @@ func initHelmActionConfig(pvcInfo *pvc.Info, logger *slog.Logger) (*action.Confi
 	return actionConfig, nil
 }
 
-func getMergedHelmValues(helmValuesFile string, request *migration.Request) (map[string]any, error) {
+func getMergedHelmValues(
+	helmValuesFile string,
+	request *migration.Request,
+) (map[string]any, error) {
 	allValuesFiles := append([]string{helmValuesFile}, request.HelmValuesFiles...)
 	valsOptions := values.Options{
 		Values:       request.HelmValues,

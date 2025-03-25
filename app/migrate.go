@@ -66,7 +66,12 @@ var completionFuncNoFileComplete = func(*cobra.Command, []string, string) ([]str
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
-func BuildMigrateCmd(ctx context.Context, version, commit, date string, legacy bool) *cobra.Command {
+//nolint:funlen
+func BuildMigrateCmd(
+	ctx context.Context,
+	version, commit, date string,
+	legacy bool,
+) *cobra.Command {
 	var (
 		args              cobra.PositionalArgs
 		versionStr        string
@@ -127,8 +132,14 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string, legacy b
 	return &cmd
 }
 
+//
 //nolint:errcheck
-func setMigrateCmdCompletion(ctx context.Context, cmd *cobra.Command, levels, formats []string, legacy bool) {
+func setMigrateCmdCompletion(
+	ctx context.Context,
+	cmd *cobra.Command,
+	levels, formats []string,
+	legacy bool,
+) {
 	cmd.RegisterFlagCompletionFunc(FlagLogLevel, buildStaticSliceCompletionFunc(levels))
 	cmd.RegisterFlagCompletionFunc(FlagLogFormat, buildStaticSliceCompletionFunc(formats))
 
@@ -145,7 +156,10 @@ func setMigrateCmdCompletion(ctx context.Context, cmd *cobra.Command, levels, fo
 	cmd.RegisterFlagCompletionFunc(FlagDestPath, completionFuncNoFileComplete)
 
 	cmd.RegisterFlagCompletionFunc(FlagStrategies, buildSliceCompletionFunc(strategy.AllStrategies))
-	cmd.RegisterFlagCompletionFunc(FlagSSHKeyAlgorithm, buildStaticSliceCompletionFunc(ssh.KeyAlgorithms))
+	cmd.RegisterFlagCompletionFunc(
+		FlagSSHKeyAlgorithm,
+		buildStaticSliceCompletionFunc(ssh.KeyAlgorithms),
+	)
 
 	cmd.RegisterFlagCompletionFunc(FlagHelmSet, completionFuncNoFileComplete)
 	cmd.RegisterFlagCompletionFunc(FlagHelmSetString, completionFuncNoFileComplete)
@@ -209,19 +223,40 @@ func setMigrateCmdFlags(cmd *cobra.Command, logLevels, logFormats []string, lega
 			"in cases when you need to target a different destination IP on rsync for some reason. "+
 			"By default, it is determined by used strategy and differs across strategies. "+
 			"Has no effect for mnt2 and local strategies")
-	flags.Duration(FlagLBSvcTimeout, lbSvcTimeoutDefault, fmt.Sprintf("timeout for the load balancer service to "+
-		"receive an external IP. Only used by the %s strategy", strategy.LbSvcStrategy))
+	flags.Duration(
+		FlagLBSvcTimeout,
+		lbSvcTimeoutDefault,
+		fmt.Sprintf("timeout for the load balancer service to "+
+			"receive an external IP. Only used by the %s strategy", strategy.LbSvcStrategy),
+	)
 	flags.Bool(FlagCompress, true, "compress data during migration ('-z' flag of rsync)")
 
-	flags.DurationP(FlagHelmTimeout, "t", 1*time.Minute, "install/uninstall timeout for helm releases")
+	flags.DurationP(
+		FlagHelmTimeout,
+		"t",
+		1*time.Minute,
+		"install/uninstall timeout for helm releases",
+	)
 	flags.StringSliceP(FlagHelmValues, "f", nil,
 		"set additional Helm values by a YAML file or a URL (can specify multiple)")
-	flags.StringSlice(FlagHelmSet, nil, "set additional Helm values on the command line (can specify "+
-		"multiple or separate values with commas: key1=val1,key2=val2)")
-	flags.StringSlice(FlagHelmSetString, nil, "set additional Helm STRING values on the command line "+
-		"(can specify multiple or separate values with commas: key1=val1,key2=val2)")
-	flags.StringSlice(FlagHelmSetFile, nil, "set additional Helm values from respective files specified "+
-		"via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)")
+	flags.StringSlice(
+		FlagHelmSet,
+		nil,
+		"set additional Helm values on the command line (can specify "+
+			"multiple or separate values with commas: key1=val1,key2=val2)",
+	)
+	flags.StringSlice(
+		FlagHelmSetString,
+		nil,
+		"set additional Helm STRING values on the command line "+
+			"(can specify multiple or separate values with commas: key1=val1,key2=val2)",
+	)
+	flags.StringSlice(
+		FlagHelmSetFile,
+		nil,
+		"set additional Helm values from respective files specified "+
+			"via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)",
+	)
 }
 
 //nolint:funlen
