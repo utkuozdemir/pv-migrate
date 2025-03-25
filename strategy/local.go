@@ -95,7 +95,12 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	return nil
 }
 
-func runCmdLocal(ctx context.Context, attempt *migration.Attempt, cmd *exec.Cmd, logger *slog.Logger) (retErr error) {
+func runCmdLocal(
+	ctx context.Context,
+	attempt *migration.Attempt,
+	cmd *exec.Cmd,
+	logger *slog.Logger,
+) (retErr error) {
 	reader, writer := io.Pipe()
 	cmd.Stdout = writer
 	cmd.Stderr = writer
@@ -166,7 +171,10 @@ func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
 	return cmd, nil
 }
 
-func (r *Local) installLocalReleases(attempt *migration.Attempt, logger *slog.Logger) (string, string, string, error) {
+func (r *Local) installLocalReleases(
+	attempt *migration.Attempt,
+	logger *slog.Logger,
+) (string, string, string, error) {
 	keyAlgorithm := attempt.Migration.Request.KeyAlgorithm
 
 	logger.Info("🔑 Generating SSH key pair", "algorithm", keyAlgorithm)
@@ -195,10 +203,19 @@ func (r *Local) installLocalReleases(attempt *migration.Attempt, logger *slog.Lo
 	return srcReleaseName, destReleaseName, privateKey, nil
 }
 
-func getSshdPodForHelmRelease(ctx context.Context, pvcInfo *pvc.Info, name string) (*corev1.Pod, error) {
+func getSshdPodForHelmRelease(
+	ctx context.Context,
+	pvcInfo *pvc.Info,
+	name string,
+) (*corev1.Pod, error) {
 	labelSelector := "app.kubernetes.io/component=sshd,app.kubernetes.io/instance=" + name
 
-	pod, err := k8s.WaitForPod(ctx, pvcInfo.ClusterClient.KubeClient, pvcInfo.Claim.Namespace, labelSelector)
+	pod, err := k8s.WaitForPod(
+		ctx,
+		pvcInfo.ClusterClient.KubeClient,
+		pvcInfo.Claim.Namespace,
+		labelSelector,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sshd pod for helm release %s: %w", name, err)
 	}
@@ -321,7 +338,17 @@ func portForwardToSshd(ctx context.Context, pvcInfo *pvc.Info,
 			ReadyCh:    readyChan,
 		}, logger)
 		if err != nil {
-			logger.Error("❌ Error on port-forward", "ns", namespace, "name", name, "port", port, "error", err)
+			logger.Error(
+				"❌ Error on port-forward",
+				"ns",
+				namespace,
+				"name",
+				name,
+				"port",
+				port,
+				"error",
+				err,
+			)
 		}
 	}()
 

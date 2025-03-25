@@ -70,7 +70,9 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 
 		if runErr := s.Run(ctx, &attempt, attemptLogger); runErr != nil {
 			if errors.Is(runErr, strategy.ErrUnaccepted) {
-				attemptLogger.Info("🦊 This strategy cannot handle this migration, will try the next one")
+				attemptLogger.Info(
+					"🦊 This strategy cannot handle this migration, will try the next one",
+				)
 
 				continue
 			}
@@ -130,7 +132,7 @@ func (m *Migrator) buildMigration(ctx context.Context, request *migration.Reques
 		return nil, err
 	}
 
-	if !(destPvcInfo.SupportsRWO || destPvcInfo.SupportsRWX) {
+	if !destPvcInfo.SupportsRWO && !destPvcInfo.SupportsRWX {
 		return nil, errors.New("destination PVC is not writable")
 	}
 
@@ -166,7 +168,11 @@ func (m *Migrator) getClusterClients(r *migration.Request,
 	return sourceClient, destClient, nil
 }
 
-func handleMountedPVCs(r *migration.Request, sourcePvcInfo, destPvcInfo *pvc.Info, logger *slog.Logger) error {
+func handleMountedPVCs(
+	r *migration.Request,
+	sourcePvcInfo, destPvcInfo *pvc.Info,
+	logger *slog.Logger,
+) error {
 	ignoreMounted := r.IgnoreMounted
 
 	err := handleMounted(sourcePvcInfo, ignoreMounted, logger)

@@ -17,7 +17,11 @@ type ClusterClient struct {
 	NsInContext      string
 }
 
-func GetClusterClient(kubeconfigPath string, context string, logger *slog.Logger) (*ClusterClient, error) {
+func GetClusterClient(
+	kubeconfigPath string,
+	context string,
+	logger *slog.Logger,
+) (*ClusterClient, error) {
 	config, rcGetter, namespace, err := buildK8sConfig(kubeconfigPath, context, logger)
 	if err != nil {
 		return nil, err

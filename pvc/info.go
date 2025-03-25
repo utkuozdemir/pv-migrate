@@ -21,8 +21,14 @@ type Info struct {
 	SupportsRWX        bool
 }
 
+//
 //nolint:cyclop
-func New(ctx context.Context, client *k8s.ClusterClient, namespace string, name string) (*Info, error) {
+func New(
+	ctx context.Context,
+	client *k8s.ClusterClient,
+	namespace string,
+	name string,
+) (*Info, error) {
 	kubeClient := client.KubeClient
 
 	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).

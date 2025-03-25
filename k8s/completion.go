@@ -33,7 +33,11 @@ func GetContexts(kubeconfigPath string, logger *slog.Logger) ([]string, error) {
 	return contextNames, nil
 }
 
-func GetNamespaces(ctx context.Context, kubeconfigPath, kubectx string, logger *slog.Logger) ([]string, error) {
+func GetNamespaces(
+	ctx context.Context,
+	kubeconfigPath, kubectx string,
+	logger *slog.Logger,
+) ([]string, error) {
 	client, err := GetClusterClient(kubeconfigPath, kubectx, logger)
 	if err != nil {
 		return nil, err
@@ -53,7 +57,11 @@ func GetNamespaces(ctx context.Context, kubeconfigPath, kubectx string, logger *
 	return nsNames, nil
 }
 
-func GetPVCs(ctx context.Context, kubeconfigPath, kubectx, namespace string, logger *slog.Logger) ([]string, error) {
+func GetPVCs(
+	ctx context.Context,
+	kubeconfigPath, kubectx, namespace string,
+	logger *slog.Logger,
+) ([]string, error) {
 	client, err := GetClusterClient(kubeconfigPath, kubectx, logger)
 	if err != nil {
 		return nil, err

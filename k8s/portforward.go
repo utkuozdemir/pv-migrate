@@ -40,7 +40,12 @@ func PortForward(req *PortForwardRequest, logger *slog.Logger) error {
 
 	outWriter := &slogDebugWriter{logger: logger}
 
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, targetURL)
+	dialer := spdy.NewDialer(
+		upgrader,
+		&http.Client{Transport: transport},
+		http.MethodPost,
+		targetURL,
+	)
 
 	ports := []string{fmt.Sprintf("%d:%d", req.LocalPort, req.PodPort)}
 
