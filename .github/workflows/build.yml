@@ -52,7 +52,7 @@ jobs:
         uses: golangci/golangci-lint-action@v7.0.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v2.0.1
+          version: v2.0.2
           args: --timeout=10m0s
           install-mode: goinstall
       - name: Build with Goreleaser
