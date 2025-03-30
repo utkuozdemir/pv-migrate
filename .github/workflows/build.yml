@@ -57,7 +57,7 @@ jobs:
           install-mode: goinstall
       - name: Build with Goreleaser
         if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v6.2.1
+        uses: goreleaser/goreleaser-action@v6.3.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
           version: v2.8.1
