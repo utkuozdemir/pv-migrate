@@ -64,7 +64,12 @@ the data from the old PVC to the new one with the desired StorageClass.
 - Uses rsync over SSH with a freshly generated [Ed25519](https://en.wikipedia.org/wiki/EdDSA) 
   or RSA keys each time to securely migrate the files
 - Allows full customization of the manifests (e.g. specifying your own docker images for rsync and sshd, configuring affinity etc.)
-- Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed
+- Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed:
+  - Mount both PVCs in a single pod (mnt2)
+  - ClusterIP service (svc)
+  - LoadBalancer service (lbsvc)
+  - NodePort service (nodeport)
+  - Local port-forward transfer (local)
 - Customizable strategy order
 - Supports arm32v7 (Raspberry Pi etc.) and arm64 architectures as well as amd64
 - Supports completion for popular shells: bash, zsh, fish, powershell
