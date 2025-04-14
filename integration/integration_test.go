@@ -98,6 +98,138 @@ func TestIntegration(t *testing.T) {
 	t.Run("DifferentCluster", testDifferentCluster)
 	t.Run("Local", testLocal)
 	t.Run("LongPVCNames", testLongPVCNames)
+	t.Run("NodePort", testNodePort)
+	t.Run("NodePortDifferentNS", testNodePortDifferentNS)
+	t.Run("NodePortDestHostOverride", testNodePortDestHostOverride)
+}
+
+// testNodePort tests the NodePort strategy in the same namespace
+func testNodePort(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
+
+	// Prepare the destination with an extra file to test it remains after migration
+	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	// Run the migration using the NodePort strategy specifically
+	cmd := fmt.Sprintf("%s -s nodeport -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
+	require.NoError(t, runCliApp(ctx, cmd))
+
+	// Verify the data was migrated correctly
+	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	// Check that ownership and content were preserved
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	// Verify that the extra file still exists (no deletion)
+	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+// testNodePortDifferentNS tests the NodePort strategy with source and destination in different namespaces
+func testNodePortDifferentNS(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
+
+	// Prepare the destination with an extra file to test it remains after migration
+	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	// Run the migration using the NodePort strategy specifically between different namespaces
+	cmd := fmt.Sprintf("%s -s nodeport -i -n %s -N %s --source source --dest dest",
+		migrateCmdline, ns1, ns2)
+	require.NoError(t, runCliApp(ctx, cmd))
+
+	// Verify the data was migrated correctly
+	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	// Check that ownership and content were preserved
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	// Verify that the extra file still exists (no deletion)
+	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+// testNodePortDestHostOverride tests the NodePort strategy with a custom destination host override
+func testNodePortDestHostOverride(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
+
+	// Create a service that will be used for the override
+	svcName := "nodeport-override-svc"
+	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(context.Background(),
+		&corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   svcName,
+				Labels: resourceLabels,
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app.kubernetes.io/component": "sshd",
+					"app.kubernetes.io/name":      "pv-migrate",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Name:       "ssh",
+						Port:       22,
+						TargetPort: intstr.FromInt32(22),
+					},
+				},
+			},
+		}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Prepare the destination with an extra file to test it remains after migration
+	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	// Set the destination host override to use our custom service
+	destHostOverride := svcName + "." + ns1
+	cmd := fmt.Sprintf(
+		"%s -s nodeport -i -n %s -N %s -H %s source dest", migrateLegacyCmdline, ns1, ns2, destHostOverride)
+	require.NoError(t, runCliApp(ctx, cmd))
+
+	// Verify the data was migrated correctly
+	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	// Check that ownership and content were preserved
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	// Verify that the extra file still exists (no deletion)
+	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
 }
 
 func testSameNS(t *testing.T) {
