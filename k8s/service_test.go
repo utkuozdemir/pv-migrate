@@ -61,10 +61,10 @@ func TestGetNodePortServiceDetails(t *testing.T) {
 
 	// Create the resources in the fake client
 	_, err := fakeClient.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = fakeClient.CoreV1().Services(namespace).Create(ctx, svc, metav1.CreateOptions{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// The fake client doesn't properly support UntilWithSync, so we can't actually test the function.
 	// Skip the test with an explanation.
@@ -118,10 +118,10 @@ func TestGetNodePortServiceDetailsWithoutSSHPort(t *testing.T) {
 
 	// Create the resources in the fake client
 	_, err := fakeClient.CoreV1().Nodes().Create(ctx, node, metav1.CreateOptions{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	_, err = fakeClient.CoreV1().Services(namespace).Create(ctx, svc, metav1.CreateOptions{})
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// The fake client doesn't properly support UntilWithSync, so we can't actually test the function.
 	// Just skip the test with an explanation.
@@ -254,7 +254,7 @@ func testFindNodeIPWithNoNodes(
 	fakeClient *fake.Clientset,
 ) {
 	ip, err := findNodeIP(ctx, fakeClient)
-	assert.Error(t, err, "Should return error when no nodes exist")
+	require.Error(t, err, "Should return error when no nodes exist")
 	assert.Empty(t, ip)
 }
 
@@ -350,7 +350,7 @@ func testFindNodeIPWithNoUsableIP(
 
 	// Test with only a node that has no usable IP
 	ip, err := findNodeIP(ctx, fakeClient)
-	assert.Error(t, err, "Should return error when no nodes have usable IPs")
+	require.Error(t, err, "Should return error when no nodes have usable IPs")
 	assert.Empty(t, ip)
 }
 
