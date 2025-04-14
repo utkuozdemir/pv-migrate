@@ -280,6 +280,13 @@ func (m *mockK8sFunctions) WaitForJobCompletion(
 	return nil
 }
 
+// Define type aliases to ensure type safety.
+type (
+	InstallHelmFn        func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error
+	GetNodePortDetailsFn func(context.Context, kubernetes.Interface, string, string, interface{}) (string, int, error)
+	WaitForJobFn         func(context.Context, kubernetes.Interface, string, string, bool, *slog.Logger) error
+)
+
 // Mock test for the NodePort Run method with proper dependencies injected.
 func TestNodePortRunWithMocks(t *testing.T) {
 	t.Parallel()
@@ -353,9 +360,9 @@ func (n *NodePort) testRun(
 	ctx context.Context,
 	attempt *migration.Attempt,
 	logger *slog.Logger,
-	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
-	getNodePortDetailsFn func(context.Context, kubernetes.Interface, string, string, interface{}) (string, int, error),
-	waitForJobFn func(context.Context, kubernetes.Interface, string, string, bool, *slog.Logger) error,
+	installFn InstallHelmFn,
+	getNodePortDetailsFn GetNodePortDetailsFn,
+	waitForJobFn WaitForJobFn,
 ) error {
 	// Prepare migration config
 	mig := attempt.Migration
@@ -429,8 +436,8 @@ func (n *NodePort) setupSourceNodePort(
 	attempt *migration.Attempt,
 	_ *pvc.Info,
 	_ string,
-	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
-	_ func(context.Context, kubernetes.Interface, string, string, interface{}) (string, int, error),
+	installFn InstallHelmFn,
+	_ GetNodePortDetailsFn,
 	releaseNames []string,
 	sshConfig *struct {
 		publicKey           string
@@ -461,9 +468,9 @@ func (n *NodePort) setupSourceNodePort(
 func (n *NodePort) setupDestinationNodePort(
 	ctx context.Context,
 	attempt *migration.Attempt,
-	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
-	getNodePortDetailsFn func(context.Context, kubernetes.Interface, string, string, interface{}) (string, int, error),
-	waitForJobFn func(context.Context, kubernetes.Interface, string, string, bool, *slog.Logger) error,
+	installFn InstallHelmFn,
+	getNodePortDetailsFn GetNodePortDetailsFn,
+	waitForJobFn WaitForJobFn,
 	releaseNames []string,
 	sshConfig *struct {
 		publicKey           string
@@ -524,7 +531,7 @@ func (n *NodePort) setupDestinationNodePort(
 	return waitForJobFn(ctx, kubeClient, destInfo.Claim.Namespace, jobName, showProgressBar, logger)
 }
 
-// createMockRequest creates a mock migration request for testing
+// createMockRequest creates a mock migration request for testing.
 func createMockRequest() *migration.Request {
 	return &migration.Request{
 		Source: &migration.PVCInfo{
@@ -542,7 +549,7 @@ func createMockRequest() *migration.Request {
 	}
 }
 
-// createMockPVC creates a mock PVC with the given name and namespace
+// createMockPVC creates a mock PVC with the given name and namespace.
 func createMockPVC(name, namespace string) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
@@ -560,9 +567,12 @@ func createMockPVC(name, namespace string) *corev1.PersistentVolumeClaim {
 	}
 }
 
-// createMockPVCInfo creates a mock PVC info with the given PVC and client
-func createMockPVCInfo(pvc *corev1.PersistentVolumeClaim, client *k8s.ClusterClient) *pvc.Info {
-	return &pvc.Info{
+// PVCInfoType is needed to avoid linter errors with pvc.Info.
+type PVCInfoType = pvc.Info
+
+// createMockPVCInfo creates a mock PVC info with the given PVC and client.
+func createMockPVCInfo(pvc *corev1.PersistentVolumeClaim, client *k8s.ClusterClient) *PVCInfoType {
+	return &PVCInfoType{
 		Claim:         pvc,
 		ClusterClient: client,
 	}
@@ -602,15 +612,17 @@ func createMockAttempt() *migration.Attempt {
 	}
 }
 
-// createTestMocks creates and configures the mock objects needed for NodePort tests
+// createTestMocks creates and configures the mock objects needed for NodePort tests.
 func createTestMocks(
-	t *testing.T,
 	ctx context.Context,
+	t *testing.T,
 	attempt *migration.Attempt,
 	overrideHost string,
 	mockNodeIP string,
 	mockNodePort int,
 ) (*mockInstaller, *mockK8sFunctions, *slog.Logger) {
+	t.Helper()
+
 	logger := slogt.New(t)
 
 	// Create mocks
@@ -678,7 +690,14 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 	mockNodePort := 32222
 
 	// Create and configure mocks
-	mockInstaller, mockK8s, logger := createTestMocks(t, ctx, attempt, overrideHost, mockNodeIP, mockNodePort)
+	mockInstaller, mockK8s, logger := createTestMocks(
+		ctx,
+		t,
+		attempt,
+		overrideHost,
+		mockNodeIP,
+		mockNodePort,
+	)
 
 	// Create NodePort strategy
 	np := NodePort{}
