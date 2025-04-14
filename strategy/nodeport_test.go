@@ -446,12 +446,12 @@ func (n *NodePort) setupReleaseNames(attempt *migration.Attempt) []string {
 
 // setupSourceNodePort installs the source component with NodePort service.
 func (n *NodePort) setupSourceNodePort(
-	ctx context.Context,
+	_ context.Context,
 	attempt *migration.Attempt,
-	sourceInfo *pvc.Info,
-	sourceNs string,
+	_ *pvc.Info,
+	_ string,
 	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
-	getNodePortDetailsFn func(context.Context, kubernetes.Interface, string, string, interface{}) (string, int, error),
+	_ func(context.Context, kubernetes.Interface, string, string, interface{}) (string, int, error),
 	releaseNames []string,
 	sshConfig *struct {
 		publicKey           string
