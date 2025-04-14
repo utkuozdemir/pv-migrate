@@ -95,34 +95,57 @@ func GetNodePortServiceDetails(
 	name string,
 	timeout time.Duration,
 ) (string, int, error) {
-	resCli := cli.CoreV1().Services(namespace)
-	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
-
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	var nodeIP string
-	var nodePort int
+	// Get the service
+	svc, err := waitForNodePortService(ctx, cli, namespace, name)
+	if err != nil {
+		return "", 0, err
+	}
+
+	// Extract the NodePort from the service
+	nodePort, err := findNodePort(svc)
+	if err != nil {
+		return "", 0, err
+	}
+
+	// Find a worker node IP
+	nodeIP, err := findNodeIP(ctx, cli)
+	if err != nil {
+		return "", 0, err
+	}
+
+	return nodeIP, nodePort, nil
+}
+
+// waitForNodePortService waits for a NodePort service to be ready
+func waitForNodePortService(
+	ctx context.Context,
+	cli kubernetes.Interface,
+	namespace string,
+	name string,
+) (*corev1.Service, error) {
+	resCli := cli.CoreV1().Services(namespace)
+	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
+
+	var resultSvc *corev1.Service
 
 	listWatch := &cache.ListWatch{
 		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
-
 			list, err := resCli.List(ctx, options)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list services %s/%s: %w", namespace, name, err)
 			}
-
 			return list, nil
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
-
 			resWatch, err := resCli.Watch(ctx, options)
 			if err != nil {
 				return nil, fmt.Errorf("failed to watch services %s/%s: %w", namespace, name, err)
 			}
-
 			return resWatch, nil
 		},
 	}
@@ -138,46 +161,46 @@ func GetNodePortServiceDetails(
 				return false, fmt.Errorf("service %s/%s is not of type NodePort", namespace, name)
 			}
 
-			// Get the NodePort from the service
-			if len(svc.Spec.Ports) > 0 {
-				for _, port := range svc.Spec.Ports {
-					if port.Name == "ssh" || port.Port == 22 {
-						nodePort = int(port.NodePort)
-						break
-					}
-				}
-				if nodePort == 0 && len(svc.Spec.Ports) > 0 {
-					// If no SSH port found, just use the first port
-					nodePort = int(svc.Spec.Ports[0].NodePort)
-				}
-			}
-
-			// Get a worker node IP
-			nodes, err := cli.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-			if err != nil {
-				return false, fmt.Errorf("failed to list nodes: %w", err)
-			}
-
-			for _, node := range nodes.Items {
-				for _, addr := range node.Status.Addresses {
-					if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
-						nodeIP = addr.Address
-						break
-					}
-				}
-				if nodeIP != "" {
-					break
-				}
-			}
-
-			return nodeIP != "" && nodePort != 0, nil
+			resultSvc = svc
+			return true, nil
 		}); err != nil {
-		return "", 0, fmt.Errorf("failed to get NodePort service %s/%s details: %w", namespace, name, err)
+		return nil, fmt.Errorf("failed to get NodePort service %s/%s details: %w", namespace, name, err)
 	}
 
-	if nodeIP == "" || nodePort == 0 {
-		return "", 0, fmt.Errorf("failed to get node IP or NodePort for service %s/%s", namespace, name)
+	return resultSvc, nil
+}
+
+// findNodePort extracts the NodePort from a service
+func findNodePort(svc *corev1.Service) (int, error) {
+	if len(svc.Spec.Ports) == 0 {
+		return 0, fmt.Errorf("service has no ports defined")
 	}
 
-	return nodeIP, nodePort, nil
+	// First try to find SSH port
+	for _, port := range svc.Spec.Ports {
+		if port.Name == "ssh" || port.Port == 22 {
+			return int(port.NodePort), nil
+		}
+	}
+
+	// Fallback to the first port
+	return int(svc.Spec.Ports[0].NodePort), nil
+}
+
+// findNodeIP gets a usable IP address from a worker node
+func findNodeIP(ctx context.Context, cli kubernetes.Interface) (string, error) {
+	nodes, err := cli.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	for _, node := range nodes.Items {
+		for _, addr := range node.Status.Addresses {
+			if addr.Type == corev1.NodeInternalIP || addr.Type == corev1.NodeExternalIP {
+				return addr.Address, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("no suitable node IP address found")
 }
