@@ -48,7 +48,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	svcName := srcReleaseName + "-sshd"
 
 	// Get NodePort service details
-	nodeIp, nodePort, err := k8s.GetNodePortServiceDetails(
+	nodeIP, nodePort, err := k8s.GetNodePortServiceDetails(
 		ctx,
 		sourceKubeClient,
 		sourceNs,
@@ -59,7 +59,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 		return fmt.Errorf("failed to get NodePort service details: %w", err)
 	}
 
-	sshTargetHost := nodeIp
+	sshTargetHost := nodeIP
 	if mig.Request.DestHostOverride != "" {
 		sshTargetHost = mig.Request.DestHostOverride
 	}
