@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -119,7 +120,7 @@ func GetNodePortServiceDetails(
 	return nodeIP, nodePort, nil
 }
 
-// waitForNodePortService waits for a NodePort service to be ready
+// waitForNodePortService waits for a NodePort service to be ready.
 func waitForNodePortService(
 	ctx context.Context,
 	cli kubernetes.Interface,
@@ -138,6 +139,7 @@ func waitForNodePortService(
 			if err != nil {
 				return nil, fmt.Errorf("failed to list services %s/%s: %w", namespace, name, err)
 			}
+
 			return list, nil
 		},
 		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
@@ -146,6 +148,7 @@ func waitForNodePortService(
 			if err != nil {
 				return nil, fmt.Errorf("failed to watch services %s/%s: %w", namespace, name, err)
 			}
+
 			return resWatch, nil
 		},
 	}
@@ -162,18 +165,24 @@ func waitForNodePortService(
 			}
 
 			resultSvc = svc
+
 			return true, nil
 		}); err != nil {
-		return nil, fmt.Errorf("failed to get NodePort service %s/%s details: %w", namespace, name, err)
+		return nil, fmt.Errorf(
+			"failed to get NodePort service %s/%s details: %w",
+			namespace,
+			name,
+			err,
+		)
 	}
 
 	return resultSvc, nil
 }
 
-// findNodePort extracts the NodePort from a service
+// findNodePort extracts the NodePort from a service.
 func findNodePort(svc *corev1.Service) (int, error) {
 	if len(svc.Spec.Ports) == 0 {
-		return 0, fmt.Errorf("service has no ports defined")
+		return 0, errors.New("service has no ports defined")
 	}
 
 	// First try to find SSH port
@@ -187,7 +196,7 @@ func findNodePort(svc *corev1.Service) (int, error) {
 	return int(svc.Spec.Ports[0].NodePort), nil
 }
 
-// findNodeIP gets a usable IP address from a worker node
+// findNodeIP gets a usable IP address from a worker node.
 func findNodeIP(ctx context.Context, cli kubernetes.Interface) (string, error) {
 	nodes, err := cli.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
 	if err != nil {
@@ -202,5 +211,5 @@ func findNodeIP(ctx context.Context, cli kubernetes.Interface) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no suitable node IP address found")
+	return "", errors.New("no suitable node IP address found")
 }
