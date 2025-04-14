@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"testing"
 
@@ -84,7 +85,10 @@ func (m *mockInstaller) InstallHelmChart(attempt *migration.Attempt, pvcInfo *pv
 ) error {
 	args := m.Called(attempt, pvcInfo, name, values, logger)
 
-	return args.Error(0)
+	if err := args.Error(0); err != nil {
+		return fmt.Errorf("error from mock installer: %w", err)
+	}
+	return nil
 }
 
 // Test helper for NodePort installation functions.
@@ -246,7 +250,7 @@ func (n *NodePort) testInstallOnDestWithNodePort(
 
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to build rsync command: %w", err)
 	}
 
 	vals := map[string]any{
@@ -299,7 +303,10 @@ func (m *mockK8sFunctions) WaitForJobCompletion(
 ) error {
 	args := m.Called(ctx, cli, namespace, name, showProgressBar, logger)
 
-	return args.Error(0)
+	if err := args.Error(0); err != nil {
+		return fmt.Errorf("error waiting for job completion: %w", err)
+	}
+	return nil
 }
 
 // Mock test for the NodePort Run method with proper dependencies injected.
@@ -421,7 +428,7 @@ func (n *NodePort) prepareSSHConfig(keyAlgorithm string, logger *slog.Logger) (*
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create SSH key pair: %w", err)
 	}
 
 	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
