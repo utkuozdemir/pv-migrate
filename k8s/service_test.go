@@ -144,6 +144,8 @@ func TestFindNodePort(t *testing.T) {
 
 // testFindNodePortWithSSH tests finding SSH ports in services.
 func testFindNodePortWithSSH(t *testing.T) {
+	t.Helper()
+
 	// Test with SSH port by name
 	svcWithSSH := &corev1.Service{
 		Spec: corev1.ServiceSpec{
@@ -191,6 +193,8 @@ func testFindNodePortWithSSH(t *testing.T) {
 
 // testFindNodePortFallback tests fallback to first port.
 func testFindNodePortFallback(t *testing.T) {
+	t.Helper()
+
 	svcWithoutSSH := &corev1.Service{
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -215,6 +219,8 @@ func testFindNodePortFallback(t *testing.T) {
 
 // testFindNodePortEmptyPorts tests service with no ports.
 func testFindNodePortEmptyPorts(t *testing.T) {
+	t.Helper()
+
 	svcNoPort := &corev1.Service{
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{},
@@ -353,6 +359,3 @@ func testFindNodeIPWithNoUsableIP(
 	require.Error(t, err, "Should return error when no nodes have usable IPs")
 	assert.Empty(t, ip)
 }
-
-// testContext is a type alias to make the function signatures cleaner.
-type testContext = context.Context
