@@ -1,7 +1,6 @@
 package k8s
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -16,7 +15,7 @@ func TestGetNodePortServiceDetails(t *testing.T) {
 	t.Parallel()
 
 	// Setup
-	ctx := context.Background()
+	ctx := t.Context()
 	namespace := "test-namespace"
 	serviceName := "test-service"
 
@@ -83,7 +82,7 @@ func TestGetNodePortServiceDetailsWithoutSSHPort(t *testing.T) {
 	t.Parallel()
 
 	// Setup
-	ctx := context.Background()
+	ctx := t.Context()
 	namespace := "test-namespace"
 	serviceName := "test-service"
 
@@ -139,7 +138,19 @@ func TestGetNodePortServiceDetailsWithoutSSHPort(t *testing.T) {
 func TestFindNodePort(t *testing.T) {
 	t.Parallel()
 
-	// Test with SSH port
+	// Test with SSH port and various service configurations
+	testFindNodePortWithSSH(t)
+
+	// Test fallback to first port when no SSH port is available
+	testFindNodePortFallback(t)
+
+	// Test service with no ports
+	testFindNodePortEmptyPorts(t)
+}
+
+// testFindNodePortWithSSH tests finding SSH ports in services
+func testFindNodePortWithSSH(t *testing.T) {
+	// Test with SSH port by name
 	svcWithSSH := &corev1.Service{
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -182,8 +193,10 @@ func TestFindNodePort(t *testing.T) {
 	port, err = findNodePort(svcWithPort22)
 	require.NoError(t, err)
 	assert.Equal(t, 32222, port, "Should select port 22 even with different name")
+}
 
-	// Test fallback to first port
+// testFindNodePortFallback tests fallback to first port
+func testFindNodePortFallback(t *testing.T) {
 	svcWithoutSSH := &corev1.Service{
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -201,26 +214,28 @@ func TestFindNodePort(t *testing.T) {
 		},
 	}
 
-	port, err = findNodePort(svcWithoutSSH)
+	port, err := findNodePort(svcWithoutSSH)
 	require.NoError(t, err)
 	assert.Equal(t, 30080, port, "Should fallback to first port")
+}
 
-	// Test service with no ports
+// testFindNodePortEmptyPorts tests service with no ports
+func testFindNodePortEmptyPorts(t *testing.T) {
 	svcNoPort := &corev1.Service{
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{},
 		},
 	}
 
-	_, err = findNodePort(svcNoPort)
+	_, err := findNodePort(svcNoPort)
 	assert.Error(t, err, "Should return error for service with no ports")
 }
 
-// TestFindNodeIP tests the findNodeIP helper function
+// TestFindNodeIP tests the findNodeIP helper function.
 func TestFindNodeIP(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := t.Context()
 
 	// Create a fake client with multiple nodes
 	fakeClient := fake.NewSimpleClientset()
@@ -228,7 +243,7 @@ func TestFindNodeIP(t *testing.T) {
 	// Test with no nodes
 	ip, err := findNodeIP(ctx, fakeClient)
 	assert.Error(t, err, "Should return error when no nodes exist")
-	assert.Equal(t, "", ip)
+	assert.Empty(t, ip)
 
 	// Create nodes with different address types
 	node1 := &corev1.Node{
@@ -305,5 +320,5 @@ func TestFindNodeIP(t *testing.T) {
 	// Test with only a node that has no usable IP
 	ip, err = findNodeIP(ctx, fakeClient)
 	assert.Error(t, err, "Should return error when no nodes have usable IPs")
-	assert.Equal(t, "", ip)
+	assert.Empty(t, ip)
 }
