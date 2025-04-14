@@ -64,13 +64,13 @@ func TestNodePortInAllStrategies(t *testing.T) {
 func TestNodePortInNameToStrategy(t *testing.T) {
 	t.Parallel()
 
-	strategyInstance, ok := nameToStrategy[NodePortStrategy]
-	assert.True(t, ok, "NodePort strategy should be in nameToStrategy map")
+	strategyInstance, exists := nameToStrategy[NodePortStrategy]
+	assert.True(t, exists, "NodePort strategy should be in nameToStrategy map")
 	assert.NotNil(t, strategyInstance, "NodePort strategy instance should not be nil")
 
 	// Verify it's a NodePort strategy instance
-	_, ok = strategyInstance.(*NodePort)
-	assert.True(t, ok, "Strategy instance should be of type *NodePort")
+	_, isNodePort := strategyInstance.(*NodePort)
+	assert.True(t, isNodePort, "Strategy instance should be of type *NodePort")
 }
 
 // Mock for installation functions.
@@ -588,13 +588,13 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 		attempt.Migration.DestInfo,
 		mock.Anything,
 		mock.MatchedBy(func(values map[string]any) bool {
-			rsync, ok := values["rsync"].(map[string]any)
-			if !ok {
+			rsync, rsyncExists := values["rsync"].(map[string]any)
+			if !rsyncExists {
 				return false
 			}
-			host, ok := rsync["sshRemoteHost"].(string)
+			host, hostExists := rsync["sshRemoteHost"].(string)
 
-			return ok && host == overrideHost
+			return hostExists && host == overrideHost
 		}),
 		logger).Return(nil)
 
