@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -231,21 +232,38 @@ func testFindNodePortEmptyPorts(t *testing.T) {
 	assert.Error(t, err, "Should return error for service with no ports")
 }
 
-// TestFindNodeIP tests the findNodeIP helper function.
+// TestFindNodeIP tests the findNodeIP helper function
 func TestFindNodeIP(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-
-	// Create a fake client with multiple nodes
+	
+	// Create a fake client and run different test scenarios
 	fakeClient := fake.NewSimpleClientset()
-
+	
 	// Test with no nodes
+	testFindNodeIPWithNoNodes(t, ctx, fakeClient)
+	
+	// Test with a node that has internal IP
+	testFindNodeIPWithInternalIP(t, ctx, fakeClient)
+	
+	// Test with multiple nodes having different IP types
+	testFindNodeIPWithMultipleNodes(t, ctx, fakeClient)
+	
+	// Test with a node that has no usable IP
+	testFindNodeIPWithNoUsableIP(t, ctx, fakeClient)
+}
+
+// testFindNodeIPWithNoNodes tests findNodeIP with no nodes in the cluster
+func testFindNodeIPWithNoNodes(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
 	ip, err := findNodeIP(ctx, fakeClient)
 	assert.Error(t, err, "Should return error when no nodes exist")
 	assert.Empty(t, ip)
+}
 
-	// Create nodes with different address types
+// testFindNodeIPWithInternalIP tests findNodeIP with a node having internal IP
+func testFindNodeIPWithInternalIP(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
+	// Create a node with internal IP
 	node1 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node1",
@@ -259,7 +277,19 @@ func TestFindNodeIP(t *testing.T) {
 			},
 		},
 	}
+	
+	_, err := fakeClient.CoreV1().Nodes().Create(ctx, node1, metav1.CreateOptions{})
+	require.NoError(t, err)
 
+	// Test finding internal IP
+	ip, err := findNodeIP(ctx, fakeClient)
+	require.NoError(t, err)
+	assert.Equal(t, "192.168.1.100", ip, "Should find internal IP")
+}
+
+// testFindNodeIPWithMultipleNodes tests findNodeIP with multiple nodes having different IP types
+func testFindNodeIPWithMultipleNodes(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
+	// Add node with external IP
 	node2 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node2",
@@ -273,8 +303,19 @@ func TestFindNodeIP(t *testing.T) {
 			},
 		},
 	}
+	
+	_, err := fakeClient.CoreV1().Nodes().Create(ctx, node2, metav1.CreateOptions{})
+	require.NoError(t, err)
 
-	// Node with only hostname, no IP
+	// Test with multiple valid nodes - should still return the first valid IP
+	ip, err := findNodeIP(ctx, fakeClient)
+	require.NoError(t, err)
+	assert.Equal(t, "192.168.1.100", ip, "Should find first valid IP (internal)")
+}
+
+// testFindNodeIPWithNoUsableIP tests findNodeIP with nodes having no usable IPs
+func testFindNodeIPWithNoUsableIP(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
+	// Create node with only hostname, no IP
 	node3 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "node3",
@@ -288,27 +329,8 @@ func TestFindNodeIP(t *testing.T) {
 			},
 		},
 	}
-
-	// Create the nodes
-	_, err = fakeClient.CoreV1().Nodes().Create(ctx, node1, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	// Test after creating one node with internal IP
-	ip, err = findNodeIP(ctx, fakeClient)
-	require.NoError(t, err)
-	assert.Equal(t, "192.168.1.100", ip, "Should find internal IP")
-
-	// Add node with external IP
-	_, err = fakeClient.CoreV1().Nodes().Create(ctx, node2, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	// Test with multiple valid nodes - should still return the first valid IP
-	ip, err = findNodeIP(ctx, fakeClient)
-	require.NoError(t, err)
-	assert.Equal(t, "192.168.1.100", ip, "Should find first valid IP (internal)")
-
-	// Create node with only hostname
-	_, err = fakeClient.CoreV1().Nodes().Create(ctx, node3, metav1.CreateOptions{})
+	
+	_, err := fakeClient.CoreV1().Nodes().Create(ctx, node3, metav1.CreateOptions{})
 	require.NoError(t, err)
 
 	// Delete the nodes with IP addresses
@@ -318,7 +340,10 @@ func TestFindNodeIP(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test with only a node that has no usable IP
-	ip, err = findNodeIP(ctx, fakeClient)
+	ip, err := findNodeIP(ctx, fakeClient)
 	assert.Error(t, err, "Should return error when no nodes have usable IPs")
 	assert.Empty(t, ip)
 }
+
+// testContext is a type alias to make the function signatures cleaner
+type testContext = context.Context
