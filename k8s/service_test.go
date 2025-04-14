@@ -3,7 +3,6 @@ package k8s
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -67,14 +66,8 @@ func TestGetNodePortServiceDetails(t *testing.T) {
 	_, err = fakeClient.CoreV1().Services(namespace).Create(ctx, svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
 
-	// Test the function
-	_, _, err = GetNodePortServiceDetails(ctx, fakeClient, namespace, serviceName, 5*time.Second)
-
-	// The fake client doesn't actually implement UntilWithSync functionality correctly,
-	// so this test would fail in practice. In a real scenario, we'd need to add mocks.
-	// For now, we'll just skip the test with an explanation
-
-	// Instead, we'll just confirm that the function exists and can be called
+	// The fake client doesn't properly support UntilWithSync, so we can't actually test the function.
+	// Skip the test with an explanation.
 	t.Skip("Skipping test as fake.NewSimpleClientset() doesn't fully support watch functionality")
 }
 
@@ -130,8 +123,8 @@ func TestGetNodePortServiceDetailsWithoutSSHPort(t *testing.T) {
 	_, err = fakeClient.CoreV1().Services(namespace).Create(ctx, svc, metav1.CreateOptions{})
 	assert.NoError(t, err)
 
-	// Test the function.
-	// As with the previous test, the fake client doesn't properly support UntilWithSync.
+	// The fake client doesn't properly support UntilWithSync, so we can't actually test the function.
+	// Just skip the test with an explanation.
 	t.Skip("Skipping test as fake.NewSimpleClientset() doesn't fully support watch functionality")
 }
 
