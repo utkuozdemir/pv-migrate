@@ -259,6 +259,8 @@ func testFindNodeIPWithNoNodes(
 	t *testing.T,
 	fakeClient *fake.Clientset,
 ) {
+	t.Helper()
+
 	ip, err := findNodeIP(ctx, fakeClient)
 	require.Error(t, err, "Should return error when no nodes exist")
 	assert.Empty(t, ip)
@@ -270,6 +272,8 @@ func testFindNodeIPWithInternalIP(
 	t *testing.T,
 	fakeClient *fake.Clientset,
 ) {
+	t.Helper()
+
 	// Create a node with internal IP
 	node1 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -300,6 +304,8 @@ func testFindNodeIPWithMultipleNodes(
 	t *testing.T,
 	fakeClient *fake.Clientset,
 ) {
+	t.Helper()
+
 	// Add node with external IP
 	node2 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -330,6 +336,8 @@ func testFindNodeIPWithNoUsableIP(
 	t *testing.T,
 	fakeClient *fake.Clientset,
 ) {
+	t.Helper()
+
 	// Create node with only hostname, no IP
 	node3 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
