@@ -237,19 +237,19 @@ func TestFindNodeIP(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	
+
 	// Create a fake client and run different test scenarios
 	fakeClient := fake.NewSimpleClientset()
-	
+
 	// Test with no nodes
 	testFindNodeIPWithNoNodes(t, ctx, fakeClient)
-	
+
 	// Test with a node that has internal IP
 	testFindNodeIPWithInternalIP(t, ctx, fakeClient)
-	
+
 	// Test with multiple nodes having different IP types
 	testFindNodeIPWithMultipleNodes(t, ctx, fakeClient)
-	
+
 	// Test with a node that has no usable IP
 	testFindNodeIPWithNoUsableIP(t, ctx, fakeClient)
 }
@@ -277,7 +277,7 @@ func testFindNodeIPWithInternalIP(t *testing.T, ctx context.Context, fakeClient 
 			},
 		},
 	}
-	
+
 	_, err := fakeClient.CoreV1().Nodes().Create(ctx, node1, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -303,7 +303,7 @@ func testFindNodeIPWithMultipleNodes(t *testing.T, ctx context.Context, fakeClie
 			},
 		},
 	}
-	
+
 	_, err := fakeClient.CoreV1().Nodes().Create(ctx, node2, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -329,7 +329,7 @@ func testFindNodeIPWithNoUsableIP(t *testing.T, ctx context.Context, fakeClient 
 			},
 		},
 	}
-	
+
 	_, err := fakeClient.CoreV1().Nodes().Create(ctx, node3, metav1.CreateOptions{})
 	require.NoError(t, err)
 
