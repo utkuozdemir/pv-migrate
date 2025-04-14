@@ -135,7 +135,7 @@ func TestGetNodePortServiceDetailsWithoutSSHPort(t *testing.T) {
 	t.Skip("Skipping test as fake.NewSimpleClientset() doesn't fully support watch functionality")
 }
 
-// TestFindNodePort tests the findNodePort helper function
+// TestFindNodePort tests the findNodePort helper function.
 func TestFindNodePort(t *testing.T) {
 	t.Parallel()
 
@@ -149,7 +149,7 @@ func TestFindNodePort(t *testing.T) {
 	testFindNodePortEmptyPorts(t)
 }
 
-// testFindNodePortWithSSH tests finding SSH ports in services
+// testFindNodePortWithSSH tests finding SSH ports in services.
 func testFindNodePortWithSSH(t *testing.T) {
 	// Test with SSH port by name
 	svcWithSSH := &corev1.Service{
@@ -196,7 +196,7 @@ func testFindNodePortWithSSH(t *testing.T) {
 	assert.Equal(t, 32222, port, "Should select port 22 even with different name")
 }
 
-// testFindNodePortFallback tests fallback to first port
+// testFindNodePortFallback tests fallback to first port.
 func testFindNodePortFallback(t *testing.T) {
 	svcWithoutSSH := &corev1.Service{
 		Spec: corev1.ServiceSpec{
@@ -220,7 +220,7 @@ func testFindNodePortFallback(t *testing.T) {
 	assert.Equal(t, 30080, port, "Should fallback to first port")
 }
 
-// testFindNodePortEmptyPorts tests service with no ports
+// testFindNodePortEmptyPorts tests service with no ports.
 func testFindNodePortEmptyPorts(t *testing.T) {
 	svcNoPort := &corev1.Service{
 		Spec: corev1.ServiceSpec{
@@ -232,7 +232,7 @@ func testFindNodePortEmptyPorts(t *testing.T) {
 	assert.Error(t, err, "Should return error for service with no ports")
 }
 
-// TestFindNodeIP tests the findNodeIP helper function
+// TestFindNodeIP tests the findNodeIP helper function.
 func TestFindNodeIP(t *testing.T) {
 	t.Parallel()
 
@@ -254,14 +254,14 @@ func TestFindNodeIP(t *testing.T) {
 	testFindNodeIPWithNoUsableIP(t, ctx, fakeClient)
 }
 
-// testFindNodeIPWithNoNodes tests findNodeIP with no nodes in the cluster
+// testFindNodeIPWithNoNodes tests findNodeIP with no nodes in the cluster.
 func testFindNodeIPWithNoNodes(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
 	ip, err := findNodeIP(ctx, fakeClient)
 	assert.Error(t, err, "Should return error when no nodes exist")
 	assert.Empty(t, ip)
 }
 
-// testFindNodeIPWithInternalIP tests findNodeIP with a node having internal IP
+// testFindNodeIPWithInternalIP tests findNodeIP with a node having internal IP.
 func testFindNodeIPWithInternalIP(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
 	// Create a node with internal IP
 	node1 := &corev1.Node{
@@ -287,8 +287,12 @@ func testFindNodeIPWithInternalIP(t *testing.T, ctx context.Context, fakeClient 
 	assert.Equal(t, "192.168.1.100", ip, "Should find internal IP")
 }
 
-// testFindNodeIPWithMultipleNodes tests findNodeIP with multiple nodes having different IP types
-func testFindNodeIPWithMultipleNodes(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
+// testFindNodeIPWithMultipleNodes tests findNodeIP with multiple nodes having different IP types.
+func testFindNodeIPWithMultipleNodes(
+	t *testing.T,
+	ctx context.Context,
+	fakeClient *fake.Clientset,
+) {
 	// Add node with external IP
 	node2 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
@@ -313,7 +317,7 @@ func testFindNodeIPWithMultipleNodes(t *testing.T, ctx context.Context, fakeClie
 	assert.Equal(t, "192.168.1.100", ip, "Should find first valid IP (internal)")
 }
 
-// testFindNodeIPWithNoUsableIP tests findNodeIP with nodes having no usable IPs
+// testFindNodeIPWithNoUsableIP tests findNodeIP with nodes having no usable IPs.
 func testFindNodeIPWithNoUsableIP(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
 	// Create node with only hostname, no IP
 	node3 := &corev1.Node{
@@ -345,5 +349,5 @@ func testFindNodeIPWithNoUsableIP(t *testing.T, ctx context.Context, fakeClient 
 	assert.Empty(t, ip)
 }
 
-// testContext is a type alias to make the function signatures cleaner
+// testContext is a type alias to make the function signatures cleaner.
 type testContext = context.Context

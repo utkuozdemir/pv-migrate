@@ -408,12 +408,13 @@ func (n *NodePort) testRun(
 	return nil
 }
 
-// prepareSSHConfig generates SSH keys and returns the configuration
+// prepareSSHConfig generates SSH keys and returns the configuration.
 func (n *NodePort) prepareSSHConfig(keyAlgorithm string, logger *slog.Logger) (*struct {
 	publicKey           string
 	privateKey          string
 	privateKeyMountPath string
-}, error) {
+}, error,
+) {
 	logger.Info("🔑 Generating SSH key pair", "algorithm", keyAlgorithm)
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
@@ -434,14 +435,15 @@ func (n *NodePort) prepareSSHConfig(keyAlgorithm string, logger *slog.Logger) (*
 	}, nil
 }
 
-// setupReleaseNames returns the source and destination release names
+// setupReleaseNames returns the source and destination release names.
 func (n *NodePort) setupReleaseNames(attempt *migration.Attempt) []string {
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
+
 	return []string{srcReleaseName, destReleaseName}
 }
 
-// setupSourceNodePort installs the source component with NodePort service
+// setupSourceNodePort installs the source component with NodePort service.
 func (n *NodePort) setupSourceNodePort(
 	ctx context.Context,
 	attempt *migration.Attempt,
@@ -475,7 +477,7 @@ func (n *NodePort) setupSourceNodePort(
 	return nil
 }
 
-// setupDestinationNodePort installs the destination component and waits for job completion
+// setupDestinationNodePort installs the destination component and waits for job completion.
 func (n *NodePort) setupDestinationNodePort(
 	ctx context.Context,
 	attempt *migration.Attempt,
@@ -499,6 +501,7 @@ func (n *NodePort) setupDestinationNodePort(
 
 	// Get NodePort service address and port
 	svcName := srcReleaseName + "-sshd"
+
 	nodeIP, nodePort, err := getNodePortDetailsFn(
 		ctx,
 		sourceInfo.ClusterClient.KubeClient,
