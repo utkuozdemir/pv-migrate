@@ -524,26 +524,98 @@ func (n *NodePort) setupDestinationNodePort(
 	return waitForJobFn(ctx, kubeClient, destInfo.Claim.Namespace, jobName, showProgressBar, logger)
 }
 
-// Test destination host override.
-func TestDestHostOverrideWithMocks(t *testing.T) {
-	t.Parallel()
+// createMockRequest creates a mock migration request for testing
+func createMockRequest() *migration.Request {
+	return &migration.Request{
+		Source: &migration.PVCInfo{
+			Namespace: "source-ns",
+			Name:      "source-pvc",
+			Path:      "/",
+		},
+		Dest: &migration.PVCInfo{
+			Namespace: "dest-ns",
+			Name:      "dest-pvc",
+			Path:      "/",
+		},
+		SourceMountReadOnly: true,
+		KeyAlgorithm:        ssh.Ed25519KeyAlgorithm,
+	}
+}
 
-	// Setup
+// createMockPVC creates a mock PVC with the given name and namespace
+func createMockPVC(name, namespace string) *corev1.PersistentVolumeClaim {
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("10Gi"),
+				},
+			},
+		},
+	}
+}
+
+// createMockPVCInfo creates a mock PVC info with the given PVC and client
+func createMockPVCInfo(pvc *corev1.PersistentVolumeClaim, client *k8s.ClusterClient) *pvc.Info {
+	return &pvc.Info{
+		Claim:         pvc,
+		ClusterClient: client,
+	}
+}
+
+// Helper function to create a mock migration attempt.
+func createMockAttempt() *migration.Attempt {
+	// Create the request
+	req := createMockRequest()
+
+	// Create a fake client
+	fakeClient := fake.NewSimpleClientset()
+	fakeClusterClient := &k8s.ClusterClient{
+		KubeClient: fakeClient,
+	}
+
+	// Create source and destination PVCs
+	sourceClaim := createMockPVC("source-pvc", "source-ns")
+	destClaim := createMockPVC("dest-pvc", "dest-ns")
+
+	// Create PVC info objects
+	sourceInfo := createMockPVCInfo(sourceClaim, fakeClusterClient)
+	destInfo := createMockPVCInfo(destClaim, fakeClusterClient)
+
+	// Create the migration
+	mig := &migration.Migration{
+		SourceInfo: sourceInfo,
+		DestInfo:   destInfo,
+		Request:    req,
+	}
+
+	// Return the attempt
+	return &migration.Attempt{
+		ID:                    "test-attempt",
+		HelmReleaseNamePrefix: "test-prefix",
+		Migration:             mig,
+	}
+}
+
+// createTestMocks creates and configures the mock objects needed for NodePort tests
+func createTestMocks(
+	t *testing.T,
+	ctx context.Context,
+	attempt *migration.Attempt,
+	overrideHost string,
+	mockNodeIP string,
+	mockNodePort int,
+) (*mockInstaller, *mockK8sFunctions, *slog.Logger) {
 	logger := slogt.New(t)
-	ctx := t.Context()
-	attempt := createMockAttempt()
-
-	// Set a destination host override
-	overrideHost := "override.example.com"
-	attempt.Migration.Request.DestHostOverride = overrideHost
 
 	// Create mocks
 	mockInstaller := new(mockInstaller)
 	mockK8s := new(mockK8sFunctions)
-
-	// Setup expected calls
-	mockNodeIP := "192.168.1.100" // This should be ignored when override is present
-	mockNodePort := 32222
 
 	// Source installation
 	mockInstaller.On("InstallHelmChart",
@@ -561,7 +633,7 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 		mock.Anything,
 		mock.Anything).Return(mockNodeIP, mockNodePort, nil)
 
-	// Check destination installation uses override host
+	// Check destination installation uses the provided host
 	mockInstaller.On("InstallHelmChart",
 		attempt,
 		attempt.Migration.DestInfo,
@@ -586,7 +658,29 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 		mock.Anything,
 		logger).Return(nil)
 
-	// Create NodePort strategy with mock dependencies
+	return mockInstaller, mockK8s, logger
+}
+
+// Test destination host override.
+func TestDestHostOverrideWithMocks(t *testing.T) {
+	t.Parallel()
+
+	// Setup
+	ctx := t.Context()
+	attempt := createMockAttempt()
+
+	// Set a destination host override
+	overrideHost := "override.example.com"
+	attempt.Migration.Request.DestHostOverride = overrideHost
+
+	// Setup mock values
+	mockNodeIP := "192.168.1.100" // This should be ignored when override is present
+	mockNodePort := 32222
+
+	// Create and configure mocks
+	mockInstaller, mockK8s, logger := createTestMocks(t, ctx, attempt, overrideHost, mockNodeIP, mockNodePort)
+
+	// Create NodePort strategy
 	np := NodePort{}
 
 	// Test with our own Run method that uses the mock dependencies
@@ -599,80 +693,4 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 	require.NoError(t, err)
 	mockInstaller.AssertExpectations(t)
 	mockK8s.AssertExpectations(t)
-}
-
-// Helper function to create a mock migration attempt.
-func createMockAttempt() *migration.Attempt {
-	req := &migration.Request{
-		Source: &migration.PVCInfo{
-			Namespace: "source-ns",
-			Name:      "source-pvc",
-			Path:      "/",
-		},
-		Dest: &migration.PVCInfo{
-			Namespace: "dest-ns",
-			Name:      "dest-pvc",
-			Path:      "/",
-		},
-		SourceMountReadOnly: true,
-		KeyAlgorithm:        ssh.Ed25519KeyAlgorithm,
-	}
-
-	sourceClaim := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "source-pvc",
-			Namespace: "source-ns",
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-			Resources: corev1.VolumeResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("10Gi"),
-				},
-			},
-		},
-	}
-
-	destClaim := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "dest-pvc",
-			Namespace: "dest-ns",
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-			Resources: corev1.VolumeResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("10Gi"),
-				},
-			},
-		},
-	}
-
-	fakeClient := fake.NewSimpleClientset()
-
-	fakeClusterClient := &k8s.ClusterClient{
-		KubeClient: fakeClient,
-	}
-
-	sourceInfo := &pvc.Info{
-		Claim:         sourceClaim,
-		ClusterClient: fakeClusterClient,
-	}
-
-	destInfo := &pvc.Info{
-		Claim:         destClaim,
-		ClusterClient: fakeClusterClient,
-	}
-
-	mig := &migration.Migration{
-		SourceInfo: sourceInfo,
-		DestInfo:   destInfo,
-		Request:    req,
-	}
-
-	return &migration.Attempt{
-		ID:                    "test-attempt",
-		HelmReleaseNamePrefix: "test-prefix",
-		Migration:             mig,
-	}
 }
