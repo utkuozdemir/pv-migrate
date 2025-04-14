@@ -400,7 +400,7 @@ func (n *NodePort) testRun(
 	}
 
 	// Setup destination with NodePort
-	if err := n.setupDestinationNodePort(ctx, attempt, installFn, waitForJobFn,
+	if err := n.setupDestinationNodePort(ctx, attempt, installFn, getNodePortDetailsFn, waitForJobFn,
 		releaseNames, sshConfig, logger); err != nil {
 		return err
 	}
@@ -480,6 +480,7 @@ func (n *NodePort) setupDestinationNodePort(
 	ctx context.Context,
 	attempt *migration.Attempt,
 	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
+	getNodePortDetailsFn func(context.Context, kubernetes.Interface, string, string, interface{}) (string, int, error),
 	waitForJobFn func(context.Context, kubernetes.Interface, string, string, bool, *slog.Logger) error,
 	releaseNames []string,
 	sshConfig *struct {
