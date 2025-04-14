@@ -8,6 +8,7 @@ import (
 	slogt "github.com/neilotoole/slogt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -131,7 +132,7 @@ func TestInstallNodePortOnSource(t *testing.T) {
 	)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mockInstaller.AssertExpectations(t)
 }
 
@@ -174,7 +175,7 @@ func TestInstallOnDestWithNodePort(t *testing.T) {
 		privateKey, privateKeyPath, sshHost, nodePort, srcMountPath, destMountPath, logger)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mockInstaller.AssertExpectations(t)
 }
 
@@ -364,7 +365,7 @@ func TestNodePortRunWithMocks(t *testing.T) {
 		mockK8s.WaitForJobCompletion)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mockInstaller.AssertExpectations(t)
 	mockK8s.AssertExpectations(t)
 }
@@ -617,7 +618,7 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 		mockK8s.WaitForJobCompletion)
 
 	// Assert
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	mockInstaller.AssertExpectations(t)
 	mockK8s.AssertExpectations(t)
 }
