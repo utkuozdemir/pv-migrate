@@ -113,6 +113,33 @@ func installNodePortOnSource(attempt *migration.Attempt, releaseName,
 func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateKey,
 	privateKeyMountPath, sshHost string, sshPort int, srcMountPath, destMountPath string, logger *slog.Logger,
 ) error {
+	vals, err := buildNodePortDestValues(
+		attempt,
+		privateKey,
+		privateKeyMountPath,
+		sshHost,
+		sshPort,
+		srcMountPath,
+		destMountPath,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to build Helm values for destination: %w", err)
+	}
+
+	return installHelmChart(attempt, attempt.Migration.DestInfo, releaseName, vals, logger)
+}
+
+// buildNodePortDestValues builds the Helm values for installing rsync on the destination
+// with NodePort connectivity to the source.
+func buildNodePortDestValues(
+	attempt *migration.Attempt,
+	privateKey string,
+	privateKeyMountPath string,
+	sshHost string,
+	sshPort int,
+	srcMountPath string,
+	destMountPath string,
+) (map[string]any, error) {
 	mig := attempt.Migration
 	destInfo := mig.DestInfo
 	namespace := destInfo.Claim.Namespace
@@ -132,10 +159,10 @@ func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateK
 
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
-		return fmt.Errorf("failed to build rsync command: %w", err)
+		return nil, fmt.Errorf("failed to build rsync command: %w", err)
 	}
 
-	vals := map[string]any{
+	return map[string]any{
 		"rsync": map[string]any{
 			"enabled":             true,
 			"namespace":           namespace,
@@ -153,7 +180,5 @@ func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateK
 			"command":  rsyncCmdStr,
 			"affinity": destInfo.AffinityHelmValues,
 		},
-	}
-
-	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
+	}, nil
 }

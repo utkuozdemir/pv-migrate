@@ -19,7 +19,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/k8s"
 	"github.com/utkuozdemir/pv-migrate/migration"
 	"github.com/utkuozdemir/pv-migrate/pvc"
-	"github.com/utkuozdemir/pv-migrate/rsync"
 	"github.com/utkuozdemir/pv-migrate/ssh"
 )
 
@@ -88,6 +87,7 @@ func (m *mockInstaller) InstallHelmChart(attempt *migration.Attempt, pvcInfo *pv
 	if err := args.Error(0); err != nil {
 		return fmt.Errorf("error from mock installer: %w", err)
 	}
+
 	return nil
 }
 
@@ -184,7 +184,6 @@ func TestInstallOnDestWithNodePort(t *testing.T) {
 }
 
 // Test wrapper methods for NodePort to allow dependency injection.
-// Test wrapper methods for NodePort to allow dependency injection.
 func (n *NodePort) testInstallNodePortOnSource(
 	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
 	attempt *migration.Attempt,
@@ -231,49 +230,20 @@ func (n *NodePort) testInstallOnDestWithNodePort(
 	destMountPath string,
 	logger *slog.Logger,
 ) error {
-	mig := attempt.Migration
-	destInfo := mig.DestInfo
-	namespace := destInfo.Claim.Namespace
-
-	srcPath := srcMountPath + "/" + mig.Request.Source.Path
-	destPath := destMountPath + "/" + mig.Request.Dest.Path
-	rsyncCmd := rsync.Cmd{
-		NoChown:    mig.Request.NoChown,
-		Delete:     mig.Request.DeleteExtraneousFiles,
-		SrcPath:    srcPath,
-		DestPath:   destPath,
-		SrcUseSSH:  true,
-		SrcSSHHost: sshHost,
-		Port:       sshPort, // Use Port instead of SrcSSHPort
-		Compress:   mig.Request.Compress,
-	}
-
-	rsyncCmdStr, err := rsyncCmd.Build()
+	vals, err := buildNodePortDestValues(
+		attempt,
+		privateKey,
+		privateKeyMountPath,
+		sshHost,
+		sshPort,
+		srcMountPath,
+		destMountPath,
+	)
 	if err != nil {
-		return fmt.Errorf("failed to build rsync command: %w", err)
+		return fmt.Errorf("failed to build Helm values for destination in test: %w", err)
 	}
 
-	vals := map[string]any{
-		"rsync": map[string]any{
-			"enabled":             true,
-			"namespace":           namespace,
-			"privateKeyMount":     true,
-			"privateKey":          privateKey,
-			"privateKeyMountPath": privateKeyMountPath,
-			"sshRemoteHost":       sshHost,
-			"sshRemotePort":       sshPort,
-			"pvcMounts": []map[string]any{
-				{
-					"name":      destInfo.Claim.Name,
-					"mountPath": destMountPath,
-				},
-			},
-			"command":  rsyncCmdStr,
-			"affinity": destInfo.AffinityHelmValues,
-		},
-	}
-
-	return installFn(attempt, destInfo, releaseName, vals, logger)
+	return installFn(attempt, attempt.Migration.DestInfo, releaseName, vals, logger)
 }
 
 // Mock k8s functions.
@@ -306,6 +276,7 @@ func (m *mockK8sFunctions) WaitForJobCompletion(
 	if err := args.Error(0); err != nil {
 		return fmt.Errorf("error waiting for job completion: %w", err)
 	}
+
 	return nil
 }
 
