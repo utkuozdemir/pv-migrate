@@ -242,10 +242,10 @@ func TestFindNodeIP(t *testing.T) {
 	fakeClient := fake.NewSimpleClientset()
 
 	// Test with no nodes
-	testFindNodeIPWithNoNodes(t, ctx, fakeClient)
+	testFindNodeIPWithNoNodes(ctx, t, fakeClient)
 
 	// Test with a node that has internal IP
-	testFindNodeIPWithInternalIP(t, ctx, fakeClient)
+	testFindNodeIPWithInternalIP(ctx, t, fakeClient)
 
 	// Test with multiple nodes having different IP types
 	testFindNodeIPWithMultipleNodes(ctx, t, fakeClient)
@@ -255,14 +255,22 @@ func TestFindNodeIP(t *testing.T) {
 }
 
 // testFindNodeIPWithNoNodes tests findNodeIP with no nodes in the cluster.
-func testFindNodeIPWithNoNodes(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
+func testFindNodeIPWithNoNodes(
+	ctx context.Context,
+	t *testing.T,
+	fakeClient *fake.Clientset,
+) {
 	ip, err := findNodeIP(ctx, fakeClient)
 	assert.Error(t, err, "Should return error when no nodes exist")
 	assert.Empty(t, ip)
 }
 
 // testFindNodeIPWithInternalIP tests findNodeIP with a node having internal IP.
-func testFindNodeIPWithInternalIP(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
+func testFindNodeIPWithInternalIP(
+	ctx context.Context,
+	t *testing.T,
+	fakeClient *fake.Clientset,
+) {
 	// Create a node with internal IP
 	node1 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
