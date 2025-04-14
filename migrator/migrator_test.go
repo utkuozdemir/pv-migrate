@@ -129,7 +129,25 @@ func TestNodePortStrategyIntegration(t *testing.T) {
 
 	ctx := t.Context()
 	logger := slogt.New(t)
+	
+	// Setup strategy mocks and migrator
+	strategyExecutionOrder, migrator := setupNodePortStrategyTest()
 
+	// Request with default strategies (should include NodePort now)
+	// Important: We need to set ignoreMounted to true since our mocks use mounted PVCs
+	req := buildMigration(true) 
+	
+	// Run the migration
+	err := migrator.Run(ctx, req, logger)
+	
+	// Verify results
+	require.NoError(t, err)
+	
+	assertNodePortStrategyExecution(t, strategyExecutionOrder)
+}
+
+// setupNodePortStrategyTest creates mock strategies and returns the execution order tracker and migrator
+func setupNodePortStrategyTest() ([]string, Migrator) {
 	strategyExecutionOrder := []string{}
 	
 	// Create mocks for each strategy
@@ -172,25 +190,20 @@ func TestNodePortStrategyIntegration(t *testing.T) {
 		getKubeClient: fakeClusterClientGetter(),
 		getStrategyMap: func([]string) (map[string]strategy.Strategy, error) {
 			return map[string]strategy.Strategy{
-				strategy.Mnt2Strategy:    &mnt2Mock,
-				strategy.SvcStrategy:     &svcMock,
-				strategy.LbSvcStrategy:   &lbsvcMock,
+				strategy.Mnt2Strategy:     &mnt2Mock,
+				strategy.SvcStrategy:      &svcMock,
+				strategy.LbSvcStrategy:    &lbsvcMock,
 				strategy.NodePortStrategy: &nodeportMock,
-				strategy.LocalStrategy:   &localMock,
+				strategy.LocalStrategy:    &localMock,
 			}, nil
 		},
 	}
+	
+	return strategyExecutionOrder, migrator
+}
 
-	// Request with default strategies (should include NodePort now)
-	// Important: We need to set ignoreMounted to true since our mocks use mounted PVCs
-	req := buildMigration(true) // Changed from false to true
-	
-	// Run the migration
-	err := migrator.Run(ctx, req, logger)
-	
-	// Verify results
-	require.NoError(t, err)
-	
+// assertNodePortStrategyExecution verifies the strategy execution
+func assertNodePortStrategyExecution(t *testing.T, strategyExecutionOrder []string) {
 	// Check that NodePort strategy was tried and succeeded
 	assert.Contains(t, strategyExecutionOrder, strategy.NodePortStrategy, 
 		"NodePort strategy should have been executed")
