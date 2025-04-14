@@ -248,7 +248,7 @@ func TestFindNodeIP(t *testing.T) {
 	testFindNodeIPWithInternalIP(t, ctx, fakeClient)
 
 	// Test with multiple nodes having different IP types
-	testFindNodeIPWithMultipleNodes(t, ctx, fakeClient)
+	testFindNodeIPWithMultipleNodes(ctx, t, fakeClient)
 
 	// Test with a node that has no usable IP
 	testFindNodeIPWithNoUsableIP(t, ctx, fakeClient)
@@ -289,8 +289,8 @@ func testFindNodeIPWithInternalIP(t *testing.T, ctx context.Context, fakeClient 
 
 // testFindNodeIPWithMultipleNodes tests findNodeIP with multiple nodes having different IP types.
 func testFindNodeIPWithMultipleNodes(
-	t *testing.T,
 	ctx context.Context,
+	t *testing.T,
 	fakeClient *fake.Clientset,
 ) {
 	// Add node with external IP
