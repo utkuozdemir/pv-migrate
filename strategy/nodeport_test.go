@@ -2,23 +2,23 @@ package strategy
 
 import (
 	"context"
-	"testing"
-
 	"log/slog"
+	"testing"
 
 	slogt "github.com/neilotoole/slogt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"github.com/utkuozdemir/pv-migrate/k8s"
-	"github.com/utkuozdemir/pv-migrate/migration"
-	"github.com/utkuozdemir/pv-migrate/pvc"
-	"github.com/utkuozdemir/pv-migrate/rsync"
-	"github.com/utkuozdemir/pv-migrate/ssh"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+
+	"github.com/utkuozdemir/pv-migrate/k8s"
+	"github.com/utkuozdemir/pv-migrate/migration"
+	"github.com/utkuozdemir/pv-migrate/pvc"
+	"github.com/utkuozdemir/pv-migrate/rsync"
+	"github.com/utkuozdemir/pv-migrate/ssh"
 )
 
 func TestNodePortStrategy(t *testing.T) {
@@ -33,9 +33,11 @@ func TestNodePortInDefaultStrategies(t *testing.T) {
 	t.Parallel()
 
 	found := false
+
 	for _, s := range DefaultStrategies {
 		if s == NodePortStrategy {
 			found = true
+
 			break
 		}
 	}
@@ -47,9 +49,11 @@ func TestNodePortInAllStrategies(t *testing.T) {
 	t.Parallel()
 
 	found := false
+
 	for _, s := range AllStrategies {
 		if s == NodePortStrategy {
 			found = true
+
 			break
 		}
 	}
@@ -69,18 +73,20 @@ func TestNodePortInNameToStrategy(t *testing.T) {
 	assert.True(t, ok, "Strategy instance should be of type *NodePort")
 }
 
-// Mock for installation functions
+// Mock for installation functions.
 type mockInstaller struct {
 	mock.Mock
 }
 
 func (m *mockInstaller) InstallHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string,
-	values map[string]any, logger *slog.Logger) error {
+	values map[string]any, logger *slog.Logger,
+) error {
 	args := m.Called(attempt, pvcInfo, name, values, logger)
+
 	return args.Error(0)
 }
 
-// Test helper for NodePort installation functions
+// Test helper for NodePort installation functions.
 func TestInstallNodePortOnSource(t *testing.T) {
 	t.Parallel()
 
@@ -106,6 +112,7 @@ func TestInstallNodePortOnSource(t *testing.T) {
 			if !ok {
 				return false
 			}
+
 			return service["type"] == "NodePort"
 		}),
 		logger).Return(nil)
@@ -114,7 +121,14 @@ func TestInstallNodePortOnSource(t *testing.T) {
 	np := &NodePort{}
 
 	// Call the function we want to test through a wrapper that uses our mock
-	err := np.testInstallNodePortOnSource(mockInstaller.InstallHelmChart, attempt, releaseName, publicKey, srcMountPath, logger)
+	err := np.testInstallNodePortOnSource(
+		mockInstaller.InstallHelmChart,
+		attempt,
+		releaseName,
+		publicKey,
+		srcMountPath,
+		logger,
+	)
 
 	// Assert
 	assert.NoError(t, err)
@@ -164,7 +178,7 @@ func TestInstallOnDestWithNodePort(t *testing.T) {
 	mockInstaller.AssertExpectations(t)
 }
 
-// Test wrapper methods for NodePort to allow dependency injection
+// Test wrapper methods for NodePort to allow dependency injection.
 func (n *NodePort) testInstallNodePortOnSource(
 	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
 	attempt *migration.Attempt,
@@ -256,7 +270,7 @@ func (n *NodePort) testInstallOnDestWithNodePort(
 	return installFn(attempt, destInfo, releaseName, vals, logger)
 }
 
-// Mock k8s functions
+// Mock k8s functions.
 type mockK8sFunctions struct {
 	mock.Mock
 }
@@ -269,6 +283,7 @@ func (m *mockK8sFunctions) GetNodePortServiceDetails(
 	timeout interface{},
 ) (string, int, error) {
 	args := m.Called(ctx, cli, namespace, name, timeout)
+
 	return args.String(0), args.Int(1), args.Error(2)
 }
 
@@ -281,16 +296,17 @@ func (m *mockK8sFunctions) WaitForJobCompletion(
 	logger *slog.Logger,
 ) error {
 	args := m.Called(ctx, cli, namespace, name, showProgressBar, logger)
+
 	return args.Error(0)
 }
 
-// Mock test for the NodePort Run method with proper dependencies injected
+// Mock test for the NodePort Run method with proper dependencies injected.
 func TestNodePortRunWithMocks(t *testing.T) {
 	t.Parallel()
 
 	// Setup
 	logger := slogt.New(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	attempt := createMockAttempt()
 
 	// Create mocks for all the dependencies
@@ -352,7 +368,7 @@ func TestNodePortRunWithMocks(t *testing.T) {
 	mockK8s.AssertExpectations(t)
 }
 
-// Test helper method for NodePort.Run
+// Test helper method for NodePort.Run.
 func (n *NodePort) testRun(
 	ctx context.Context,
 	attempt *migration.Attempt,
@@ -384,13 +400,21 @@ func (n *NodePort) testRun(
 	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
 	// Install source with NodePort
-	err = n.testInstallNodePortOnSource(installFn, attempt, srcReleaseName, publicKey, srcMountPath, logger)
+	err = n.testInstallNodePortOnSource(
+		installFn,
+		attempt,
+		srcReleaseName,
+		publicKey,
+		srcMountPath,
+		logger,
+	)
 	if err != nil {
 		return err
 	}
 
 	// Get NodePort service address and port
 	svcName := srcReleaseName + "-sshd"
+
 	nodeIP, nodePort, err := getNodePortDetailsFn(
 		ctx,
 		sourceInfo.ClusterClient.KubeClient,
@@ -409,8 +433,18 @@ func (n *NodePort) testRun(
 	}
 
 	// Install on destination
-	err = n.testInstallOnDestWithNodePort(installFn, attempt, destReleaseName, privateKey, privateKeyMountPath,
-		sshTargetHost, nodePort, srcMountPath, destMountPath, logger)
+	err = n.testInstallOnDestWithNodePort(
+		installFn,
+		attempt,
+		destReleaseName,
+		privateKey,
+		privateKeyMountPath,
+		sshTargetHost,
+		nodePort,
+		srcMountPath,
+		destMountPath,
+		logger,
+	)
 	if err != nil {
 		return err
 	}
@@ -423,13 +457,13 @@ func (n *NodePort) testRun(
 	return waitForJobFn(ctx, kubeClient, destInfo.Claim.Namespace, jobName, showProgressBar, logger)
 }
 
-// Test destination host override
+// Test destination host override.
 func TestDestHostOverrideWithMocks(t *testing.T) {
 	t.Parallel()
 
 	// Setup
 	logger := slogt.New(t)
-	ctx := context.Background()
+	ctx := t.Context()
 	attempt := createMockAttempt()
 
 	// Set a destination host override
@@ -471,6 +505,7 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 				return false
 			}
 			host, ok := rsync["sshRemoteHost"].(string)
+
 			return ok && host == overrideHost
 		}),
 		logger).Return(nil)
@@ -499,7 +534,7 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 	mockK8s.AssertExpectations(t)
 }
 
-// Helper function to create a mock migration attempt
+// Helper function to create a mock migration attempt.
 func createMockAttempt() *migration.Attempt {
 	req := &migration.Request{
 		Source: &migration.PVCInfo{

@@ -123,7 +123,7 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	assert.Equal(t, []int{3, 1, 2}, result)
 }
 
-// TestNodePortStrategyUnit tests the NodePort strategy's unit integration with the migrator
+// TestNodePortStrategyUnit tests the NodePort strategy's unit integration with the migrator.
 func TestNodePortStrategyUnit(t *testing.T) {
 	t.Parallel()
 
@@ -170,11 +170,12 @@ func TestNodePortStrategyUnit(t *testing.T) {
 		"LocalStrategy should not have been tried since NodePort succeeded")
 }
 
-// makeStrategyMocks creates mocks for all strategies and records execution in the provided slice
+// makeStrategyMocks creates mocks for all strategies and records execution in the provided slice.
 func makeStrategyMocks(executedStrategies *[]string) map[string]strategy.Strategy {
 	mnt2Mock := mockStrategy{
 		runFunc: func(_ context.Context, _ *migration.Attempt) error {
 			*executedStrategies = append(*executedStrategies, strategy.Mnt2Strategy)
+
 			return strategy.ErrUnaccepted
 		},
 	}
@@ -182,6 +183,7 @@ func makeStrategyMocks(executedStrategies *[]string) map[string]strategy.Strateg
 	svcMock := mockStrategy{
 		runFunc: func(_ context.Context, _ *migration.Attempt) error {
 			*executedStrategies = append(*executedStrategies, strategy.SvcStrategy)
+
 			return strategy.ErrUnaccepted
 		},
 	}
@@ -189,6 +191,7 @@ func makeStrategyMocks(executedStrategies *[]string) map[string]strategy.Strateg
 	lbsvcMock := mockStrategy{
 		runFunc: func(_ context.Context, _ *migration.Attempt) error {
 			*executedStrategies = append(*executedStrategies, strategy.LbSvcStrategy)
+
 			return strategy.ErrUnaccepted
 		},
 	}
@@ -196,6 +199,7 @@ func makeStrategyMocks(executedStrategies *[]string) map[string]strategy.Strateg
 	nodeportMock := mockStrategy{
 		runFunc: func(_ context.Context, _ *migration.Attempt) error {
 			*executedStrategies = append(*executedStrategies, strategy.NodePortStrategy)
+
 			return nil // This one succeeds
 		},
 	}
@@ -203,6 +207,7 @@ func makeStrategyMocks(executedStrategies *[]string) map[string]strategy.Strateg
 	localMock := mockStrategy{
 		runFunc: func(_ context.Context, _ *migration.Attempt) error {
 			*executedStrategies = append(*executedStrategies, strategy.LocalStrategy)
+
 			return strategy.ErrUnaccepted
 		},
 	}
@@ -216,7 +221,7 @@ func makeStrategyMocks(executedStrategies *[]string) map[string]strategy.Strateg
 	}
 }
 
-// TestExplicitNodePortStrategySelection tests that NodePort strategy can be explicitly selected
+// TestExplicitNodePortStrategySelection tests that NodePort strategy can be explicitly selected.
 func TestExplicitNodePortStrategySelection(t *testing.T) {
 	t.Parallel()
 
@@ -228,6 +233,7 @@ func TestExplicitNodePortStrategySelection(t *testing.T) {
 	nodeportMock := mockStrategy{
 		runFunc: func(_ context.Context, _ *migration.Attempt) error {
 			nodeportExecuted = true
+
 			return nil
 		},
 	}
@@ -243,14 +249,21 @@ func TestExplicitNodePortStrategySelection(t *testing.T) {
 
 	// Request with only NodePort strategy explicitly selected
 	// Important: We need to set ignoreMounted to true since our mocks use mounted PVCs
-	req := buildMigrationRequestWithStrategies([]string{strategy.NodePortStrategy}, true) // Changed from false to true
+	req := buildMigrationRequestWithStrategies(
+		[]string{strategy.NodePortStrategy},
+		true,
+	) // Changed from false to true
 
 	// Run the migration
 	err := migrator.Run(ctx, req, logger)
 
 	// Verify results
 	require.NoError(t, err)
-	assert.True(t, nodeportExecuted, "NodePort strategy should have been executed when explicitly selected")
+	assert.True(
+		t,
+		nodeportExecuted,
+		"NodePort strategy should have been executed when explicitly selected",
+	)
 }
 
 func buildMigration(ignoreMounted bool) *migration.Request {
