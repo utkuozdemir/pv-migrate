@@ -377,44 +377,127 @@ func (n *NodePort) testRun(
 	getNodePortDetailsFn func(context.Context, kubernetes.Interface, string, string, interface{}) (string, int, error),
 	waitForJobFn func(context.Context, kubernetes.Interface, string, string, bool, *slog.Logger) error,
 ) error {
+	// Prepare migration config
 	mig := attempt.Migration
 	sourceInfo := mig.SourceInfo
-	destInfo := mig.DestInfo
 	sourceNs := sourceInfo.Claim.Namespace
-	keyAlgorithm := mig.Request.KeyAlgorithm
+	
+	// Setup SSH keys and release names
+	sshConfig, err := n.prepareSSHConfig(mig.Request.KeyAlgorithm, logger)
+	if err != nil {
+		return err
+	}
+	
+	// Setup release names and cleanup hook
+	releaseNames := n.setupReleaseNames(attempt)
+	doneCh := registerCleanupHook(attempt, releaseNames, logger)
+	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
+	// Setup source with NodePort
+	if err := n.setupSourceNodePort(ctx, attempt, sourceInfo, sourceNs, installFn, 
+		getNodePortDetailsFn, releaseNames, sshConfig, logger); err != nil {
+		return err
+	}
+	
+	// Setup destination with NodePort
+	if err := n.setupDestinationNodePort(ctx, attempt, installFn, waitForJobFn, 
+		releaseNames, sshConfig, logger); err != nil {
+		return err
+	}
+	
+	return nil
+}
+
+// prepareSSHConfig generates SSH keys and returns the configuration
+func (n *NodePort) prepareSSHConfig(keyAlgorithm string, logger *slog.Logger) (*struct {
+	publicKey          string
+	privateKey         string
+	privateKeyMountPath string
+}, error) {
 	logger.Info("🔑 Generating SSH key pair", "algorithm", keyAlgorithm)
 
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
+	
+	return &struct {
+		publicKey          string
+		privateKey         string
+		privateKeyMountPath string
+	}{
+		publicKey:          publicKey,
+		privateKey:         privateKey,
+		privateKeyMountPath: privateKeyMountPath,
+	}, nil
+}
 
+// setupReleaseNames returns the source and destination release names
+func (n *NodePort) setupReleaseNames(attempt *migration.Attempt) []string {
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
-	releaseNames := []string{srcReleaseName, destReleaseName}
+	return []string{srcReleaseName, destReleaseName}
+}
 
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
-
+// setupSourceNodePort installs the source component with NodePort service
+func (n *NodePort) setupSourceNodePort(
+	ctx context.Context,
+	attempt *migration.Attempt,
+	sourceInfo *pvc.Info,
+	sourceNs string,
+	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
+	getNodePortDetailsFn func(context.Context, kubernetes.Interface, string, string, interface{}) (string, int, error),
+	releaseNames []string,
+	sshConfig *struct {
+		publicKey          string
+		privateKey         string
+		privateKeyMountPath string
+	},
+	logger *slog.Logger,
+) error {
+	srcReleaseName := releaseNames[0]
+	
 	// Install source with NodePort
-	err = n.testInstallNodePortOnSource(
+	err := n.testInstallNodePortOnSource(
 		installFn,
 		attempt,
 		srcReleaseName,
-		publicKey,
+		sshConfig.publicKey,
 		srcMountPath,
 		logger,
 	)
 	if err != nil {
 		return err
 	}
+	
+	return nil
+}
 
+// setupDestinationNodePort installs the destination component and waits for job completion
+func (n *NodePort) setupDestinationNodePort(
+	ctx context.Context,
+	attempt *migration.Attempt,
+	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
+	waitForJobFn func(context.Context, kubernetes.Interface, string, string, bool, *slog.Logger) error,
+	releaseNames []string,
+	sshConfig *struct {
+		publicKey          string
+		privateKey         string
+		privateKeyMountPath string
+	},
+	logger *slog.Logger,
+) error {
+	mig := attempt.Migration
+	sourceInfo := mig.SourceInfo
+	destInfo := mig.DestInfo
+	sourceNs := sourceInfo.Claim.Namespace
+	srcReleaseName := releaseNames[0]
+	destReleaseName := releaseNames[1]
+	
 	// Get NodePort service address and port
 	svcName := srcReleaseName + "-sshd"
-
 	nodeIP, nodePort, err := getNodePortDetailsFn(
 		ctx,
 		sourceInfo.ClusterClient.KubeClient,
@@ -437,8 +520,8 @@ func (n *NodePort) testRun(
 		installFn,
 		attempt,
 		destReleaseName,
-		privateKey,
-		privateKeyMountPath,
+		sshConfig.privateKey,
+		sshConfig.privateKeyMountPath,
 		sshTargetHost,
 		nodePort,
 		srcMountPath,
