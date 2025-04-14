@@ -214,8 +214,12 @@ func setMigrateCmdFlags(cmd *cobra.Command, logLevels, logFormats []string, lega
 	flags.BoolP(FlagSkipCleanup, "x", false, "skip cleanup of the migration")
 	flags.BoolP(FlagNoProgressBar, "b", false, "do not display a progress bar")
 	flags.BoolP(FlagSourceMountReadOnly, "R", true, "mount the source PVC in ReadOnly mode")
-	flags.StringSliceP(FlagStrategies, "s", strategy.DefaultStrategies,
-		"the comma-separated list of strategies to be used in the given order (available: mnt2, svc, lbsvc, nodeport, local)")
+	flags.StringSliceP(
+		FlagStrategies,
+		"s",
+		strategy.DefaultStrategies,
+		"the comma-separated list of strategies to be used in the given order (available: mnt2, svc, lbsvc, nodeport, local)",
+	)
 	flags.StringP(FlagSSHKeyAlgorithm, "a", ssh.Ed25519KeyAlgorithm,
 		"ssh key algorithm to be used. Valid values are "+strings.Join(ssh.KeyAlgorithms, ","))
 	flags.StringP(FlagDestHostOverride, "H", "",
