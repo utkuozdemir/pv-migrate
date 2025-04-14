@@ -123,8 +123,8 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	assert.Equal(t, []int{3, 1, 2}, result)
 }
 
-// TestNodePortStrategyIntegration tests the integration of the NodePort strategy with the migrator
-func TestNodePortStrategyIntegration(t *testing.T) {
+// TestNodePortStrategyUnit tests the NodePort strategy's unit integration with the migrator
+func TestNodePortStrategyUnit(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
