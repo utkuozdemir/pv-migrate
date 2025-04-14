@@ -439,6 +439,7 @@ func testLbSvcDestHostOverride(t *testing.T) {
 	clearDestsOnCleanup(t)
 	ctx := t.Context()
 
+	// Create a service that will be used for the override
 	svcName := "alternative-svc"
 	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(context.Background(),
 		&corev1.Service{
@@ -462,14 +463,17 @@ func testLbSvcDestHostOverride(t *testing.T) {
 		}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
+	// Prepare the destination with an extra file to test it remains after migration
 	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
+	// Set the destination host override to use our custom service
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
 		"%s -i -n %s -N %s -H %s source dest", migrateLegacyCmdline, ns1, ns2, destHostOverride)
 	require.NoError(t, runCliApp(ctx, cmd))
 
+	// Verify the data was migrated correctly
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
 
@@ -480,10 +484,12 @@ func testLbSvcDestHostOverride(t *testing.T) {
 		return
 	}
 
+	// Check that ownership and content were preserved
 	assert.Equal(t, dataFileUID, parts[0])
 	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
+	// Verify that the extra file still exists (no deletion)
 	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
 }
