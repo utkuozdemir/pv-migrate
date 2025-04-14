@@ -251,7 +251,7 @@ func TestFindNodeIP(t *testing.T) {
 	testFindNodeIPWithMultipleNodes(ctx, t, fakeClient)
 
 	// Test with a node that has no usable IP
-	testFindNodeIPWithNoUsableIP(t, ctx, fakeClient)
+	testFindNodeIPWithNoUsableIP(ctx, t, fakeClient)
 }
 
 // testFindNodeIPWithNoNodes tests findNodeIP with no nodes in the cluster.
@@ -318,7 +318,11 @@ func testFindNodeIPWithMultipleNodes(
 }
 
 // testFindNodeIPWithNoUsableIP tests findNodeIP with nodes having no usable IPs.
-func testFindNodeIPWithNoUsableIP(t *testing.T, ctx context.Context, fakeClient *fake.Clientset) {
+func testFindNodeIPWithNoUsableIP(
+	ctx context.Context,
+	t *testing.T,
+	fakeClient *fake.Clientset,
+) {
 	// Create node with only hostname, no IP
 	node3 := &corev1.Node{
 		ObjectMeta: metav1.ObjectMeta{
