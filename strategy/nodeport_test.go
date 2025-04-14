@@ -3,18 +3,11 @@ package strategy
 import (
 	"context"
 	"log/slog"
-	"log/slog"
 	"testing"
 
 	slogt "github.com/neilotoole/slogt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
-
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,11 +34,9 @@ func TestNodePortInDefaultStrategies(t *testing.T) {
 
 	found := false
 
-
 	for _, s := range DefaultStrategies {
 		if s == NodePortStrategy {
 			found = true
-
 
 			break
 		}
@@ -59,11 +50,9 @@ func TestNodePortInAllStrategies(t *testing.T) {
 
 	found := false
 
-
 	for _, s := range AllStrategies {
 		if s == NodePortStrategy {
 			found = true
-
 
 			break
 		}
@@ -85,7 +74,6 @@ func TestNodePortInNameToStrategy(t *testing.T) {
 }
 
 // Mock for installation functions.
-// Mock for installation functions.
 type mockInstaller struct {
 	mock.Mock
 }
@@ -93,15 +81,11 @@ type mockInstaller struct {
 func (m *mockInstaller) InstallHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string,
 	values map[string]any, logger *slog.Logger,
 ) error {
-	values map[string]any, logger *slog.Logger,
-) error {
 	args := m.Called(attempt, pvcInfo, name, values, logger)
-
 
 	return args.Error(0)
 }
 
-// Test helper for NodePort installation functions.
 // Test helper for NodePort installation functions.
 func TestInstallNodePortOnSource(t *testing.T) {
 	t.Parallel()
@@ -129,7 +113,6 @@ func TestInstallNodePortOnSource(t *testing.T) {
 				return false
 			}
 
-
 			return service["type"] == "NodePort"
 		}),
 		logger).Return(nil)
@@ -138,14 +121,6 @@ func TestInstallNodePortOnSource(t *testing.T) {
 	np := &NodePort{}
 
 	// Call the function we want to test through a wrapper that uses our mock
-	err := np.testInstallNodePortOnSource(
-		mockInstaller.InstallHelmChart,
-		attempt,
-		releaseName,
-		publicKey,
-		srcMountPath,
-		logger,
-	)
 	err := np.testInstallNodePortOnSource(
 		mockInstaller.InstallHelmChart,
 		attempt,
@@ -297,7 +272,6 @@ func (n *NodePort) testInstallOnDestWithNodePort(
 }
 
 // Mock k8s functions.
-// Mock k8s functions.
 type mockK8sFunctions struct {
 	mock.Mock
 }
@@ -310,7 +284,6 @@ func (m *mockK8sFunctions) GetNodePortServiceDetails(
 	timeout interface{},
 ) (string, int, error) {
 	args := m.Called(ctx, cli, namespace, name, timeout)
-
 
 	return args.String(0), args.Int(1), args.Error(2)
 }
@@ -325,18 +298,15 @@ func (m *mockK8sFunctions) WaitForJobCompletion(
 ) error {
 	args := m.Called(ctx, cli, namespace, name, showProgressBar, logger)
 
-
 	return args.Error(0)
 }
 
-// Mock test for the NodePort Run method with proper dependencies injected.
 // Mock test for the NodePort Run method with proper dependencies injected.
 func TestNodePortRunWithMocks(t *testing.T) {
 	t.Parallel()
 
 	// Setup
 	logger := slogt.New(t)
-	ctx := t.Context()
 	ctx := t.Context()
 	attempt := createMockAttempt()
 
@@ -399,7 +369,6 @@ func TestNodePortRunWithMocks(t *testing.T) {
 	mockK8s.AssertExpectations(t)
 }
 
-// Test helper method for NodePort.Run.
 // Test helper method for NodePort.Run.
 func (n *NodePort) testRun(
 	ctx context.Context,
@@ -534,7 +503,6 @@ func (n *NodePort) setupDestinationNodePort(
 	// Get NodePort service address and port
 	svcName := srcReleaseName + "-sshd"
 
-
 	nodeIP, nodePort, err := getNodePortDetailsFn(
 		ctx,
 		sourceInfo.ClusterClient.KubeClient,
@@ -578,13 +546,11 @@ func (n *NodePort) setupDestinationNodePort(
 }
 
 // Test destination host override.
-// Test destination host override.
 func TestDestHostOverrideWithMocks(t *testing.T) {
 	t.Parallel()
 
 	// Setup
 	logger := slogt.New(t)
-	ctx := t.Context()
 	ctx := t.Context()
 	attempt := createMockAttempt()
 
@@ -628,7 +594,6 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 			}
 			host, ok := rsync["sshRemoteHost"].(string)
 
-
 			return ok && host == overrideHost
 		}),
 		logger).Return(nil)
@@ -657,7 +622,6 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 	mockK8s.AssertExpectations(t)
 }
 
-// Helper function to create a mock migration attempt.
 // Helper function to create a mock migration attempt.
 func createMockAttempt() *migration.Attempt {
 	req := &migration.Request{
