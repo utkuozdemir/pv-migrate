@@ -42,7 +42,7 @@ Flags:
   -n, --source-namespace string        namespace of the source PVC
   -p, --source-path string             the filesystem path to migrate in the source PVC (default "/")
   -a, --ssh-key-algorithm string       ssh key algorithm to be used. Valid values are rsa,ed25519 (default "ed25519")
-  -s, --strategies strings             the comma-separated list of strategies to be used in the given order (default [mnt2,svc,lbsvc])
+  -s, --strategies strings             the comma-separated list of strategies to be used in the given order (available: mnt2, svc, lbsvc, nodeport, local) (default [mnt2,svc,lbsvc,nodeport])
   -v, --version                        version for pv-migrate
 
 Use "pv-migrate [command] --help" for more information about a command.
