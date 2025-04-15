@@ -52,7 +52,7 @@ jobs:
         uses: golangci/golangci-lint-action@v7.0.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v2.0.2
+          version: v2.1.2
           args: --timeout=10m0s
           install-mode: goinstall
       - name: Build with Goreleaser
@@ -176,7 +176,7 @@ jobs:
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
         run: richgo test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
       - name: Send coverage
-        uses: codecov/codecov-action@v5.4.0
+        uses: codecov/codecov-action@v5.4.2
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
