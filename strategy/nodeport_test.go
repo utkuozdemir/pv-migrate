@@ -713,3 +713,83 @@ func TestDestHostOverrideWithMocks(t *testing.T) {
 	mockInstaller.AssertExpectations(t)
 	mockK8s.AssertExpectations(t)
 }
+
+// TestCustomNodePortPort tests that a custom NodePort port is correctly set in the Helm values.
+func TestCustomNodePortPort(t *testing.T) {
+	t.Parallel()
+
+	// Setup
+	logger := slogt.New(t)
+	attempt := createMockAttempt()
+
+	// Set a custom NodePort port in the request
+	customPort := 31234
+	attempt.Migration.Request.NodePortPort = customPort
+
+	releaseName := "test-release"
+	publicKey := "test-public-key"
+
+	// Create a mock installer - we'll check that the NodePort port is correctly passed
+	mockInstaller := new(mockInstaller)
+	mockInstaller.On("InstallHelmChart",
+		attempt,
+		attempt.Migration.SourceInfo,
+		releaseName,
+		mock.MatchedBy(func(values map[string]any) bool {
+			// Check the service type is NodePort and the nodePort is set correctly
+			sshd, ok := values["sshd"].(map[string]any)
+			if !ok {
+				return false
+			}
+			service, ok := sshd["service"].(map[string]any)
+			if !ok {
+				return false
+			}
+
+			// Verify the custom port is set
+			nodePort, nodePortExists := service["nodePort"]
+
+			return service["type"] == "NodePort" &&
+				nodePortExists &&
+				nodePort == customPort
+		}),
+		logger).Return(nil)
+
+	// Create our NodePort strategy with the mocked installer
+	np := &NodePort{}
+
+	// Call the function we want to test through a wrapper that uses our mock
+	err := np.testInstallNodePortOnSourceWithNodePort(
+		mockInstaller.InstallHelmChart,
+		attempt,
+		releaseName,
+		publicKey,
+		srcMountPath,
+		logger,
+	)
+
+	// Assert
+	require.NoError(t, err)
+	mockInstaller.AssertExpectations(t)
+}
+
+// Helper function for testing NodePort with custom port.
+func (n *NodePort) testInstallNodePortOnSourceWithNodePort(
+	installFn func(*migration.Attempt, *pvc.Info, string, map[string]any, *slog.Logger) error,
+	attempt *migration.Attempt,
+	releaseName string,
+	publicKey string,
+	srcMountPath string,
+	logger *slog.Logger,
+) error {
+	mig := attempt.Migration
+	sourceInfo := mig.SourceInfo
+	namespace := sourceInfo.Claim.Namespace
+
+	vals, err := prepareNodePortSourceValues(mig, namespace, publicKey, srcMountPath, logger)
+	if err != nil {
+		return fmt.Errorf("failed to prepare source Helm values in test: %w", err)
+	}
+
+	return installFn(attempt, sourceInfo, releaseName, vals, logger)
+}

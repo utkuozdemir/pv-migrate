@@ -2,6 +2,7 @@ package strategy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -81,12 +82,16 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	return nil
 }
 
-func installNodePortOnSource(attempt *migration.Attempt, releaseName,
-	publicKey, srcMountPath string, logger *slog.Logger,
-) error {
-	mig := attempt.Migration
+// prepareNodePortSourceValues creates the values map for the source Helm chart with NodePort.
+// This function is shared between the implementation and the tests.
+func prepareNodePortSourceValues(
+	mig *migration.Migration,
+	namespace string,
+	publicKey string,
+	srcMountPath string,
+	logger *slog.Logger,
+) (map[string]any, error) {
 	sourceInfo := mig.SourceInfo
-	namespace := sourceInfo.Claim.Namespace
 
 	vals := map[string]any{
 		"sshd": map[string]any{
@@ -110,10 +115,46 @@ func installNodePortOnSource(attempt *migration.Attempt, releaseName,
 	// Set custom NodePort if specified
 	if mig.Request.NodePortPort != 0 {
 		logger.Info("Using custom NodePort", "port", mig.Request.NodePortPort)
-		sshd := vals["sshd"].(map[string]any)
-		svc := sshd["service"].(map[string]any)
+
+		// Get the sshd map with type checking
+		sshdVal, sshdExists := vals["sshd"]
+		if !sshdExists {
+			return nil, errors.New("missing sshd configuration in values map")
+		}
+
+		sshd, sshdIsMap := sshdVal.(map[string]any)
+		if !sshdIsMap {
+			return nil, errors.New("sshd configuration is not a map")
+		}
+
+		// Get the service map with type checking
+		svcVal, svcExists := sshd["service"]
+		if !svcExists {
+			return nil, errors.New("missing service configuration in sshd map")
+		}
+
+		svc, svcIsMap := svcVal.(map[string]any)
+		if !svcIsMap {
+			return nil, errors.New("service configuration is not a map")
+		}
+
 		svc["port"] = 22
 		svc["nodePort"] = mig.Request.NodePortPort
+	}
+
+	return vals, nil
+}
+
+func installNodePortOnSource(attempt *migration.Attempt, releaseName,
+	publicKey, srcMountPath string, logger *slog.Logger,
+) error {
+	mig := attempt.Migration
+	sourceInfo := mig.SourceInfo
+	namespace := sourceInfo.Claim.Namespace
+
+	vals, err := prepareNodePortSourceValues(mig, namespace, publicKey, srcMountPath, logger)
+	if err != nil {
+		return fmt.Errorf("failed to prepare source Helm values: %w", err)
 	}
 
 	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
