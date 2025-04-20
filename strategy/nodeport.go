@@ -107,6 +107,15 @@ func installNodePortOnSource(attempt *migration.Attempt, releaseName,
 		},
 	}
 
+	// Set custom NodePort if specified
+	if mig.Request.NodePortPort != 0 {
+		logger.Info("Using custom NodePort", "port", mig.Request.NodePortPort)
+		sshd := vals["sshd"].(map[string]any)
+		svc := sshd["service"].(map[string]any)
+		svc["port"] = 22
+		svc["nodePort"] = mig.Request.NodePortPort
+	}
+
 	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
 }
 

@@ -42,6 +42,7 @@ const (
 	FlagDestPath         = "dest-path"
 	FlagDestHostOverride = "dest-host-override"
 	FlagLBSvcTimeout     = "lbsvc-timeout"
+	FlagNodePortPort     = "nodeport-port"
 
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
@@ -233,6 +234,9 @@ func setMigrateCmdFlags(cmd *cobra.Command, logLevels, logFormats []string, lega
 		fmt.Sprintf("timeout for the load balancer service to "+
 			"receive an external IP. Only used by the %s strategy", strategy.LbSvcStrategy),
 	)
+	flags.Int(FlagNodePortPort, 0,
+		fmt.Sprintf("custom port to use for NodePort service (range 30000-32767). "+
+			"Only used by the %s strategy", strategy.NodePortStrategy))
 	flags.Bool(FlagCompress, true, "compress data during migration ('-z' flag of rsync)")
 
 	flags.DurationP(
@@ -307,6 +311,14 @@ func runMigration(cmd *cobra.Command, args []string) error {
 	destHostOverride, _ := flags.GetString(FlagDestHostOverride)
 	lbSvcTimeout, _ := flags.GetDuration(FlagLBSvcTimeout)
 	compress, _ := flags.GetBool(FlagCompress)
+	nodePortPort, _ := flags.GetInt(FlagNodePortPort)
+
+	// Validate NodePort port range if a custom port is specified
+	if nodePortPort != 0 {
+		if nodePortPort < 30000 || nodePortPort > 32767 {
+			return fmt.Errorf("invalid NodePort port %d: must be between 30000-32767", nodePortPort)
+		}
+	}
 
 	deleteExtraneousFiles, _ := flags.GetBool(FlagDestDeleteExtraneousFiles)
 	request := migration.Request{
@@ -328,6 +340,7 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		DestHostOverride:      destHostOverride,
 		LBSvcTimeout:          lbSvcTimeout,
 		Compress:              compress,
+		NodePortPort:          nodePortPort,
 	}
 
 	logger.Info("🚀 Starting migration")

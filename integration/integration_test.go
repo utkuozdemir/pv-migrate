@@ -101,6 +101,7 @@ func TestIntegration(t *testing.T) {
 	t.Run("NodePort", testNodePort)
 	t.Run("NodePortDifferentNS", testNodePortDifferentNS)
 	t.Run("NodePortDestHostOverride", testNodePortDestHostOverride)
+	t.Run("NodePortCustomPort", testNodePortCustomPort)
 }
 
 // testNodePort tests the NodePort strategy in the same namespace
@@ -177,6 +178,9 @@ func testNodePortDestHostOverride(t *testing.T) {
 	clearDestsOnCleanup(t)
 	ctx := t.Context()
 
+	// Define a custom NodePort in the valid range
+	customNodePort := 30022
+
 	// Create a service that will be used for the override
 	svcName := "nodeport-override-svc"
 	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(context.Background(),
@@ -186,6 +190,7 @@ func testNodePortDestHostOverride(t *testing.T) {
 				Labels: resourceLabels,
 			},
 			Spec: corev1.ServiceSpec{
+				Type: corev1.ServiceTypeNodePort,
 				Selector: map[string]string{
 					"app.kubernetes.io/component": "sshd",
 					"app.kubernetes.io/name":      "pv-migrate",
@@ -193,7 +198,7 @@ func testNodePortDestHostOverride(t *testing.T) {
 				Ports: []corev1.ServicePort{
 					{
 						Name:       "ssh",
-						Port:       22,
+						Port:       int32(customNodePort),
 						TargetPort: intstr.FromInt32(22),
 					},
 				},
@@ -208,7 +213,45 @@ func testNodePortDestHostOverride(t *testing.T) {
 	// Set the destination host override to use our custom service
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
-		"%s -s nodeport -i -n %s -N %s -H %s source dest", migrateLegacyCmdline, ns1, ns2, destHostOverride)
+		"%s -s nodeport --nodeport-port=%d -i -n %s -N %s -H %s source dest", migrateLegacyCmdline, customNodePort, ns1, ns2, destHostOverride)
+	require.NoError(t, runCliApp(ctx, cmd))
+
+	// Verify the data was migrated correctly
+	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Equal(t, len(parts), 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	// Check that ownership and content were preserved
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	// Verify that the extra file still exists (no deletion)
+	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+// testNodePortCustomPort tests the NodePort strategy with a custom NodePort port
+func testNodePortCustomPort(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
+
+	// Define a custom NodePort in the valid range
+	customNodePort := 31234
+
+	// Prepare the destination with an extra file to test it remains after migration
+	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	// Run the migration using the NodePort strategy with a custom port
+	cmd := fmt.Sprintf("%s -s nodeport --nodeport-port=%d -i -n %s -N %s source dest",
+		migrateLegacyCmdline, customNodePort, ns1, ns2)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	// Verify the data was migrated correctly

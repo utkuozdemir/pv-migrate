@@ -21,6 +21,9 @@ spec:
       targetPort: 22
       protocol: TCP
       name: ssh
+      {{- if and (eq .Values.sshd.service.type "NodePort") .Values.sshd.service.nodePort }}
+      nodePort: {{ .Values.sshd.service.nodePort }}
+      {{- end }}
   selector:
     app.kubernetes.io/component: sshd
     {{- include "pv-migrate.selectorLabels" . | nindent 4 }}
