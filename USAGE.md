@@ -34,7 +34,7 @@ Flags:
       --log-level string               log level, must be one of "DEBUG, INFO, WARN, ERROR" or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText (default "INFO")
   -o, --no-chown                       omit chown on rsync
   -b, --no-progress-bar                do not display a progress bar
-      --nodeport-port                  defines custom NodePort to use. Only used by the nodeport strategy
+      --nodeport-port                  custom port to use for NodePort service (range 30000-32767). Only used by the nodeport strategy
   -x, --skip-cleanup                   skip cleanup of the migration
       --source string                  source PVC name
   -c, --source-context string          context in the kubeconfig file of the source PVC
