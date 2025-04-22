@@ -41,9 +41,6 @@ func setupNodePortValidationTest() *cobra.Command {
 func TestNodePortPortValidation(t *testing.T) {
 	t.Parallel()
 
-	// Create a test command with the migrate flags
-	cmd := setupNodePortValidationTest()
-
 	tests := []struct {
 		name        string
 		port        int
@@ -83,9 +80,12 @@ func TestNodePortPortValidation(t *testing.T) {
 
 	for _, testCase := range tests {
 		// Capture range variable for parallel execution
-		t.Run(testCase.name, func(t *testing.T) {
+		tc := testCase
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			testNodePortValidation(t, cmd, testCase.port, testCase.expectError)
+			// Create a new command for each subtest to avoid data races
+			cmd := setupNodePortValidationTest()
+			testNodePortValidation(t, cmd, tc.port, tc.expectError)
 		})
 	}
 }
