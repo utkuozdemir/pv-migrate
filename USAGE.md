@@ -34,6 +34,7 @@ Flags:
       --log-level string               log level, must be one of "DEBUG, INFO, WARN, ERROR" or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText (default "INFO")
   -o, --no-chown                       omit chown on rsync
   -b, --no-progress-bar                do not display a progress bar
+      --nodeport-port int              custom port to use for NodePort service (range 30000-32767). Only used by the nodeport strategy
   -x, --skip-cleanup                   skip cleanup of the migration
       --source string                  source PVC name
   -c, --source-context string          context in the kubeconfig file of the source PVC
@@ -42,7 +43,7 @@ Flags:
   -n, --source-namespace string        namespace of the source PVC
   -p, --source-path string             the filesystem path to migrate in the source PVC (default "/")
   -a, --ssh-key-algorithm string       ssh key algorithm to be used. Valid values are rsa,ed25519 (default "ed25519")
-  -s, --strategies strings             the comma-separated list of strategies to be used in the given order (default [mnt2,svc,lbsvc])
+  -s, --strategies strings             the comma-separated list of strategies to be used in the given order (available: mnt2, svc, lbsvc, nodeport, local) (default [mnt2,svc,lbsvc,nodeport])
   -v, --version                        version for pv-migrate
 
 Use "pv-migrate [command] --help" for more information about a command.
@@ -62,6 +63,7 @@ resources, serviceacccounts, additional annotations etc.
 |---------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `mnt2`  | **Mount both** - Mounts both PVCs in a single pod and runs a regular rsync, without using SSH or the network. Only applicable if source and destination PVCs are in the same namespace and both can be mounted from a single pod.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `svc`   | **Service** - Runs rsync+ssh over a Kubernetes Service (`ClusterIP`). Only applicable when source and destination PVCs are in the same Kubernetes cluster.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `nodeport` | **NodePort Service** - Runs rsync+ssh over a Kubernetes Service of type `NodePort`. The `--nodeport-port` flag can be specified if you require usage of a specific port.                                                                                                                                                                                                                                                                                                                                                                |
 | `lbsvc` | **Load Balancer Service** - Runs rsync+ssh over a Kubernetes Service of type `LoadBalancer`. Always applicable (will fail if `LoadBalancer` IP is not assigned for a long period).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `local` | **Local Transfer** - Runs sshd on both source and destination, then uses a combination of `kubectl port-forward` logic and an SSH reverse proxy to tunnel all the traffic over the client device (the device which runs pv-migrate, e.g. your laptop). Requires `ssh` command to be available on the client device. <br/><br/>Note that this strategy is **experimental** (and not enabled by default), potentially can put heavy load on both apiservers and is not as resilient as others. It is recommended for small amounts of data and/or when the only access to both clusters seems to be through `kubectl` (e.g. for air-gapped clusters, on jump hosts etc.). |
 
@@ -126,6 +128,16 @@ $ pv-migrate \
 $ pv-migrate \
   --helm-set rsync.extraArgs="--partial --inplace" \
   --source old-pvc --dest new-pvc
+```
+
+### Example 7: Using a specific NodePort for the NodePort strategy
+
+```bash
+$ pv-migrate \
+  --strategies nodeport \
+  --nodeport-port 30555 \
+  --source old-pvc \
+  --dest new-pvc
 ```
 
 **For further customization on the rendered manifests**

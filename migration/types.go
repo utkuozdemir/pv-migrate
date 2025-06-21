@@ -35,6 +35,7 @@ type Request struct {
 	DestHostOverride      string
 	LBSvcTimeout          time.Duration
 	Compress              bool
+	NodePortPort          int // Custom port for NodePort strategy (30000-32767)
 }
 
 type Migration struct {

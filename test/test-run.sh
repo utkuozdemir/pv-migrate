@@ -66,3 +66,15 @@ pv-migrate \
   -N pv-migrate-test-1 \
   --dest-delete-extraneous-files \
   --dest pv-migrate-test-dest-1
+echo "----------------------------------"
+echo "Different cluster - NodePort strategy"
+pv-migrate \
+  --strategies nodeport \
+  --ignore-mounted \
+  --source-kubeconfig $SOURCE_KUBECONFIG \
+  -n pv-migrate-test-1 \
+  --source pv-migrate-test-source-1 \
+  --dest-kubeconfig $DEST_KUBECONFIG \
+  -N pv-migrate-test-1 \
+  --dest-delete-extraneous-files \
+  --dest pv-migrate-test-dest-1
