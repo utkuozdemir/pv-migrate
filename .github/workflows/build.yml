@@ -57,7 +57,7 @@ jobs:
           install-mode: goinstall
       - name: Build with Goreleaser
         if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v6.3.0
+        uses: goreleaser/goreleaser-action@v6.4.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
           version: v2.11.2
@@ -108,7 +108,7 @@ jobs:
       - name: kind-1 - Install MetalLB
         env:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
-          METALLB_CHART_VERSION: 6.4.21
+          METALLB_CHART_VERSION: 6.4.22
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
