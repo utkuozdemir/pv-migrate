@@ -17,6 +17,7 @@ func TestGetClusterClient(t *testing.T) {
 	t.Parallel()
 
 	kubeconfig := prepareKubeconfig()
+
 	defer func() {
 		os.Remove(kubeconfig)
 	}()
@@ -50,6 +51,7 @@ func TestBuildK8sConfig(t *testing.T) {
 	t.Parallel()
 
 	conf := prepareKubeconfig()
+
 	defer func() {
 		_ = os.Remove(conf)
 	}()

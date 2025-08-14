@@ -7,6 +7,8 @@ linters:
     - exhaustruct # pointless
     - gochecknoglobals # globals are sometimes ok
     - testpackage # todo: consider enabling
+    - wsl # deprecated
+    - noinlineerr # big fan of inline errors
   settings:
     goconst:
       min-occurrences: 5

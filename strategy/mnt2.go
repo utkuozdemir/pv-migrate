@@ -12,27 +12,6 @@ import (
 
 type Mnt2 struct{}
 
-func (r *Mnt2) canDo(t *migration.Migration) bool {
-	sourceInfo := t.SourceInfo
-	destInfo := t.DestInfo
-
-	sameCluster := sourceInfo.ClusterClient.RestConfig.Host == destInfo.ClusterClient.RestConfig.Host
-	if !sameCluster {
-		return false
-	}
-
-	sameNamespace := sourceInfo.Claim.Namespace == destInfo.Claim.Namespace
-	if !sameNamespace {
-		return false
-	}
-
-	sameNode := sourceInfo.MountedNode == destInfo.MountedNode
-	oneUnmounted := sourceInfo.MountedNode == "" || destInfo.MountedNode == ""
-
-	return sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX ||
-		destInfo.SupportsRWX
-}
-
 func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	if !r.canDo(mig) {
@@ -91,6 +70,27 @@ func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt, logger *slog
 	}
 
 	return nil
+}
+
+func (r *Mnt2) canDo(t *migration.Migration) bool {
+	sourceInfo := t.SourceInfo
+	destInfo := t.DestInfo
+
+	sameCluster := sourceInfo.ClusterClient.RestConfig.Host == destInfo.ClusterClient.RestConfig.Host
+	if !sameCluster {
+		return false
+	}
+
+	sameNamespace := sourceInfo.Claim.Namespace == destInfo.Claim.Namespace
+	if !sameNamespace {
+		return false
+	}
+
+	sameNode := sourceInfo.MountedNode == destInfo.MountedNode
+	oneUnmounted := sourceInfo.MountedNode == "" || destInfo.MountedNode == ""
+
+	return sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX ||
+		destInfo.SupportsRWX
 }
 
 func buildRsyncCmdMnt2(mig *migration.Migration) (string, error) {

@@ -81,7 +81,7 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 		return fmt.Errorf("failed to build rsync command: %w", err)
 	}
 
-	cmd := exec.Command("ssh", "-i", privateKeyFile,
+	cmd := exec.CommandContext(ctx, "ssh", "-i", privateKeyFile,
 		"-p", strconv.Itoa(srcFwdPort),
 		"-R", fmt.Sprintf("%d:localhost:%d", sshReverseTunnelPort, destFwdPort),
 		"-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "root@localhost",

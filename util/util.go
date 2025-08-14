@@ -1,3 +1,4 @@
+//nolint:revive // suppress "var-naming: avoid meaningless package names"
 package util
 
 import (
