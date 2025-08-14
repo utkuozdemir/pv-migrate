@@ -13,14 +13,6 @@ import (
 
 type Svc struct{}
 
-func (r *Svc) canDo(t *migration.Migration) bool {
-	s := t.SourceInfo
-	d := t.DestInfo
-	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
-
-	return sameCluster
-}
-
 func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	if !r.canDo(mig) {
@@ -53,6 +45,14 @@ func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.
 	}
 
 	return nil
+}
+
+func (r *Svc) canDo(t *migration.Migration) bool {
+	s := t.SourceInfo
+	d := t.DestInfo
+	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
+
+	return sameCluster
 }
 
 //
