@@ -17,16 +17,16 @@ jobs:
           # https://github.com/goreleaser/goreleaser-action/issues/56#issuecomment-568718162
           fetch-depth: 0
       - name: Setup Go
-        uses: actions/setup-go@v5.4.0
+        uses: actions/setup-go@v5.5.0
         with:
           go-version-file: go.mod
       - name: Login to DockerHub
-        uses: docker/login-action@v3.4.0
+        uses: docker/login-action@v3.5.0
         with:
           username: utkuozdemir
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3.4.0
+        uses: docker/login-action@v3.5.0
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -35,7 +35,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v6.3.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.8.2
+          version: v2.11.2
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
