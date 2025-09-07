@@ -38,7 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5.0.0
       - name: Install go
-        uses: actions/setup-go@v5.5.0
+        uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
       - name: Install Task
@@ -72,7 +72,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5.0.0
       - name: Install go
-        uses: actions/setup-go@v5.5.0
+        uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
       - name: Install richgo
