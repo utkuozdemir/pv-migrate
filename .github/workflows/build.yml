@@ -97,7 +97,13 @@ jobs:
           version: v0.30.0
           config: test/kind-config.yaml
       - name: kind-1 - Create metallb-system namespace
-        run: kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
+        run: |
+          kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
+          kubectl label namespace metallb-system \
+            pod-security.kubernetes.io/enforce=privileged \
+            pod-security.kubernetes.io/audit=privileged \
+            pod-security.kubernetes.io/warn=privileged \
+            --overwrite
       - name: kind-1 - Install allow-all network policies on system namespaces
         run: |
           kubectl -n kube-system apply -f test/netpol-allow-all.yaml
@@ -118,13 +124,13 @@ jobs:
           
           envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
           
-          helm repo add bitnami https://charts.bitnami.com/bitnami
           helm upgrade metallb \
-          --install bitnami/metallb \
-          --namespace metallb-system \
-          --version ${METALLB_CHART_VERSION} \
-          --atomic \
-          --set networkPolicy.enabled=true
+            --install oci://registry-1.docker.io/bitnamicharts/metallb \
+            --debug \
+            --namespace metallb-system \
+            --version ${METALLB_CHART_VERSION} \
+            --atomic \
+            --set networkPolicy.enabled=true
           
           helm -n metallb-system get values metallb
           
