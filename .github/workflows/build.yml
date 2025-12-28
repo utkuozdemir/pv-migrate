@@ -31,6 +31,10 @@ concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash --noprofile --norc -euox pipefail {0}
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -89,6 +93,14 @@ jobs:
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'pull_request' && github.actor == github.repository_owner }}
+        timeout-minutes: 60
+        with:
+          limit-access-to-actor: true
+          detached: true
+
       - name: kind-1 - Create cluster
         uses: helm/kind-action@v1.12.0
         with:
@@ -97,7 +109,13 @@ jobs:
           version: v0.30.0
           config: test/kind-config.yaml
       - name: kind-1 - Create metallb-system namespace
-        run: kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
+        run: |
+          kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
+          kubectl label namespace metallb-system \
+            pod-security.kubernetes.io/enforce=privileged \
+            pod-security.kubernetes.io/audit=privileged \
+            pod-security.kubernetes.io/warn=privileged \
+            --overwrite
       - name: kind-1 - Install allow-all network policies on system namespaces
         run: |
           kubectl -n kube-system apply -f test/netpol-allow-all.yaml
@@ -107,7 +125,6 @@ jobs:
         run: cilium install --set policyEnforcementMode=always
       - name: kind-1 - Install MetalLB
         env:
-          # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
           METALLB_CHART_VERSION: 6.4.22
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
@@ -118,13 +135,23 @@ jobs:
           
           envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
           
-          helm repo add bitnami https://charts.bitnami.com/bitnami
+          # TODO: switch to the official MetalLB chart and do not specify image versions
+          METALLB_CONTROLLER_VERSION=v0.15.3
+          METALLB_SPEAKER_VERSION=v0.15.3
+          
           helm upgrade metallb \
-          --install bitnami/metallb \
-          --namespace metallb-system \
-          --version ${METALLB_CHART_VERSION} \
-          --atomic \
-          --set networkPolicy.enabled=true
+            --install oci://registry-1.docker.io/bitnamicharts/metallb \
+            --namespace metallb-system \
+            --version ${METALLB_CHART_VERSION} \
+            --atomic \
+            --set global.security.allowInsecureImages=true \
+            --set networkPolicy.enabled=true \
+            --set controller.image.registry=quay.io \
+            --set controller.image.repository=metallb/controller \
+            --set controller.image.tag=$METALLB_CONTROLLER_VERSION \
+            --set speaker.image.registry=quay.io \
+            --set speaker.image.repository=metallb/speaker \
+            --set speaker.image.tag=$METALLB_SPEAKER_VERSION
           
           helm -n metallb-system get values metallb
           
@@ -180,3 +207,7 @@ jobs:
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Teardown tmate session
+        if: ${{ success() }}
+        run: sudo touch /continue
