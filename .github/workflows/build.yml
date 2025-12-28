@@ -2,13 +2,7 @@
 name: build
 
 on:
-  workflow_dispatch:
-    inputs:
-      debug_enabled:
-        type: boolean
-        description: Run with tmate debugging enabled on failure
-        required: false
-        default: false
+  workflow_dispatch: {}
   push:
     branches:
       - master
@@ -77,13 +71,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5.0.0
-      - name: Setup tmate session for debugging via SSH on failure
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
-        timeout-minutes: 15
-        with:
-          limit-access-to-actor: true
-          detached: true # Continues to next steps while you are connected
       - name: Install go
         uses: actions/setup-go@v6.0.0
         with:
@@ -101,6 +88,14 @@ jobs:
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
+
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'pull_request' && github.actor == github.repository_owner }}
+        timeout-minutes: 60
+        with:
+          limit-access-to-actor: true
+          detached: true
 
       - name: kind-1 - Create cluster
         uses: helm/kind-action@v1.12.0
@@ -201,3 +196,7 @@ jobs:
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Teardown tmate session
+        if: ${{ success() }}
+        run: sudo touch /continue
