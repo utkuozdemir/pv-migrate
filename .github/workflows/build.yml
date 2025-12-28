@@ -162,7 +162,6 @@ jobs:
 
       - name: kind-1 - Wait for all pods in the cluster to be ready
         run: |
-          set -euox pipefail
           for i in $(seq 1 10); do
             echo "Attempt: $i"
             kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
