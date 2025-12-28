@@ -2,7 +2,13 @@
 name: build
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: Run with tmate debugging enabled on failure
+        required: false
+        default: false
   push:
     branches:
       - master
@@ -71,6 +77,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5.0.0
+      - name: Setup tmate session for debugging via SSH on failure
+        uses: mxschmitt/action-tmate@v3
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+        timeout-minutes: 15
+        with:
+          limit-access-to-actor: true
+          detached: true # Continues to next steps while you are connected
       - name: Install go
         uses: actions/setup-go@v6.0.0
         with:
@@ -116,6 +129,8 @@ jobs:
           # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
           METALLB_CHART_VERSION: 6.4.22
         run: |
+          set -euox pipefail
+          
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
           # Find the first IPv4 subnet of kind, e.g., 172.18.0.0/16, then trim it to remove last octet, e.g., 172.18.0
