@@ -31,6 +31,10 @@ concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+defaults:
+  run:
+    shell: bash --noprofile --norc -euox pipefail {0}
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -121,11 +125,8 @@ jobs:
         run: cilium install --set policyEnforcementMode=always
       - name: kind-1 - Install MetalLB
         env:
-          # renovate: depName=metallb datasource=helm registryUrl=https://charts.bitnami.com/bitnami
           METALLB_CHART_VERSION: 6.4.22
         run: |
-          set -euox pipefail
-          
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
           
           # Find the first IPv4 subnet of kind, e.g., 172.18.0.0/16, then trim it to remove last octet, e.g., 172.18.0
@@ -134,12 +135,12 @@ jobs:
           
           envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
           
+          # TODO: switch to the official MetalLB chart and do not specify image versions
           METALLB_CONTROLLER_VERSION=v0.15.3
           METALLB_SPEAKER_VERSION=v0.15.3
           
           helm upgrade metallb \
             --install oci://registry-1.docker.io/bitnamicharts/metallb \
-            --debug \
             --namespace metallb-system \
             --version ${METALLB_CHART_VERSION} \
             --atomic \
@@ -161,6 +162,7 @@ jobs:
 
       - name: kind-1 - Wait for all pods in the cluster to be ready
         run: |
+          set -euox pipefail
           for i in $(seq 1 10); do
             echo "Attempt: $i"
             kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
