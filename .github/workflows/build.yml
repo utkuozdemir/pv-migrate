@@ -134,13 +134,22 @@ jobs:
           
           envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
           
+          METALLB_CONTROLLER_VERSION=v0.15.3
+          METALLB_SPEAKER_VERSION=v0.15.3
+          
           helm upgrade metallb \
             --install oci://registry-1.docker.io/bitnamicharts/metallb \
             --debug \
             --namespace metallb-system \
             --version ${METALLB_CHART_VERSION} \
             --atomic \
-            --set networkPolicy.enabled=true
+            --set networkPolicy.enabled=true \
+            --set controller.image.registry=quay.io \
+            --set controller.image.repository=metallb/controller \
+            --set controller.image.tag=$METALLB_CONTROLLER_VERSION \
+            --set speaker.image.registry=quay.io \
+            --set speaker.image.repository=metallb/speaker \
+            --set speaker.image.tag=$METALLB_SPEAKER_VERSION
           
           helm -n metallb-system get values metallb
           
