@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.1
       - name: Install go
         uses: actions/setup-go@v6.0.0
         with:
@@ -53,7 +53,7 @@ jobs:
       - name: Tidy go.mod
         run: go mod tidy
       - name: Run linters
-        uses: golangci/golangci-lint-action@v8.0.0
+        uses: golangci/golangci-lint-action@v9.2.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
           version: v2.5.0
@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v5.0.0
+        uses: actions/checkout@v6.0.1
       - name: Install go
         uses: actions/setup-go@v6.0.0
         with:
