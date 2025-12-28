@@ -143,6 +143,7 @@ jobs:
             --namespace metallb-system \
             --version ${METALLB_CHART_VERSION} \
             --atomic \
+            --global.security.allowInsecureImages=true \
             --set networkPolicy.enabled=true \
             --set controller.image.registry=quay.io \
             --set controller.image.repository=metallb/controller \
