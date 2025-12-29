@@ -17,7 +17,7 @@ jobs:
           # https://github.com/goreleaser/goreleaser-action/issues/56#issuecomment-568718162
           fetch-depth: 0
       - name: Setup Go
-        uses: actions/setup-go@v6.0.0
+        uses: actions/setup-go@v6.1.0
         with:
           go-version-file: go.mod
       - name: Login to DockerHub
@@ -35,7 +35,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v6.4.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.12.3
+          version: v2.13.2
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
