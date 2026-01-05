@@ -1,4 +1,3 @@
----
 name: build
 
 on:
@@ -12,9 +11,9 @@ on:
       - "img/**"
       - "test/**"
       - ".gitignore"
-      - "docker/**"
       - "renovate.json"
       - ".krew.yaml"
+      # Removed docker/** to ensure changes trigger builds
   pull_request:
     branches:
       - master
@@ -23,7 +22,6 @@ on:
       - "img/**"
       - "test/**"
       - ".gitignore"
-      - "docker/**"
       - "renovate.json"
       - ".krew.yaml"
 
@@ -75,6 +73,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.1
+
+      # 1. Get SHA for unique tagging
+      - name: Get short SHA
+        id: vars
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      # 2. Build images locally (standard docker build)
+      - name: Build images
+        run: |
+          TAG="${{ steps.vars.outputs.sha }}"
+          docker build -t integration-test-rsync:$TAG ./docker/rsync/
+          docker build -t integration-test-sshd:$TAG ./docker/sshd/
+
       - name: Install go
         uses: actions/setup-go@v6.1.0
         with:
@@ -105,6 +116,13 @@ jobs:
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
           version: v0.31.0
           config: test/kind-config.yaml
+
+      - name: kind-1 - Load local images
+        run: |
+          TAG="${{ steps.vars.outputs.sha }}"
+          kind load docker-image integration-test-rsync:$TAG --name kind-1
+          kind load docker-image integration-test-sshd:$TAG --name kind-1
+
       - name: kind-1 - Create metallb-system namespace
         run: |
           kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
@@ -125,17 +143,11 @@ jobs:
           METALLB_CHART_VERSION: 6.4.22
         run: |
           MANIFESTS_PATH=/tmp/metallb-manifests.yaml
-          
-          # Find the first IPv4 subnet of kind, e.g., 172.18.0.0/16, then trim it to remove last octet, e.g., 172.18.0
           ADDRESS_RANGE_PREFIX=$(docker network inspect -f json kind | jq -r '.[0].IPAM.Config | map(select(.Subnet | test("^[0-9]+\\."))) | .[0].Subnet | split("/")[0] | split(".")[:3] | join(".")')
           export ADDRESS_RANGE=${ADDRESS_RANGE_PREFIX}.240-${ADDRESS_RANGE_PREFIX}.255
-          
           envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
-          
-          # TODO: switch to the official MetalLB chart and do not specify image versions
           METALLB_CONTROLLER_VERSION=v0.15.3
           METALLB_SPEAKER_VERSION=v0.15.3
-          
           helm upgrade metallb \
             --install oci://registry-1.docker.io/bitnamicharts/metallb \
             --namespace metallb-system \
@@ -149,12 +161,6 @@ jobs:
             --set speaker.image.registry=quay.io \
             --set speaker.image.repository=metallb/speaker \
             --set speaker.image.tag=$METALLB_SPEAKER_VERSION
-          
-          helm -n metallb-system get values metallb
-          
-          echo "MetalLB rendered manifests:"
-          cat $MANIFESTS_PATH
-          
           kubectl apply -f $MANIFESTS_PATH
 
       - name: kind-1 - Wait for all pods in the cluster to be ready
@@ -174,6 +180,15 @@ jobs:
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
           version: v0.31.0
           config: test/kind-config.yaml
+
+      - name: kind-2 - Load local images
+        env:
+          KUBECONFIG: /home/runner/.kube/kind-2.yaml
+        run: |
+          TAG="${{ steps.vars.outputs.sha }}"
+          kind load docker-image integration-test-rsync:$TAG --name kind-2
+          kind load docker-image integration-test-sshd:$TAG --name kind-2
+
       - name: kind-2 - Install allow-all network policies on system namespaces
         env:
           KUBECONFIG: /home/runner/.kube/kind-2.yaml
@@ -194,9 +209,13 @@ jobs:
             sleep 5;
           done
 
+      # 5. Run Tests
       - name: Run tests
         env:
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
+          # Pass only the image name:tag. Kind will find it locally.
+          RSYNC_IMAGE: integration-test-rsync:${{ steps.vars.outputs.sha }}
+          SSHD_IMAGE: integration-test-sshd:${{ steps.vars.outputs.sha }}
         run: go test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
       - name: Send coverage
         uses: codecov/codecov-action@v5.5.2
