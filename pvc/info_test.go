@@ -186,7 +186,7 @@ func buildClusterClient(
 		pod1,
 		pod2,
 	}
-	kubeClient := fake.NewSimpleClientset(objects...)
+	kubeClient := fake.NewClientset(objects...)
 
 	return &k8s.ClusterClient{
 		KubeClient: kubeClient,

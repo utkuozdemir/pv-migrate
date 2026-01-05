@@ -79,9 +79,6 @@ jobs:
         uses: actions/setup-go@v6.0.0
         with:
           go-version-file: go.mod
-      - name: Install richgo
-        # renovate: depName=kyoh86/richgo
-        run: go install github.com/kyoh86/richgo@v0.3.12
       - name: Install helm
         run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
       - name: Install cilium-cli
@@ -199,9 +196,8 @@ jobs:
 
       - name: Run tests
         env:
-          RICHGO_FORCE_COLOR: "1"
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: richgo test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
+        run: go test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
       - name: Send coverage
         uses: codecov/codecov-action@v5.5.1
         with:
