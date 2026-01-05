@@ -72,12 +72,8 @@ func ParseLine(line string) (Progress, error) {
 		return Progress{}, err
 	}
 
-	total := int64((float64(transferred) / float64(percentage)) * percentHundred)
-
-	if transferred > total {
-		// in case of a rounding error, update total, since transferred is more accurate
-		total = transferred
-	}
+	// in case of a rounding error, update total, since transferred is more accurate
+	total := max(transferred, int64((float64(transferred)/float64(percentage))*percentHundred))
 
 	return Progress{
 		Line:        line,

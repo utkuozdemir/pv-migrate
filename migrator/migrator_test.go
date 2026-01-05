@@ -153,7 +153,7 @@ func fakeClusterClientGetter() clusterClientGetter {
 
 	return func(string, string, *slog.Logger) (*k8s.ClusterClient, error) {
 		return &k8s.ClusterClient{
-			KubeClient: fake.NewSimpleClientset(pvcA, pvcB, podA, podB),
+			KubeClient: fake.NewClientset(pvcA, pvcB, podA, podB),
 		}, nil
 	}
 }

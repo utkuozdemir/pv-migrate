@@ -143,8 +143,8 @@ func buildSliceCompletionFunc(values []string) func(*cobra.Command,
 
 		var provided []string
 
-		split := strings.Split(toComplete, ",")
-		for _, s := range split {
+		split := strings.SplitSeq(toComplete, ",")
+		for s := range split {
 			val := strings.TrimSpace(s)
 			provided = append(provided, val)
 			delete(remaining, val)

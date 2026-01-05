@@ -576,7 +576,7 @@ func buildTestClientWithAPIServerHost(apiServerHost string,
 	objects ...runtime.Object,
 ) *k8s.ClusterClient {
 	return &k8s.ClusterClient{
-		KubeClient:       fake.NewSimpleClientset(objects...),
+		KubeClient:       fake.NewClientset(objects...),
 		RESTClientGetter: nil,
 		NsInContext:      "",
 		RestConfig: &rest.Config{
