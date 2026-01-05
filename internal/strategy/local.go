@@ -33,6 +33,7 @@ const (
 
 type Local struct{}
 
+//nolint:funlen
 func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	_, err := exec.LookPath("ssh")
 	if err != nil {
@@ -67,13 +68,15 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 
 	defer func() { destStopChan <- struct{}{} }()
 
-	privateKeyFile, err := writePrivateKeyToTempFile(privateKey)
+	privateKeyFile, err := writePrivateKeyToTempFile(privateKey, logger)
 	if err != nil {
 		return fmt.Errorf("failed to write private key to temp file: %w", err)
 	}
 
 	defer func() {
-		os.Remove(privateKeyFile)
+		if removeErr := os.Remove(privateKeyFile); removeErr != nil {
+			logger.Warn("🔶 Failed to remove private key file", "error", removeErr)
+		}
 	}()
 
 	rsyncCmd, err := buildRsyncCmdLocal(mig)
@@ -188,12 +191,14 @@ func (r *Local) installLocalReleases(
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
 
-	err = installLocalOnSource(attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, srcMountPath)
+	err = installLocalOnSource(
+		attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, srcMountPath, logger,
+	)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	err = installLocalOnDest(attempt, destReleaseName, publicKey, destMountPath)
+	err = installLocalOnDest(attempt, destReleaseName, publicKey, destMountPath, logger)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -223,6 +228,7 @@ func getSshdPodForHelmRelease(
 
 func installLocalOnSource(attempt *migration.Attempt, releaseName,
 	publicKey, privateKey, privateKeyMountPath, srcMountPath string,
+	logger *slog.Logger,
 ) error {
 	mig := attempt.Migration
 	sourceInfo := mig.SourceInfo
@@ -247,10 +253,14 @@ func installLocalOnSource(attempt *migration.Attempt, releaseName,
 		},
 	}
 
-	return installHelmChart(attempt, sourceInfo, releaseName, vals)
+	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
 }
 
-func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey, destMountPath string) error {
+func installLocalOnDest(
+	attempt *migration.Attempt,
+	releaseName, publicKey, destMountPath string,
+	logger *slog.Logger,
+) error {
 	mig := attempt.Migration
 	destInfo := mig.DestInfo
 	namespace := destInfo.Claim.Namespace
@@ -277,14 +287,20 @@ func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey, dest
 
 	defer func() { _ = os.Remove(valsFile) }()
 
-	return installHelmChart(attempt, destInfo, releaseName, vals)
+	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
 }
 
-func writePrivateKeyToTempFile(privateKey string) (string, error) {
+func writePrivateKeyToTempFile(privateKey string, logger *slog.Logger) (string, error) {
 	file, err := os.CreateTemp("", "pv_migrate_private_key")
 	if err != nil {
 		return "", fmt.Errorf("failed to create private key file: %w", err)
 	}
+
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			logger.Warn("🔶 Failed to close private key file", "error", closeErr)
+		}
+	}()
 
 	_, err = file.WriteString(privateKey)
 	if err != nil {
@@ -334,6 +350,9 @@ func portForwardToSshd(ctx context.Context, pvcInfo *pvc.Info,
 			ReadyCh:    readyChan,
 		}, logger)
 		if err != nil {
+			//nolint:godox
+			// todo: when we fail here, it's game over. here needs to be reworked,
+			//       we need to fail properly
 			logger.Error(
 				"❌ Error on port-forward",
 				"ns",

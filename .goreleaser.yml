@@ -111,16 +111,15 @@ docker_manifests:
       - ghcr.io/utkuozdemir/pv-migrate:{{ .Tag }}-arm64
       - ghcr.io/utkuozdemir/pv-migrate:{{ .Tag }}-armv7
 
-# To test docker image push, uncomment the following and run
-# goreleaser release --skip-validate --rm-dist --debug
-#release:
-#  disable: true
+release:
+  prerelease: auto
 
 brews:
   - repository:
       owner: utkuozdemir
       name: homebrew-pv-migrate
       token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"
+    skip_upload: auto
     commit_author:
       name: Utku Ozdemir
       email: utkuozdemir@gmail.com
@@ -142,6 +141,7 @@ scoops:
       owner: utkuozdemir
       name: scoop-pv-migrate
       token: "{{ .Env.PRIVATE_ACCESS_TOKEN }}"
+    skip_upload: auto
     commit_author:
       name: Utku Ozdemir
       email: utkuozdemir@gmail.com

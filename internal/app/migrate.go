@@ -16,6 +16,18 @@ import (
 	"github.com/utkuozdemir/pv-migrate/pvmigrate"
 )
 
+// releaseImageTag returns the version as an image tag suitable for Docker images.
+// GoReleaser sets version without the "v" prefix (e.g. "2.3.0", "2.3.0-rc.1",
+// "2.2.1-SNAPSHOT-43a0f03"), while local builds default to "dev".
+// Returns empty string for dev and snapshot builds.
+func releaseImageTag(version string) string {
+	if version == "" || strings.Contains(version, "SNAPSHOT") || strings.Contains(version, "dev") {
+		return ""
+	}
+
+	return "v" + version
+}
+
 const (
 	FlagLogLevel  = "log-level"
 	FlagLogFormat = "log-format"
@@ -82,6 +94,8 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.
 	isATTY := isatty.IsTerminal(writer.Fd())
 
 	var migration pvmigrate.Migration
+
+	migration.ImageTag = releaseImageTag(version)
 	migration.ApplyDefaults()
 	migration.ShowProgressBar = isATTY
 

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/user"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/remotecommand"
@@ -48,8 +50,6 @@ const (
 		"source-source-source-source-source-source-source-source-source-source-source-source-source-source-source"
 	longDestPvcName = "dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-" +
 		"dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest"
-
-	migrateCmdline = "--helm-set rsync.networkPolicy.enabled=true --helm-set sshd.networkPolicy.enabled=true"
 )
 
 var (
@@ -66,8 +66,12 @@ var (
 		generateDataContent, dataFilePath, dataFileUID, dataFileGID, dataFilePath)
 	generateExtraDataShellCommand = fmt.Sprintf("echo -n %s > %s",
 		generateDataContent, extraDataFilePath)
-	printDataUIDGIDContentShellCommand = fmt.Sprintf("stat -c '%%u' %s && stat -c '%%g' %s && cat %s",
-		dataFilePath, dataFilePath, dataFilePath)
+	printDataUIDGIDContentShellCommand = fmt.Sprintf(
+		"stat -c '%%u' %s && stat -c '%%g' %s && cat %s",
+		dataFilePath,
+		dataFilePath,
+		dataFilePath,
+	)
 	checkExtraDataShellCommand = "ls " + extraDataFilePath
 	clearDataShellCommand      = "find /volume -mindepth 1 -delete"
 
@@ -113,8 +117,8 @@ func testNodePort(t *testing.T) {
 	require.NoError(t, err)
 
 	// Run the migration using the NodePort strategy specifically
-	cmd := fmt.Sprintf("%s -s nodeport -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
-	require.NoError(t, runCliApp(ctx, cmd))
+	cmd := fmt.Sprintf("%s -s nodeport -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Verify the data was migrated correctly
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -148,8 +152,8 @@ func testNodePortDifferentNS(t *testing.T) {
 
 	// Run the migration using the NodePort strategy specifically between different namespaces
 	cmd := fmt.Sprintf("%s -s nodeport -i -n %s -N %s --source source --dest dest",
-		migrateCmdline, ns1, ns2)
-	require.NoError(t, runCliApp(ctx, cmd))
+		defaultHelmArgs(t), ns1, ns2)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Verify the data was migrated correctly
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
@@ -213,8 +217,8 @@ func testNodePortDestHostOverride(t *testing.T) {
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
 		"%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s -H %s --source source --dest dest",
-		migrateCmdline, customNodePort, ns1, ns2, destHostOverride)
-	require.NoError(t, runCliApp(ctx, cmd))
+		defaultHelmArgs(t), customNodePort, ns1, ns2, destHostOverride)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Verify the data was migrated correctly
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
@@ -251,8 +255,8 @@ func testNodePortCustomPort(t *testing.T) {
 
 	// Run the migration using the NodePort strategy with a custom port
 	cmd := fmt.Sprintf("%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s --source source --dest dest",
-		migrateCmdline, customNodePort, ns1, ns2)
-	require.NoError(t, runCliApp(ctx, cmd))
+		defaultHelmArgs(t), customNodePort, ns1, ns2)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Verify the data was migrated correctly
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
@@ -282,8 +286,8 @@ func testSameNS(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
-	require.NoError(t, runCliApp(ctx, cmd))
+	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
@@ -311,10 +315,10 @@ func testCustomRsyncArgs(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", migrateCmdline, ns1, ns1))
+	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", defaultHelmArgs(t), ns1, ns1))
 	cmdArgs = append(cmdArgs, "--helm-set", "rsync.extraArgs=--partial --inplace --sparse", "--source", "source", "--dest", "dest")
 
-	require.NoError(t, runCliAppWithArgs(ctx, cmdArgs...))
+	require.NoError(t, runCliAppWithArgs(ctx, t, cmdArgs...))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
@@ -341,8 +345,8 @@ func testSameNSLoadBalancer(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -s loadbalancer -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest", migrateCmdline, ns1, ns1)
-	require.NoError(t, runCliApp(ctx, cmd))
+	cmd := fmt.Sprintf("%s -s loadbalancer -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
@@ -369,8 +373,8 @@ func testNoChown(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -o -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
-	require.NoError(t, runCliApp(ctx, cmd))
+	cmd := fmt.Sprintf("%s -i -o -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
@@ -397,8 +401,8 @@ func testDeleteExtraneousFiles(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s --no-compress -d -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
-	require.NoError(t, runCliApp(ctx, cmd))
+	cmd := fmt.Sprintf("%s --no-compress -d -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
@@ -426,8 +430,8 @@ func testMountedError(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
-	err = runCliApp(ctx, cmd)
+	cmd := fmt.Sprintf("%s -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
+	err = runCliApp(ctx, t, cmd)
 	assert.ErrorContains(t, err, "ignore-mounted is not requested")
 }
 
@@ -438,8 +442,18 @@ func testDifferentNS(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns2)
-	require.NoError(t, runCliApp(ctx, cmd))
+	podWatchCancel := startPodWatches(t)
+
+	cmd := fmt.Sprintf(
+		"%s -i -n %s -N %s --source source --dest dest",
+		defaultHelmArgs(t),
+		ns1,
+		ns2,
+	)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	createdPods := podWatchCancel()
+	assertImages(t, createdPods)
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
@@ -459,10 +473,63 @@ func testDifferentNS(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func startPodWatches(t *testing.T) (cancelFunc func() []*corev1.Pod) {
+	factory := informers.NewSharedInformerFactoryWithOptions(
+		mainClusterCli.KubeClient,
+		0,
+		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+			options.LabelSelector = "app.kubernetes.io/name=pv-migrate"
+		}),
+	)
+
+	podInformer := factory.Core().V1().Pods().Informer()
+
+	var (
+		mu          sync.Mutex
+		createdPods []*corev1.Pod
+	)
+
+	_, err := podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			pod, ok := obj.(*corev1.Pod)
+			if !ok {
+				return
+			}
+
+			// Skip pods that are being deleted — these are leftovers from previous tests
+			// that the informer picks up during its initial List.
+			if pod.DeletionTimestamp != nil {
+				return
+			}
+
+			mu.Lock()
+			createdPods = append(createdPods, pod)
+			mu.Unlock()
+		},
+	})
+	require.NoError(t, err)
+
+	stopCh := make(chan struct{})
+
+	factory.Start(stopCh)
+	factory.WaitForCacheSync(stopCh)
+
+	return func() []*corev1.Pod {
+		close(stopCh)
+		factory.Shutdown()
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		return createdPods
+	}
+}
+
 // testFailWithoutNetworkPolicies tests that the migration fails if network policies are not enabled.
 //
 // For this test to work as expected, the cluster MUST use a CNI with NetworkPolicy support,
-// AND it must be configured to block traffic across namespaces by default (unless an allowing NetworkPolicy is present).
+// AND it must be configured to block traffic across namespaces by default
+// (unless an allowing NetworkPolicy is present).
 //
 // For example, Cilium with "policyEnforcementMode=always" (what we do in CI) meets these requirements:
 // See: https://docs.cilium.io/en/stable/security/network/policyenforcement/
@@ -473,9 +540,18 @@ func testFailWithoutNetworkPolicies(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("--log-level debug --log-format json -i -n %s -N %s --source source --dest dest", ns1, ns2)
-	require.Error(t, runCliApp(ctx, cmd), "migration was expected to have failed without NetworkPolicies - "+
-		"does the cluster have a CNI that supports them and it is configured to enforce them?")
+	cmd := fmt.Sprintf(
+		"%s --log-level debug --log-format json -i -n %s -N %s --source source --dest dest",
+		imageHelmArgs(t),
+		ns1,
+		ns2,
+	)
+	require.Error(
+		t,
+		runCliApp(ctx, t, cmd),
+		"migration was expected to have failed without NetworkPolicies - "+
+			"does the cluster have a CNI that supports them and it is configured to enforce them?",
+	)
 }
 
 func testLoadBalancerDestHostOverride(t *testing.T) {
@@ -513,8 +589,8 @@ func testLoadBalancerDestHostOverride(t *testing.T) {
 	// Set the destination host override to use our custom service
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
-		"%s -i -n %s -N %s -H %s --source source --dest dest", migrateCmdline, ns1, ns2, destHostOverride)
-	require.NoError(t, runCliApp(ctx, cmd))
+		"%s -i -n %s -N %s -H %s --source source --dest dest", defaultHelmArgs(t), ns1, ns2, destHostOverride)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Verify the data was migrated correctly
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
@@ -544,8 +620,8 @@ func testRSA(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns2)
-	require.NoError(t, runCliApp(ctx, cmd))
+	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns2)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
@@ -572,9 +648,9 @@ func testDifferentCluster(t *testing.T) {
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s --source source --dest dest", migrateCmdline,
+	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t),
 		extraClusterKubeconfig, ns1, ns3)
-	require.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	stdout, err := execInPod(ctx, extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
@@ -601,9 +677,9 @@ func testLocal(t *testing.T) {
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s --source source --dest dest", migrateCmdline,
+	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t),
 		extraClusterKubeconfig, ns1, ns3)
-	require.NoError(t, runCliApp(ctx, cmd))
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	stdout, err := execInPod(ctx, extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
@@ -631,10 +707,16 @@ func testLongPVCNames(t *testing.T) {
 	require.NoError(t, err)
 
 	cmd := fmt.Sprintf("%s -i -n %s -N %s --source %s --dest %s",
-		migrateCmdline, ns1, ns1, longSourcePvcName, longDestPvcName)
-	require.NoError(t, runCliApp(ctx, cmd))
+		defaultHelmArgs(t), ns1, ns1, longSourcePvcName, longDestPvcName)
+	require.NoError(t, runCliApp(ctx, t, cmd))
 
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "long-dest", printDataUIDGIDContentShellCommand)
+	stdout, err := execInPod(
+		ctx,
+		mainClusterCli,
+		ns1,
+		"long-dest",
+		printDataUIDGIDContentShellCommand,
+	)
 	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -797,7 +879,9 @@ func createPVC(t *testing.T, cli *k8s.ClusterClient, ns, name string) {
 		},
 	}
 
-	_, err := cli.KubeClient.CoreV1().PersistentVolumeClaims(ns).Create(t.Context(), &pvc, metav1.CreateOptions{})
+	_, err := cli.KubeClient.CoreV1().
+		PersistentVolumeClaims(ns).
+		Create(t.Context(), &pvc, metav1.CreateOptions{})
 	require.NoError(t, err)
 }
 
@@ -805,9 +889,6 @@ func createPVC(t *testing.T, cli *k8s.ClusterClient, ns, name string) {
 func waitUntilPodIsRunning(t *testing.T, cli *k8s.ClusterClient, ns, name string) {
 	resCli := cli.KubeClient.CoreV1().Pods(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
-
-	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Minute)
-	defer cancel()
 
 	listWatch := &cache.ListWatch{
 		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
@@ -831,6 +912,9 @@ func waitUntilPodIsRunning(t *testing.T, cli *k8s.ClusterClient, ns, name string
 			return cliWatch, nil
 		},
 	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Minute)
+	defer cancel()
 
 	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
 		func(event watch.Event) (bool, error) {
@@ -921,11 +1005,13 @@ func deleteNS(ctx context.Context, t *testing.T, cli *k8s.ClusterClient, name st
 	require.NoError(t, namespaces.Delete(ctx, name, metav1.DeleteOptions{}))
 }
 
-func runCliApp(ctx context.Context, cmd string) error {
-	return runCliAppWithArgs(ctx, strings.Fields(cmd)...)
+func runCliApp(ctx context.Context, t *testing.T, cmd string) error {
+	return runCliAppWithArgs(ctx, t, strings.Fields(cmd)...)
 }
 
-func runCliAppWithArgs(ctx context.Context, args ...string) error {
+func runCliAppWithArgs(ctx context.Context, t *testing.T, args ...string) error {
+	t.Logf("running command: %s", strings.Join(args, " "))
+
 	cliApp, err := app.BuildMigrateCmd(ctx, "", "", "")
 	if err != nil {
 		return fmt.Errorf("failed to build command: %w", err)
@@ -939,3 +1025,51 @@ func runCliAppWithArgs(ctx context.Context, args ...string) error {
 
 	return nil
 }
+
+func assertImages(t *testing.T, pods []*corev1.Pod) {
+	require.Len(t, pods, 2)
+
+	expectedRsyncImage, expectedSshdImage := getImages(t)
+
+	var actualImages []string
+
+	for _, pod := range pods {
+		require.Len(t, pod.Spec.Containers, 1)
+
+		actualImages = append(actualImages, pod.Spec.Containers[0].Image)
+	}
+
+	require.ElementsMatch(t, []string{expectedRsyncImage, expectedSshdImage}, actualImages)
+}
+
+func imageHelmArgs(t *testing.T) string {
+	rsyncImage, sshdImage := getImages(t)
+
+	rsyncImageParts := strings.SplitN(rsyncImage, ":", 2)
+	require.Len(t, rsyncImageParts, 2)
+
+	sshdImageParts := strings.SplitN(sshdImage, ":", 2)
+	require.Len(t, sshdImageParts, 2)
+
+	return "--helm-set rsync.image.repository=" + rsyncImageParts[0] + " " +
+		"--helm-set rsync.image.tag=" + rsyncImageParts[1] + " " +
+		"--helm-set sshd.image.repository=" + sshdImageParts[0] + " " +
+		"--helm-set sshd.image.tag=" + sshdImageParts[1]
+}
+
+func defaultHelmArgs(t *testing.T) string {
+	return "--helm-set rsync.networkPolicy.enabled=true " +
+		"--helm-set sshd.networkPolicy.enabled=true " +
+		imageHelmArgs(t)
+}
+
+func getImages(t *testing.T) (rsyncImage, sshdImage string) {
+	rsyncImage = os.Getenv("RSYNC_IMAGE")
+	require.NotEmpty(t, rsyncImage, "RSYNC_IMAGE env var must be set")
+
+	sshdImage = os.Getenv("SSHD_IMAGE")
+	require.NotEmpty(t, sshdImage, "SSHD_IMAGE env var must be set")
+
+	return rsyncImage, sshdImage
+}
+

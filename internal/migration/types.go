@@ -18,6 +18,7 @@ type PVCInfo struct {
 }
 
 type Request struct {
+	ImageTag              string
 	Source                PVCInfo
 	Dest                  PVCInfo
 	DeleteExtraneousFiles bool
