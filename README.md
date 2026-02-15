@@ -1,10 +1,10 @@
 # pv-migrate
 
 [![build](https://github.com/utkuozdemir/pv-migrate/actions/workflows/build.yml/badge.svg)](https://github.com/utkuozdemir/pv-migrate/actions/workflows/build.yml)
-[![codecov](https://codecov.io/gh/utkuozdemir/pv-migrate/branch/master/graph/badge.svg?token=41ULBTVG7X)](https://codecov.io/gh/utkuozdemir/pv-migrate)
+[![codecov](https://codecov.io/gh/utkuozdemir/pv-migrate/branch/main/graph/badge.svg?token=41ULBTVG7X)](https://codecov.io/gh/utkuozdemir/pv-migrate)
 [![Go Report Card](https://goreportcard.com/badge/github.com/utkuozdemir/pv-migrate)](https://goreportcard.com/report/github.com/utkuozdemir/pv-migrate)
 ![Latest GitHub release](https://img.shields.io/github/release/utkuozdemir/pv-migrate.svg)
-[![GitHub license](https://img.shields.io/github/license/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/blob/master/LICENSE)
+[![GitHub license](https://img.shields.io/github/license/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/blob/main/LICENSE)
 ![GitHub stars](https://img.shields.io/github/stars/utkuozdemir/pv-migrate.svg?label=github%20stars)
 [![GitHub forks](https://img.shields.io/github/forks/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/network)
 [![GitHub issues](https://img.shields.io/github/issues/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/issues)

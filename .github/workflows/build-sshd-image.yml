@@ -5,13 +5,13 @@ on:
   workflow_dispatch: {}
   push:
     branches:
-      - master
+      - main
       - renovate/**
     paths:
       - docker/sshd/**
   pull_request:
     branches:
-      - master
+      - main
     paths:
       - docker/sshd/**
 

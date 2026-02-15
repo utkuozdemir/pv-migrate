@@ -5,7 +5,7 @@ on:
   workflow_dispatch: {}
   push:
     branches:
-      - master
+      - main
       - renovate/**
     paths-ignore:
       - "**.md"
@@ -17,7 +17,7 @@ on:
       - ".krew.yaml"
   pull_request:
     branches:
-      - master
+      - main
     paths-ignore:
       - "**.md"
       - "img/**"
