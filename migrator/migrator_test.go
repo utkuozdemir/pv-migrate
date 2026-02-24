@@ -123,6 +123,149 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	assert.Equal(t, []int{3, 1, 2}, result)
 }
 
+// TestNodePortStrategyUnit tests the NodePort strategy's unit integration with the migrator.
+func TestNodePortStrategyUnit(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := slogt.New(t)
+
+	// Track which strategies were executed
+	var executedStrategies []string
+
+	// Create strategy mocks
+	strategies := makeStrategyMocks(&executedStrategies)
+
+	// Create migrator with our mocks
+	migrator := Migrator{
+		getKubeClient: fakeClusterClientGetter(),
+		getStrategyMap: func([]string) (map[string]strategy.Strategy, error) {
+			return strategies, nil
+		},
+	}
+
+	// Create migration request with default strategies
+	req := buildMigration(true)
+
+	// Run the migration
+	err := migrator.Run(ctx, req, logger)
+
+	// Verify results
+	require.NoError(t, err)
+
+	// Check that NodePort strategy was executed
+	assert.Contains(t, executedStrategies, strategy.NodePortStrategy,
+		"NodePort strategy should have been executed")
+
+	// Check strategies were attempted in the right order
+	for i, s := range strategy.DefaultStrategies {
+		if i < len(executedStrategies) {
+			assert.Equal(t, s, executedStrategies[i],
+				"Strategy execution order should match DefaultStrategies")
+		}
+	}
+
+	// Check that LocalStrategy was not executed (since NodePort succeeded)
+	assert.NotContains(t, executedStrategies, strategy.LocalStrategy,
+		"LocalStrategy should not have been tried since NodePort succeeded")
+}
+
+// makeStrategyMocks creates mocks for all strategies and records execution in the provided slice.
+func makeStrategyMocks(executedStrategies *[]string) map[string]strategy.Strategy {
+	mnt2Mock := mockStrategy{
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
+			*executedStrategies = append(*executedStrategies, strategy.Mnt2Strategy)
+
+			return strategy.ErrUnaccepted
+		},
+	}
+
+	svcMock := mockStrategy{
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
+			*executedStrategies = append(*executedStrategies, strategy.SvcStrategy)
+
+			return strategy.ErrUnaccepted
+		},
+	}
+
+	lbsvcMock := mockStrategy{
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
+			*executedStrategies = append(*executedStrategies, strategy.LbSvcStrategy)
+
+			return strategy.ErrUnaccepted
+		},
+	}
+
+	nodeportMock := mockStrategy{
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
+			*executedStrategies = append(*executedStrategies, strategy.NodePortStrategy)
+
+			return nil // This one succeeds
+		},
+	}
+
+	localMock := mockStrategy{
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
+			*executedStrategies = append(*executedStrategies, strategy.LocalStrategy)
+
+			return strategy.ErrUnaccepted
+		},
+	}
+
+	return map[string]strategy.Strategy{
+		strategy.Mnt2Strategy:     &mnt2Mock,
+		strategy.SvcStrategy:      &svcMock,
+		strategy.LbSvcStrategy:    &lbsvcMock,
+		strategy.NodePortStrategy: &nodeportMock,
+		strategy.LocalStrategy:    &localMock,
+	}
+}
+
+// TestExplicitNodePortStrategySelection tests that NodePort strategy can be explicitly selected.
+func TestExplicitNodePortStrategySelection(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := slogt.New(t)
+
+	nodeportExecuted := false
+
+	nodeportMock := mockStrategy{
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
+			nodeportExecuted = true
+
+			return nil
+		},
+	}
+
+	migrator := Migrator{
+		getKubeClient: fakeClusterClientGetter(),
+		getStrategyMap: func([]string) (map[string]strategy.Strategy, error) {
+			return map[string]strategy.Strategy{
+				strategy.NodePortStrategy: &nodeportMock,
+			}, nil
+		},
+	}
+
+	// Request with only NodePort strategy explicitly selected
+	// Important: We need to set ignoreMounted to true since our mocks use mounted PVCs
+	req := buildMigrationRequestWithStrategies(
+		[]string{strategy.NodePortStrategy},
+		true,
+	) // Changed from false to true
+
+	// Run the migration
+	err := migrator.Run(ctx, req, logger)
+
+	// Verify results
+	require.NoError(t, err)
+	assert.True(
+		t,
+		nodeportExecuted,
+		"NodePort strategy should have been executed when explicitly selected",
+	)
+}
+
 func buildMigration(ignoreMounted bool) *migration.Request {
 	return buildMigrationRequestWithStrategies(strategy.DefaultStrategies, ignoreMounted)
 }

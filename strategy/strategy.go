@@ -24,10 +24,11 @@ import (
 )
 
 const (
-	Mnt2Strategy  = "mnt2"
-	SvcStrategy   = "svc"
-	LbSvcStrategy = "lbsvc"
-	LocalStrategy = "local"
+	Mnt2Strategy     = "mnt2"
+	SvcStrategy      = "svc"
+	LbSvcStrategy    = "lbsvc"
+	LocalStrategy    = "local"
+	NodePortStrategy = "nodeport"
 
 	helmValuesYAMLIndent = 2
 
@@ -36,14 +37,21 @@ const (
 )
 
 var (
-	DefaultStrategies = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy}
-	AllStrategies     = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy, LocalStrategy}
+	DefaultStrategies = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy, NodePortStrategy}
+	AllStrategies     = []string{
+		Mnt2Strategy,
+		SvcStrategy,
+		LbSvcStrategy,
+		NodePortStrategy,
+		LocalStrategy,
+	}
 
 	nameToStrategy = map[string]Strategy{
-		Mnt2Strategy:  &Mnt2{},
-		SvcStrategy:   &Svc{},
-		LbSvcStrategy: &LbSvc{},
-		LocalStrategy: &Local{},
+		Mnt2Strategy:     &Mnt2{},
+		SvcStrategy:      &Svc{},
+		LbSvcStrategy:    &LbSvc{},
+		LocalStrategy:    &Local{},
+		NodePortStrategy: &NodePort{},
 	}
 
 	helmProviders = getter.All(cli.New())
