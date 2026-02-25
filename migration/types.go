@@ -3,7 +3,7 @@ package migration
 import (
 	"time"
 
-	"helm.sh/helm/v3/pkg/chart"
+	chart "helm.sh/helm/v4/pkg/chart/v2"
 
 	"github.com/utkuozdemir/pv-migrate/pvc"
 )

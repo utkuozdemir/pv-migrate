@@ -6,8 +6,9 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v4/pkg/chart/loader/archive"
+	chart "helm.sh/helm/v4/pkg/chart/v2"
+	"helm.sh/helm/v4/pkg/chart/v2/loader"
 )
 
 // chartFS is the embedded Helm chart.
@@ -36,8 +37,8 @@ func LoadChart() (*chart.Chart, error) {
 	return helmChart, nil
 }
 
-func chartAsBufferedFiles() ([]*loader.BufferedFile, error) {
-	var files []*loader.BufferedFile
+func chartAsBufferedFiles() ([]*archive.BufferedFile, error) {
+	var files []*archive.BufferedFile
 
 	err := fs.WalkDir(chartFS, rootDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -61,7 +62,7 @@ func chartAsBufferedFiles() ([]*loader.BufferedFile, error) {
 		// fix for Windows - the Helm client library expects templates to be under "templates/", i.e., with forward-slash
 		relativePath = filepath.ToSlash(relativePath)
 
-		files = append(files, &loader.BufferedFile{
+		files = append(files, &archive.BufferedFile{
 			Name: relativePath,
 			Data: data,
 		})

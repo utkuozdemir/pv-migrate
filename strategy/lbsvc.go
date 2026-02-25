@@ -40,7 +40,7 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	doneCh := registerCleanupHook(attempt, releaseNames, logger)
 	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installOnSource(attempt, srcReleaseName, publicKey, srcMountPath, logger)
+	err = installOnSource(attempt, srcReleaseName, publicKey, srcMountPath)
 	if err != nil {
 		return fmt.Errorf("failed to install on source: %w", err)
 	}
@@ -65,7 +65,7 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	}
 
 	err = installOnDest(attempt, destReleaseName, privateKey, privateKeyMountPath,
-		sshTargetHost, srcMountPath, destMountPath, logger)
+		sshTargetHost, srcMountPath, destMountPath)
 	if err != nil {
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
@@ -81,9 +81,7 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	return nil
 }
 
-func installOnSource(attempt *migration.Attempt, releaseName,
-	publicKey, srcMountPath string, logger *slog.Logger,
-) error {
+func installOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMountPath string) error {
 	mig := attempt.Migration
 	sourceInfo := mig.SourceInfo
 	namespace := sourceInfo.Claim.Namespace
@@ -107,11 +105,12 @@ func installOnSource(attempt *migration.Attempt, releaseName,
 		},
 	}
 
-	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
+	return installHelmChart(attempt, sourceInfo, releaseName, vals)
 }
 
-func installOnDest(attempt *migration.Attempt, releaseName, privateKey,
-	privateKeyMountPath, sshHost, srcMountPath, destMountPath string, logger *slog.Logger,
+func installOnDest(
+	attempt *migration.Attempt,
+	releaseName, privateKey, privateKeyMountPath, sshHost, srcMountPath, destMountPath string,
 ) error {
 	mig := attempt.Migration
 	destInfo := mig.DestInfo
@@ -153,7 +152,7 @@ func installOnDest(attempt *migration.Attempt, releaseName, privateKey,
 		},
 	}
 
-	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
+	return installHelmChart(attempt, destInfo, releaseName, vals)
 }
 
 func formatSSHTargetHost(host string) string {
