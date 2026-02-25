@@ -26,15 +26,14 @@ type Info struct {
 func New(
 	ctx context.Context,
 	client *k8s.ClusterClient,
-	namespace string,
-	name string,
+	ns, name string,
 ) (*Info, error) {
 	kubeClient := client.KubeClient
 
-	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(namespace).
+	claim, err := kubeClient.CoreV1().PersistentVolumeClaims(ns).
 		Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get pvc %s/%s: %w", namespace, name, err)
+		return nil, fmt.Errorf("failed to get pvc %s/%s: %w", ns, name, err)
 	}
 
 	supportsRWO := false
@@ -64,7 +63,7 @@ func New(
 
 	if readWriteOncePod && mountedNode != "" {
 		return nil, fmt.Errorf("pvc %s/%s is mounted to a pod and has ReadWriteOncePod "+
-			"access mode, it cannot be mounted to the migration pod", namespace, name)
+			"access mode, it cannot be mounted to the migration pod", ns, name)
 	}
 
 	required := !supportsRWX && !supportsROX

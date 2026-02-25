@@ -135,7 +135,8 @@ func marshalED25519PrivateKey(key ed25519.PrivateKey) ([]byte, error) {
 		pk1.Pad[i] = byte(i + 1)
 	}
 
-	pubkeyFull := []byte{0x0, 0x0, 0x0, 0x0b}
+	pubkeyFull := make([]byte, 0, 4+len(ssh.KeyAlgoED25519)+4+len(pubKey))
+	pubkeyFull = append(pubkeyFull, 0x0, 0x0, 0x0, 0x0b) //nolint:mnd
 	pubkeyFull = append(pubkeyFull, []byte(ssh.KeyAlgoED25519)...)
 	pubkeyFull = append(pubkeyFull, []byte{0x0, 0x0, 0x0, 0x20}...)
 	pubkeyFull = append(pubkeyFull, pubKey...)

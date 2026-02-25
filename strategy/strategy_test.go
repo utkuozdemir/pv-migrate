@@ -6,10 +6,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func buildTestPod(namespace string, name string, node string, pvc string) *corev1.Pod {
+func buildTestPod(ns, name, node, pvc string) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
+			Namespace: ns,
 			Name:      name,
 		},
 		Spec: corev1.PodSpec{
@@ -25,12 +25,10 @@ func buildTestPod(namespace string, name string, node string, pvc string) *corev
 	}
 }
 
-func buildTestPVC(namespace string, name string,
-	accessModes ...corev1.PersistentVolumeAccessMode,
-) *corev1.PersistentVolumeClaim {
+func buildTestPVC(ns, name string, accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
+			Namespace: ns,
 			Name:      name,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{

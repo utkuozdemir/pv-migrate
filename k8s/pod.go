@@ -19,20 +19,16 @@ const (
 	podWatchTimeout = 2 * time.Minute
 )
 
-func WaitForPod(
-	ctx context.Context,
-	cli kubernetes.Interface,
-	namespace, labelSelector string,
-) (*corev1.Pod, error) {
+func WaitForPod(ctx context.Context, cli kubernetes.Interface, ns, labelSelector string) (*corev1.Pod, error) {
 	var result *corev1.Pod
 
-	resCli := cli.CoreV1().Pods(namespace)
+	resCli := cli.CoreV1().Pods(ns)
 
 	ctx, cancel := context.WithTimeout(ctx, podWatchTimeout)
 	defer cancel()
 
 	listWatch := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			options.LabelSelector = labelSelector
 
 			list, err := resCli.List(ctx, options)
@@ -42,7 +38,7 @@ func WaitForPod(
 
 			return list, nil
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			options.LabelSelector = labelSelector
 
 			resWatch, err := resCli.Watch(ctx, options)
@@ -58,7 +54,11 @@ func WaitForPod(
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watching pods: ns: %s, labelSelector: %s", namespace, labelSelector)
+				return false, fmt.Errorf(
+					"unexpected type while watching pods: ns: %s, labelSelector: %s",
+					ns,
+					labelSelector,
+				)
 			}
 
 			phase := res.Status.Phase
@@ -76,15 +76,13 @@ func WaitForPod(
 	return result, nil
 }
 
-func waitForPodTermination(ctx context.Context, cli kubernetes.Interface,
-	namespace string, name string,
-) (*corev1.PodPhase, error) {
+func waitForPodTermination(ctx context.Context, cli kubernetes.Interface, ns, name string) (*corev1.PodPhase, error) {
 	var result *corev1.PodPhase
 
-	resCli := cli.CoreV1().Pods(namespace)
+	resCli := cli.CoreV1().Pods(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 	listWatch := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
 
 			list, err := resCli.List(ctx, options)
@@ -94,7 +92,7 @@ func waitForPodTermination(ctx context.Context, cli kubernetes.Interface,
 
 			return list, nil
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
 
 			resWatch, err := resCli.Watch(ctx, options)
@@ -110,7 +108,7 @@ func waitForPodTermination(ctx context.Context, cli kubernetes.Interface,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
 			if !ok {
-				return false, fmt.Errorf("unexpected type while watching pods: %s/%s", namespace, name)
+				return false, fmt.Errorf("unexpected type while watching pods: %s/%s", ns, name)
 			}
 
 			phase := res.Status.Phase

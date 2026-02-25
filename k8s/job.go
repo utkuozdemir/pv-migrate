@@ -15,21 +15,19 @@ import (
 )
 
 // WaitForJobCompletion waits for the Kubernetes job to complete.
-//
-
 func WaitForJobCompletion(ctx context.Context, cli kubernetes.Interface,
-	namespace string, name string, progressBarRequested bool, logger *slog.Logger,
+	ns, name string, progressBarRequested bool, logger *slog.Logger,
 ) (retErr error) {
 	canDisplayProgressBar := ctx.Value(progress.CanDisplayProgressBarContextKey{}) != nil
 	showProgressBar := progressBarRequested && canDisplayProgressBar
 	labelSelector := "job-name=" + name
 
-	pod, err := WaitForPod(ctx, cli, namespace, labelSelector)
+	pod, err := WaitForPod(ctx, cli, ns, labelSelector)
 	if err != nil {
 		return err
 	}
 
-	var eg errgroup.Group //nolint:varnamelen
+	var eg errgroup.Group
 
 	defer func() {
 		retErr = errors.Join(retErr, eg.Wait())
@@ -41,7 +39,7 @@ func WaitForJobCompletion(ctx context.Context, cli kubernetes.Interface,
 	progressLogger := progress.NewLogger(progress.LoggerOptions{
 		ShowProgressBar: showProgressBar,
 		LogStreamFunc: func(ctx context.Context) (io.ReadCloser, error) {
-			return cli.CoreV1().Pods(namespace).GetLogs(pod.Name,
+			return cli.CoreV1().Pods(ns).GetLogs(pod.Name,
 				&corev1.PodLogOptions{Follow: true}).Stream(ctx)
 		},
 	})
