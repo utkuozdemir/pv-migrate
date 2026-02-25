@@ -2,36 +2,27 @@
 package util
 
 import (
-	"crypto/rand"
-	"fmt"
-	"math/big"
-	"net"
+	"math/rand/v2"
+	"net/netip"
 )
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
 // RandomHexadecimalString returns a random lowercase hexadecimal string of given length.
 func RandomHexadecimalString(length int) string {
-	lengthBigInt := big.NewInt(int64(length))
-
 	runes := make([]rune, length)
-	for rune := range runes {
-		rnd, err := rand.Int(rand.Reader, lengthBigInt)
-		if err != nil {
-			panic(fmt.Sprintf("failed to generate random number: %v", err))
-		}
-
-		runes[rune] = letters[rnd.Int64()]
+	for i := range runes {
+		runes[i] = letters[rand.IntN(len(letters))] //nolint:gosec // not security-sensitive
 	}
 
 	return string(runes)
 }
 
 func IsIPv6(host string) bool {
-	ip := net.ParseIP(host)
-	if ip == nil {
+	addr, err := netip.ParseAddr(host)
+	if err != nil {
 		return false
 	}
 
-	return ip.To4() == nil
+	return addr.Is6()
 }

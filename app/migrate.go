@@ -11,7 +11,6 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
-	flag "github.com/spf13/pflag"
 
 	"github.com/utkuozdemir/pv-migrate/migration"
 	"github.com/utkuozdemir/pv-migrate/migrator"
@@ -21,8 +20,6 @@ import (
 )
 
 const (
-	CommandMigrate = "migrate"
-
 	FlagLogLevel  = "log-level"
 	FlagLogFormat = "log-format"
 
@@ -62,49 +59,36 @@ const (
 	lbSvcTimeoutDefault = 2 * time.Minute
 )
 
-var completionFuncNoFileComplete = func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
+var completionFuncNoFileComplete = func(*cobra.Command, []string,
+	string,
+) ([]cobra.Completion, cobra.ShellCompDirective) {
 	return nil, cobra.ShellCompDirectiveNoFileComp
 }
 
-//nolint:funlen
-func BuildMigrateCmd(
-	ctx context.Context,
-	version, commit, date string,
-	legacy bool,
-) *cobra.Command {
-	var (
-		args              cobra.PositionalArgs
-		versionStr        string
-		aliases           []string
-		use               string
-		validArgsFunction func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective)
-		hidden            bool
+type MigrationOptions struct {
+	LogLevel  string
+	LogFormat string
+
+	Request migration.Request
+}
+
+func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.Command, error) {
+	versionStr := fmt.Sprintf("%s (commit: %s) (build date: %s)", version, commit, date)
+	use := fmt.Sprintf(
+		"%s [--%s=<source-ns>] --%s=<source-pvc> [--%s=<dest-ns>] --%s=<dest-pvc>",
+		appName, FlagSourceNamespace, FlagSource, FlagDestNamespace, FlagDest,
 	)
 
-	if legacy {
-		args = cobra.ExactArgs(2) //nolint:mnd
-		aliases = []string{"m"}
-		use = CommandMigrate + " <source-pvc> <dest-pvc>"
-		validArgsFunction = buildLegacyPVCsCompletionFunc(ctx)
-		hidden = true
-	} else {
-		args = cobra.NoArgs
-		versionStr = fmt.Sprintf("%s (commit: %s) (build date: %s)", version, commit, date)
-		use = fmt.Sprintf(
-			"%s [--%s=<source-ns>] --%s=<source-pvc> [--%s=<dest-ns>] --%s=<dest-pvc>",
-			appName, FlagSourceNamespace, FlagSource, FlagDestNamespace, FlagDest,
-		)
-	}
+	var options MigrationOptions
 
 	cmd := cobra.Command{
-		Use:               use,
-		Aliases:           aliases,
-		Short:             "Migrate data from one Kubernetes PersistentVolumeClaim to another",
-		Args:              args,
-		ValidArgsFunction: validArgsFunction,
-		Version:           versionStr,
-		RunE:              runMigration,
-		Hidden:            hidden,
+		Use:     use,
+		Short:   "Migrate data from one Kubernetes PersistentVolumeClaim to another",
+		Args:    cobra.NoArgs,
+		Version: versionStr,
+		RunE: func(cmd *cobra.Command, _ []string) error { //nolint:contextcheck
+			return runMigration(cmd, &options)
+		},
 	}
 
 	logLevels := []string{
@@ -118,156 +102,150 @@ func BuildMigrateCmd(
 		logFormatJSON,
 	}
 
-	setMigrateCmdFlags(&cmd, logLevels, logFormats, legacy)
-	setMigrateCmdCompletion(ctx, &cmd, logLevels, logFormats, legacy)
+	if err := setMigrateCmdFlags(&cmd, &options, logLevels, logFormats); err != nil {
+		return nil, fmt.Errorf("failed to set flags: %w", err)
+	}
 
-	if !legacy {
-		legacyMigrateCommand := BuildMigrateCmd(ctx, version, commit, date, true)
-
-		cmd.AddCommand(legacyMigrateCommand)
+	if err := setMigrateCmdCompletion(ctx, &cmd, logLevels, logFormats); err != nil {
+		return nil, fmt.Errorf("failed to set completion: %w", err)
 	}
 
 	cmd.AddCommand(buildCompletionCmd())
 
-	return &cmd
+	return &cmd, nil
 }
 
-//
-//nolint:errcheck
 func setMigrateCmdCompletion(
 	ctx context.Context,
 	cmd *cobra.Command,
 	levels, formats []string,
-	legacy bool,
-) {
-	cmd.RegisterFlagCompletionFunc(FlagLogLevel, buildStaticSliceCompletionFunc(levels))
-	cmd.RegisterFlagCompletionFunc(FlagLogFormat, buildStaticSliceCompletionFunc(formats))
-
-	cmd.RegisterFlagCompletionFunc(FlagSourceContext,
-		buildKubeContextCompletionFunc(FlagSourceKubeconfig))
-	cmd.RegisterFlagCompletionFunc(FlagSourceNamespace,
-		buildKubeNSCompletionFunc(ctx, FlagSourceKubeconfig, FlagSourceContext))
-	cmd.RegisterFlagCompletionFunc(FlagSourcePath, completionFuncNoFileComplete)
-
-	cmd.RegisterFlagCompletionFunc(FlagDestContext,
-		buildKubeContextCompletionFunc(FlagDestKubeconfig))
-	cmd.RegisterFlagCompletionFunc(FlagDestNamespace,
-		buildKubeNSCompletionFunc(ctx, FlagDestKubeconfig, FlagDestContext))
-	cmd.RegisterFlagCompletionFunc(FlagDestPath, completionFuncNoFileComplete)
-
-	cmd.RegisterFlagCompletionFunc(FlagStrategies, buildSliceCompletionFunc(strategy.AllStrategies))
-	cmd.RegisterFlagCompletionFunc(
-		FlagSSHKeyAlgorithm,
-		buildStaticSliceCompletionFunc(ssh.KeyAlgorithms),
-	)
-
-	cmd.RegisterFlagCompletionFunc(FlagHelmSet, completionFuncNoFileComplete)
-	cmd.RegisterFlagCompletionFunc(FlagHelmSetString, completionFuncNoFileComplete)
-	cmd.RegisterFlagCompletionFunc(FlagHelmSetFile, completionFuncNoFileComplete)
-
-	if !legacy {
-		cmd.RegisterFlagCompletionFunc(FlagSource, buildPVCCompletionFunc(ctx, false))
-		cmd.RegisterFlagCompletionFunc(FlagDest, buildPVCCompletionFunc(ctx, true))
+) error {
+	completions := []struct {
+		flag string
+		fn   cobra.CompletionFunc
+	}{
+		{FlagLogLevel, buildStaticSliceCompletionFunc(levels)},
+		{FlagLogFormat, buildStaticSliceCompletionFunc(formats)},
+		{FlagSourceContext, buildKubeContextCompletionFunc(FlagSourceKubeconfig)},
+		{FlagSourceNamespace, buildKubeNSCompletionFunc(ctx, FlagSourceKubeconfig, FlagSourceContext)},
+		{FlagSourcePath, completionFuncNoFileComplete},
+		{FlagDestContext, buildKubeContextCompletionFunc(FlagDestKubeconfig)},
+		{FlagDestNamespace, buildKubeNSCompletionFunc(ctx, FlagDestKubeconfig, FlagDestContext)},
+		{FlagDestPath, completionFuncNoFileComplete},
+		{FlagStrategies, buildSliceCompletionFunc(strategy.AllStrategies)},
+		{FlagSSHKeyAlgorithm, buildStaticSliceCompletionFunc(ssh.KeyAlgorithms)},
+		{FlagHelmSet, completionFuncNoFileComplete},
+		{FlagHelmSetString, completionFuncNoFileComplete},
+		{FlagHelmSetFile, completionFuncNoFileComplete},
+		{FlagSource, buildPVCCompletionFunc(ctx, false)},
+		{FlagDest, buildPVCCompletionFunc(ctx, true)},
 	}
+
+	for _, c := range completions {
+		if err := cmd.RegisterFlagCompletionFunc(c.flag, c.fn); err != nil {
+			return fmt.Errorf("failed to register completion for flag %q: %w", c.flag, err)
+		}
+	}
+
+	return nil
 }
 
 //nolint:funlen
-func setMigrateCmdFlags(cmd *cobra.Command, logLevels, logFormats []string, legacy bool) {
+func setMigrateCmdFlags(cmd *cobra.Command, options *MigrationOptions, logLevels, logFormats []string) error {
 	persistentFlags := cmd.PersistentFlags()
 	flags := cmd.Flags()
 
-	persistentFlags.String(FlagLogLevel, slog.LevelInfo.String(),
+	req := &options.Request
+	req.Source = &migration.PVCInfo{}
+	req.Dest = &migration.PVCInfo{}
+
+	persistentFlags.StringVar(&options.LogLevel, FlagLogLevel, slog.LevelInfo.String(),
 		"log level, must be one of \""+strings.Join(logLevels, ", ")+
 			"\" or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText")
-	persistentFlags.String(FlagLogFormat, logFormatText,
+	persistentFlags.StringVar(&options.LogFormat, FlagLogFormat, logFormatText,
 		"log format, must be one of: "+strings.Join(logFormats, ", "))
 
-	flags.StringP(FlagSourceKubeconfig, "k", "", "path of the kubeconfig file of the source PVC")
-	flags.StringP(FlagSourceContext, "c", "", "context in the kubeconfig file of the source PVC")
-	flags.StringP(FlagSourceNamespace, "n", "", "namespace of the source PVC")
+	flags.StringVarP(&req.Source.KubeconfigPath, FlagSourceKubeconfig, "k", "",
+		"path of the kubeconfig file of the source PVC")
+	flags.StringVarP(&req.Source.Context, FlagSourceContext, "c", "",
+		"context in the kubeconfig file of the source PVC")
+	flags.StringVarP(&req.Source.Namespace, FlagSourceNamespace, "n", "",
+		"namespace of the source PVC")
+	flags.StringVar(&req.Source.Name, FlagSource, "", "source PVC name")
 
-	if !legacy {
-		flags.String(FlagSource, "", "source PVC name")
-
-		cmd.MarkFlagRequired(FlagSource) //nolint:errcheck
+	if err := cmd.MarkFlagRequired(FlagSource); err != nil {
+		return fmt.Errorf("failed to mark flag %q as required: %w", FlagSource, err)
 	}
 
-	flags.StringP(FlagSourcePath, "p", "/", "the filesystem path to migrate in the source PVC")
+	flags.StringVarP(&req.Source.Path, FlagSourcePath, "p", "/",
+		"the filesystem path to migrate in the source PVC")
 
-	flags.StringP(FlagDestKubeconfig, "K", "", "path of the kubeconfig file of the destination PVC")
-	flags.StringP(FlagDestContext, "C", "", "context in the kubeconfig file of the destination PVC")
-	flags.StringP(FlagDestNamespace, "N", "", "namespace of the destination PVC")
+	flags.StringVarP(&req.Dest.KubeconfigPath, FlagDestKubeconfig, "K", "",
+		"path of the kubeconfig file of the destination PVC")
+	flags.StringVarP(&req.Dest.Context, FlagDestContext, "C", "",
+		"context in the kubeconfig file of the destination PVC")
+	flags.StringVarP(&req.Dest.Namespace, FlagDestNamespace, "N", "",
+		"namespace of the destination PVC")
+	flags.StringVar(&req.Dest.Name, FlagDest, "", "destination PVC name")
 
-	if !legacy {
-		flags.String(FlagDest, "", "destination PVC name")
-
-		cmd.MarkFlagRequired(FlagDest) //nolint:errcheck
+	if err := cmd.MarkFlagRequired(FlagDest); err != nil {
+		return fmt.Errorf("failed to mark flag %q as required: %w", FlagDest, err)
 	}
 
-	flags.StringP(FlagDestPath, "P", "/", "the filesystem path to migrate in the destination PVC")
+	flags.StringVarP(&req.Dest.Path, FlagDestPath, "P", "/",
+		"the filesystem path to migrate in the destination PVC")
 
-	flags.BoolP(FlagDestDeleteExtraneousFiles, "d", false,
+	flags.BoolVarP(&req.DeleteExtraneousFiles, FlagDestDeleteExtraneousFiles, "d", false,
 		"delete extraneous files on the destination by using rsync's '--delete' flag")
-	flags.BoolP(FlagIgnoreMounted, "i", false,
+	flags.BoolVarP(&req.IgnoreMounted, FlagIgnoreMounted, "i", false,
 		"do not fail if the source or destination PVC is mounted")
-	flags.BoolP(FlagNoChown, "o", false, "omit chown on rsync")
-	flags.BoolP(FlagSkipCleanup, "x", false, "skip cleanup of the migration")
-	flags.BoolP(FlagNoProgressBar, "b", false, "do not display a progress bar")
-	flags.BoolP(FlagSourceMountReadOnly, "R", true, "mount the source PVC in ReadOnly mode")
-	flags.StringSliceP(FlagStrategies, "s", strategy.DefaultStrategies,
+	flags.BoolVarP(&req.NoChown, FlagNoChown, "o", false, "omit chown on rsync")
+	flags.BoolVarP(&req.SkipCleanup, FlagSkipCleanup, "x", false, "skip cleanup of the migration")
+	flags.BoolVarP(&req.NoProgressBar, FlagNoProgressBar, "b", false, "do not display a progress bar")
+	flags.BoolVarP(&req.SourceMountReadOnly, FlagSourceMountReadOnly, "R", true,
+		"mount the source PVC in ReadOnly mode")
+	flags.StringSliceVarP(&req.Strategies, FlagStrategies, "s", strategy.DefaultStrategies,
 		"the comma-separated list of strategies to be used in the given order (available: "+
 			strings.Join(strategy.AllStrategies, ",")+")",
 	)
-	flags.StringP(FlagSSHKeyAlgorithm, "a", ssh.Ed25519KeyAlgorithm,
+	flags.StringVarP(&req.KeyAlgorithm, FlagSSHKeyAlgorithm, "a", ssh.Ed25519KeyAlgorithm,
 		"ssh key algorithm to be used. Valid values are "+strings.Join(ssh.KeyAlgorithms, ","))
-	flags.StringP(FlagDestHostOverride, "H", "",
+	flags.StringVarP(&req.DestHostOverride, FlagDestHostOverride, "H", "",
 		"the override for the rsync host destination when it is run over SSH, "+
 			"in cases when you need to target a different destination IP on rsync for some reason. "+
 			"By default, it is determined by used strategy and differs across strategies. "+
 			"Has no effect for mnt2 and local strategies")
-	flags.Duration(
-		FlagLBSvcTimeout,
-		lbSvcTimeoutDefault,
+	flags.DurationVar(&req.LBSvcTimeout, FlagLBSvcTimeout, lbSvcTimeoutDefault,
 		fmt.Sprintf("timeout for the load balancer service to "+
 			"receive an external IP. Only used by the %s strategy", strategy.LbSvcStrategy),
 	)
-	flags.Bool(FlagCompress, true, "compress data during migration ('-z' flag of rsync)")
+	flags.BoolVar(&req.Compress, FlagCompress, true,
+		"compress data during migration ('-z' flag of rsync)")
 
-	flags.DurationP(
-		FlagHelmTimeout,
-		"t",
-		1*time.Minute,
-		"install/uninstall timeout for helm releases",
-	)
-	flags.StringSliceP(FlagHelmValues, "f", nil,
+	flags.DurationVarP(&req.HelmTimeout, FlagHelmTimeout, "t", 1*time.Minute,
+		"install/uninstall timeout for helm releases")
+	flags.StringSliceVarP(&req.HelmValuesFiles, FlagHelmValues, "f", nil,
 		"set additional Helm values by a YAML file or a URL (can specify multiple)")
-	flags.StringSlice(
-		FlagHelmSet,
-		nil,
+	flags.StringSliceVar(&req.HelmValues, FlagHelmSet, nil,
 		"set additional Helm values on the command line (can specify "+
 			"multiple or separate values with commas: key1=val1,key2=val2)",
 	)
-	flags.StringSlice(
-		FlagHelmSetString,
-		nil,
+	flags.StringSliceVar(&req.HelmStringValues, FlagHelmSetString, nil,
 		"set additional Helm STRING values on the command line "+
 			"(can specify multiple or separate values with commas: key1=val1,key2=val2)",
 	)
-	flags.StringSlice(
-		FlagHelmSetFile,
-		nil,
+	flags.StringSliceVar(&req.HelmFileValues, FlagHelmSetFile, nil,
 		"set additional Helm values from respective files specified "+
 			"via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)",
 	)
+
+	return nil
 }
 
-//nolint:funlen
-func runMigration(cmd *cobra.Command, args []string) error {
-	flags := cmd.Flags()
-
+func runMigration(cmd *cobra.Command, options *MigrationOptions) error {
 	ctx := cmd.Context()
 
-	logger, canDisplayProgressBar, err := buildLogger(flags)
+	logger, canDisplayProgressBar, err := buildLogger(options.LogLevel, options.LogFormat)
 	if err != nil {
 		return fmt.Errorf("failed to build logger: %w", err)
 	}
@@ -276,65 +254,13 @@ func runMigration(cmd *cobra.Command, args []string) error {
 		ctx = context.WithValue(ctx, progress.CanDisplayProgressBarContextKey{}, struct{}{})
 	}
 
-	var src, dest string
-
-	//nolint:mnd
-	if len(args) == 2 {
-		logger.Info(fmt.Sprintf("⚠️ Using legacy mode with PVC names as arguments, "+
-			"consider switching to --%s and --%s flags", FlagSource, FlagDest))
-
-		src = args[0]
-		dest = args[1]
-	} else {
-		src, _ = flags.GetString(FlagSource)
-		dest, _ = flags.GetString(FlagDest)
-	}
-
-	ignoreMounted, _ := flags.GetBool(FlagIgnoreMounted)
-	srcMountReadOnly, _ := flags.GetBool(FlagSourceMountReadOnly)
-	noChown, _ := flags.GetBool(FlagNoChown)
-	skipCleanup, _ := flags.GetBool(FlagSkipCleanup)
-	noProgressBar, _ := flags.GetBool(FlagNoProgressBar)
-	sshKeyAlg, _ := flags.GetString(FlagSSHKeyAlgorithm)
-	helmTimeout, _ := flags.GetDuration(FlagHelmTimeout)
-	helmValues, _ := flags.GetStringSlice(FlagHelmValues)
-	helmSet, _ := flags.GetStringSlice(FlagHelmSet)
-	helmSetString, _ := flags.GetStringSlice(FlagHelmSetString)
-	helmSetFile, _ := flags.GetStringSlice(FlagHelmSetFile)
-	strs, _ := flags.GetStringSlice(FlagStrategies)
-	destHostOverride, _ := flags.GetString(FlagDestHostOverride)
-	lbSvcTimeout, _ := flags.GetDuration(FlagLBSvcTimeout)
-	compress, _ := flags.GetBool(FlagCompress)
-
-	deleteExtraneousFiles, _ := flags.GetBool(FlagDestDeleteExtraneousFiles)
-	request := migration.Request{
-		Source:                buildSrcPVCInfo(flags, src),
-		Dest:                  buildDestPVCInfo(flags, dest),
-		DeleteExtraneousFiles: deleteExtraneousFiles,
-		IgnoreMounted:         ignoreMounted,
-		SourceMountReadOnly:   srcMountReadOnly,
-		NoChown:               noChown,
-		SkipCleanup:           skipCleanup,
-		NoProgressBar:         noProgressBar,
-		KeyAlgorithm:          sshKeyAlg,
-		HelmTimeout:           helmTimeout,
-		HelmValuesFiles:       helmValues,
-		HelmValues:            helmSet,
-		HelmStringValues:      helmSetString,
-		HelmFileValues:        helmSetFile,
-		Strategies:            strs,
-		DestHostOverride:      destHostOverride,
-		LBSvcTimeout:          lbSvcTimeout,
-		Compress:              compress,
-	}
-
 	logger.Info("🚀 Starting migration")
 
-	if deleteExtraneousFiles {
+	if options.Request.DeleteExtraneousFiles {
 		logger.Info("❕ Extraneous files will be deleted from the destination")
 	}
 
-	if err := migrator.New().Run(ctx, &request, logger); err != nil {
+	if err := migrator.New().Run(ctx, &options.Request, logger); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
@@ -342,25 +268,22 @@ func runMigration(cmd *cobra.Command, args []string) error {
 }
 
 //nolint:nonamedreturns
-func buildLogger(flags *flag.FlagSet) (logger *slog.Logger, canDisplayProgressBar bool, err error) {
-	loglvl, _ := flags.GetString(FlagLogLevel)
-	logfmt, _ := flags.GetString(FlagLogFormat)
-
+func buildLogger(logLevel, logFormat string) (logger *slog.Logger, canDisplayProgressBar bool, err error) {
 	var (
 		level   slog.Level
 		handler slog.Handler
 	)
 
-	if err = level.UnmarshalText([]byte(loglvl)); err != nil {
+	if err = level.UnmarshalText([]byte(logLevel)); err != nil {
 		return nil, false, fmt.Errorf("failed to parse log level: %w", err)
 	}
 
 	writer := os.Stderr
 
-	switch logfmt {
+	switch logFormat {
 	case logFormatJSON:
 		handler = slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level})
-	case logFormatText, "fancy":
+	case logFormatText:
 		isATTY := isatty.IsTerminal(writer.Fd())
 
 		canDisplayProgressBar = isATTY
@@ -370,7 +293,7 @@ func buildLogger(flags *flag.FlagSet) (logger *slog.Logger, canDisplayProgressBa
 			NoColor: !isATTY,
 		})
 	default:
-		return nil, false, fmt.Errorf("unknown log format: %s", logfmt)
+		return nil, false, fmt.Errorf("unknown log format: %s", logFormat)
 	}
 
 	logger = slog.New(handler)
@@ -379,34 +302,4 @@ func buildLogger(flags *flag.FlagSet) (logger *slog.Logger, canDisplayProgressBa
 	slog.SetDefault(logger)
 
 	return logger, canDisplayProgressBar, nil
-}
-
-func buildSrcPVCInfo(flags *flag.FlagSet, name string) *migration.PVCInfo {
-	srcKubeconfigPath, _ := flags.GetString(FlagSourceKubeconfig)
-	srcContext, _ := flags.GetString(FlagSourceContext)
-	srcNS, _ := flags.GetString(FlagSourceNamespace)
-	srcPath, _ := flags.GetString(FlagSourcePath)
-
-	return &migration.PVCInfo{
-		KubeconfigPath: srcKubeconfigPath,
-		Context:        srcContext,
-		Namespace:      srcNS,
-		Name:           name,
-		Path:           srcPath,
-	}
-}
-
-func buildDestPVCInfo(flags *flag.FlagSet, name string) *migration.PVCInfo {
-	destKubeconfigPath, _ := flags.GetString(FlagDestKubeconfig)
-	destContext, _ := flags.GetString(FlagDestContext)
-	destNS, _ := flags.GetString(FlagDestNamespace)
-	destPath, _ := flags.GetString(FlagDestPath)
-
-	return &migration.PVCInfo{
-		KubeconfigPath: destKubeconfigPath,
-		Context:        destContext,
-		Namespace:      destNS,
-		Name:           name,
-		Path:           destPath,
-	}
 }
