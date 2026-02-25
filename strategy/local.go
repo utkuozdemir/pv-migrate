@@ -124,7 +124,7 @@ func runCmdLocal(
 	tailCtx, tailCancel := context.WithCancel(ctx)
 	defer tailCancel()
 
-	var eg errgroup.Group //nolint:varnamelen
+	var eg errgroup.Group
 
 	eg.Go(func() error {
 		return progressLogger.Start(tailCtx, logger)
@@ -297,7 +297,7 @@ func writePrivateKeyToTempFile(privateKey string) (string, error) {
 
 	name := file.Name()
 
-	err = os.Chmod(name, privateKeyFileMode)
+	err = os.Chmod(name, privateKeyFileMode) //nolint:gosec // name is from os.CreateTemp, not user input
 	if err != nil {
 		return "", fmt.Errorf("failed to chmod private key file: %w", err)
 	}

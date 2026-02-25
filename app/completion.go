@@ -141,7 +141,7 @@ func buildSliceCompletionFunc(values []string) func(*cobra.Command,
 			remaining[value] = struct{}{}
 		}
 
-		var provided []string
+		provided := make([]string, 0, len(values))
 
 		split := strings.SplitSeq(toComplete, ",")
 		for s := range split {

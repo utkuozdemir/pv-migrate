@@ -59,7 +59,7 @@ func GetNamespaces(
 
 func GetPVCs(
 	ctx context.Context,
-	kubeconfigPath, kubectx, namespace string,
+	kubeconfigPath, kubectx, ns string,
 	logger *slog.Logger,
 ) ([]string, error) {
 	client, err := GetClusterClient(kubeconfigPath, kubectx, logger)
@@ -68,7 +68,7 @@ func GetPVCs(
 	}
 
 	pvcs, err := client.KubeClient.CoreV1().
-		PersistentVolumeClaims(namespace).List(ctx, metav1.ListOptions{})
+		PersistentVolumeClaims(ns).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to list PVCs: %w", err)
 	}

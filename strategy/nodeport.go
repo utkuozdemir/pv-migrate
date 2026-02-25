@@ -2,7 +2,6 @@ package strategy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 
@@ -48,16 +47,32 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	sourceKubeClient := attempt.Migration.SourceInfo.ClusterClient.KubeClient
 	svcName := srcReleaseName + "-sshd"
 
-	// Get NodePort service details
-	nodeIP, nodePort, err := k8s.GetNodePortServiceDetails(
-		ctx,
-		sourceKubeClient,
-		sourceNs,
-		svcName,
-		mig.Request.LBSvcTimeout,
-	)
+	nodePort, err := k8s.GetNodePort(ctx, sourceKubeClient, sourceNs, svcName, mig.Request.LBSvcTimeout)
 	if err != nil {
-		return fmt.Errorf("failed to get NodePort service details: %w", err)
+		return fmt.Errorf("failed to get NodePort: %w", err)
+	}
+
+	// Find the sshd pod to determine which node it's running on
+	sshdPod, err := getSshdPodForHelmRelease(ctx, sourceInfo, srcReleaseName)
+	if err != nil {
+		return fmt.Errorf("failed to get sshd pod: %w", err)
+	}
+
+	// Try to use the IP of the node where the sshd pod is running,
+	// fall back to any node if that fails.
+	podNode := sshdPod.Spec.NodeName
+
+	nodeIP, err := k8s.GetNodeIP(ctx, sourceKubeClient, podNode)
+	if err != nil {
+		logger.Warn("Could not get sshd pod's node IP, falling back to another node",
+			"node", podNode, "error", err)
+
+		nodeIP, err = k8s.GetAnyNodeIP(ctx, sourceKubeClient)
+		if err != nil {
+			return fmt.Errorf("failed to find usable node IP: %w", err)
+		}
+	} else {
+		logger.Info("Using sshd pod's node for NodePort connection", "node", podNode, "ip", nodeIP)
 	}
 
 	sshTargetHost := nodeIP
@@ -75,23 +90,26 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	kubeClient := destInfo.ClusterClient.KubeClient
 	jobName := destReleaseName + "-rsync"
 
-	if err = k8s.WaitForJobCompletion(ctx, kubeClient, destNs, jobName, showProgressBar, logger); err != nil {
+	if err = k8s.WaitForJobCompletion(
+		ctx,
+		kubeClient,
+		destNs,
+		jobName,
+		showProgressBar,
+		logger,
+	); err != nil {
 		return fmt.Errorf("failed to wait for job completion: %w", err)
 	}
 
 	return nil
 }
 
-// prepareNodePortSourceValues creates the values map for the source Helm chart with NodePort.
-// This function is shared between the implementation and the tests.
-func prepareNodePortSourceValues(
-	mig *migration.Migration,
-	namespace string,
-	publicKey string,
-	srcMountPath string,
-	logger *slog.Logger,
-) (map[string]any, error) {
+func installNodePortOnSource(attempt *migration.Attempt, releaseName,
+	publicKey, srcMountPath string, logger *slog.Logger,
+) error {
+	mig := attempt.Migration
 	sourceInfo := mig.SourceInfo
+	namespace := sourceInfo.Claim.Namespace
 
 	vals := map[string]any{
 		"sshd": map[string]any{
@@ -112,84 +130,12 @@ func prepareNodePortSourceValues(
 		},
 	}
 
-	// Set custom NodePort if specified
-	if mig.Request.NodePortPort != 0 {
-		logger.Info("Using custom NodePort", "port", mig.Request.NodePortPort)
-
-		// Get the sshd map with type checking
-		sshdVal, sshdExists := vals["sshd"]
-		if !sshdExists {
-			return nil, errors.New("missing sshd configuration in values map")
-		}
-
-		sshd, sshdIsMap := sshdVal.(map[string]any)
-		if !sshdIsMap {
-			return nil, errors.New("sshd configuration is not a map")
-		}
-
-		// Get the service map with type checking
-		svcVal, svcExists := sshd["service"]
-		if !svcExists {
-			return nil, errors.New("missing service configuration in sshd map")
-		}
-
-		svc, svcIsMap := svcVal.(map[string]any)
-		if !svcIsMap {
-			return nil, errors.New("service configuration is not a map")
-		}
-
-		svc["port"] = 22
-		svc["nodePort"] = mig.Request.NodePortPort
-	}
-
-	return vals, nil
-}
-
-func installNodePortOnSource(attempt *migration.Attempt, releaseName,
-	publicKey, srcMountPath string, logger *slog.Logger,
-) error {
-	mig := attempt.Migration
-	sourceInfo := mig.SourceInfo
-	namespace := sourceInfo.Claim.Namespace
-
-	vals, err := prepareNodePortSourceValues(mig, namespace, publicKey, srcMountPath, logger)
-	if err != nil {
-		return fmt.Errorf("failed to prepare source Helm values: %w", err)
-	}
-
 	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
 }
 
 func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateKey,
 	privateKeyMountPath, sshHost string, sshPort int, srcMountPath, destMountPath string, logger *slog.Logger,
 ) error {
-	vals, err := buildNodePortDestValues(
-		attempt,
-		privateKey,
-		privateKeyMountPath,
-		sshHost,
-		sshPort,
-		srcMountPath,
-		destMountPath,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to build Helm values for destination: %w", err)
-	}
-
-	return installHelmChart(attempt, attempt.Migration.DestInfo, releaseName, vals, logger)
-}
-
-// buildNodePortDestValues builds the Helm values for installing rsync on the destination
-// with NodePort connectivity to the source.
-func buildNodePortDestValues(
-	attempt *migration.Attempt,
-	privateKey string,
-	privateKeyMountPath string,
-	sshHost string,
-	sshPort int,
-	srcMountPath string,
-	destMountPath string,
-) (map[string]any, error) {
 	mig := attempt.Migration
 	destInfo := mig.DestInfo
 	namespace := destInfo.Claim.Namespace
@@ -209,10 +155,10 @@ func buildNodePortDestValues(
 
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
-		return nil, fmt.Errorf("failed to build rsync command: %w", err)
+		return fmt.Errorf("failed to build rsync command: %w", err)
 	}
 
-	return map[string]any{
+	vals := map[string]any{
 		"rsync": map[string]any{
 			"enabled":             true,
 			"namespace":           namespace,
@@ -230,5 +176,7 @@ func buildNodePortDestValues(
 			"command":  rsyncCmdStr,
 			"affinity": destInfo.AffinityHelmValues,
 		},
-	}, nil
+	}
+
+	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
 }

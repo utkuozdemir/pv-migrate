@@ -37,7 +37,7 @@ const (
 )
 
 var (
-	DefaultStrategies = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy, NodePortStrategy}
+	DefaultStrategies = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy}
 	AllStrategies     = []string{
 		Mnt2Strategy,
 		SvcStrategy,

@@ -68,8 +68,8 @@ the data from the old PVC to the new one with the desired StorageClass.
   - Mount both PVCs in a single pod (mnt2)
   - ClusterIP service (svc)
   - LoadBalancer service (lbsvc)
-  - NodePort service (nodeport)
-  - Local port-forward transfer (local)
+  - NodePort service (nodeport, opt-in)
+  - Local port-forward transfer (local, opt-in)
 - Customizable strategy order
 - Supports arm32v7 (Raspberry Pi etc.) and arm64 architectures as well as amd64
 - Supports completion for popular shells: bash, zsh, fish, powershell

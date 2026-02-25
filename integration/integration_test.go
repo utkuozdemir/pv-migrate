@@ -183,7 +183,7 @@ func testNodePortDestHostOverride(t *testing.T) {
 
 	// Create a service that will be used for the override
 	svcName := "nodeport-override-svc"
-	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(context.Background(),
+	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(ctx,
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   svcName,
@@ -213,7 +213,8 @@ func testNodePortDestHostOverride(t *testing.T) {
 	// Set the destination host override to use our custom service
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
-		"%s -s nodeport --nodeport-port=%d -i -n %s -N %s -H %s source dest", migrateLegacyCmdline, customNodePort, ns1, ns2, destHostOverride)
+		"%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s -H %s source dest",
+		migrateLegacyCmdline, customNodePort, ns1, ns2, destHostOverride)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	// Verify the data was migrated correctly
@@ -250,7 +251,7 @@ func testNodePortCustomPort(t *testing.T) {
 	require.NoError(t, err)
 
 	// Run the migration using the NodePort strategy with a custom port
-	cmd := fmt.Sprintf("%s -s nodeport --nodeport-port=%d -i -n %s -N %s source dest",
+	cmd := fmt.Sprintf("%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s source dest",
 		migrateLegacyCmdline, customNodePort, ns1, ns2)
 	require.NoError(t, runCliApp(ctx, cmd))
 
@@ -484,7 +485,7 @@ func testLbSvcDestHostOverride(t *testing.T) {
 
 	// Create a service that will be used for the override
 	svcName := "alternative-svc"
-	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(context.Background(),
+	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(ctx,
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   svcName,
@@ -728,12 +729,12 @@ func teardownOnCleanup(t *testing.T, logger *slog.Logger) {
 	})
 }
 
-func createPod(t *testing.T, cli *k8s.ClusterClient, namespace string, name string, pvc string) {
+func createPod(t *testing.T, cli *k8s.ClusterClient, ns, name, pvc string) {
 	terminationGracePeriodSeconds := int64(0)
 	pod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: ns,
 			Labels:    resourceLabels,
 		},
 		Spec: corev1.PodSpec{
@@ -766,11 +767,11 @@ func createPod(t *testing.T, cli *k8s.ClusterClient, namespace string, name stri
 
 	ctx := t.Context()
 
-	_, err := cli.KubeClient.CoreV1().Pods(namespace).Create(ctx, &pod, metav1.CreateOptions{})
+	_, err := cli.KubeClient.CoreV1().Pods(ns).Create(ctx, &pod, metav1.CreateOptions{})
 	require.NoError(t, err)
 }
 
-func createPVC(t *testing.T, cli *k8s.ClusterClient, namespace string, name string) {
+func createPVC(t *testing.T, cli *k8s.ClusterClient, ns, name string) {
 	var storageClassRef *string
 
 	storageClass := os.Getenv("PVMIG_TEST_STORAGE_CLASS")
@@ -781,7 +782,7 @@ func createPVC(t *testing.T, cli *k8s.ClusterClient, namespace string, name stri
 	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: namespace,
+			Namespace: ns,
 			Labels:    resourceLabels,
 		},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -797,30 +798,30 @@ func createPVC(t *testing.T, cli *k8s.ClusterClient, namespace string, name stri
 		},
 	}
 
-	_, err := cli.KubeClient.CoreV1().PersistentVolumeClaims(namespace).Create(t.Context(), &pvc, metav1.CreateOptions{})
+	_, err := cli.KubeClient.CoreV1().PersistentVolumeClaims(ns).Create(t.Context(), &pvc, metav1.CreateOptions{})
 	require.NoError(t, err)
 }
 
 //nolint:dupl
-func waitUntilPodIsRunning(t *testing.T, cli *k8s.ClusterClient, namespace string, name string) {
-	resCli := cli.KubeClient.CoreV1().Pods(namespace)
+func waitUntilPodIsRunning(t *testing.T, cli *k8s.ClusterClient, ns, name string) {
+	resCli := cli.KubeClient.CoreV1().Pods(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 
 	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Minute)
 	defer cancel()
 
 	listWatch := &cache.ListWatch{
-		ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			options.FieldSelector = fieldSelector
 
-			list, err := resCli.List(t.Context(), options)
+			list, err := resCli.List(ctx, options)
 			if err != nil {
 				return nil, fmt.Errorf("failed to list pods: %w", err)
 			}
 
 			return list, nil
 		},
-		WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+		WatchFuncWithContext: func(ctx context.Context, options metav1.ListOptions) (watch.Interface, error) {
 			options.FieldSelector = fieldSelector
 
 			cliWatch, err := resCli.Watch(ctx, options)
@@ -835,7 +836,7 @@ func waitUntilPodIsRunning(t *testing.T, cli *k8s.ClusterClient, namespace strin
 	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
-			require.Truef(t, ok, "unexpected type while watching pod %T: %s/%s", event.Object, namespace, name)
+			require.Truef(t, ok, "unexpected type while watching pod %T: %s/%s", event.Object, ns, name)
 
 			return res.Status.Phase == corev1.PodRunning, nil
 		})

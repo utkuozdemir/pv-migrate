@@ -56,7 +56,7 @@ func (l *Logger) MarkAsComplete(ctx context.Context) error {
 func (l *Logger) startSingle(ctx context.Context, logger *slog.Logger) error {
 	logCh := make(chan string)
 
-	var eg errgroup.Group //nolint:varnamelen
+	var eg errgroup.Group
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()

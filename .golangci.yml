@@ -12,6 +12,8 @@ linters:
   settings:
     goconst:
       min-occurrences: 5
+    varnamelen:
+      min-name-length: 2
   exclusions:
     generated: lax
     presets:
@@ -36,3 +38,5 @@ formatters:
         - standard
         - default
         - localmodule
+    golines:
+      max-len: 120

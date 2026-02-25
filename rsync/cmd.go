@@ -77,7 +77,7 @@ func (c *Cmd) buildSrc() string {
 			sshDestUser = c.SrcSSHUser
 		}
 
-		src.WriteString(fmt.Sprintf("%s@%s:", sshDestUser, c.SrcSSHHost))
+		fmt.Fprintf(&src, "%s@%s:", sshDestUser, c.SrcSSHHost)
 	}
 
 	src.WriteString(c.SrcPath)
@@ -94,7 +94,7 @@ func (c *Cmd) buildDest() string {
 			sshDestUser = c.DestSSHUser
 		}
 
-		dest.WriteString(fmt.Sprintf("%s@%s:", sshDestUser, c.DestSSHHost))
+		fmt.Fprintf(&dest, "%s@%s:", sshDestUser, c.DestSSHHost)
 	}
 
 	dest.WriteString(c.DestPath)
