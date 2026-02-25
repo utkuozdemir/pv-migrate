@@ -65,9 +65,9 @@ the data from the old PVC to the new one with the desired StorageClass.
   or RSA keys each time to securely migrate the files
 - Allows full customization of the manifests (e.g. specifying your own docker images for rsync and sshd, configuring affinity etc.)
 - Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed:
-  - Mount both PVCs in a single pod (mnt2)
-  - ClusterIP service (svc)
-  - LoadBalancer service (lbsvc)
+  - Mount both PVCs in a single pod (mount)
+  - ClusterIP service (clusterip)
+  - LoadBalancer service (loadbalancer)
   - NodePort service (nodeport, opt-in)
   - Local port-forward transfer (local, opt-in)
 - Customizable strategy order

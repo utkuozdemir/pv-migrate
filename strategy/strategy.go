@@ -25,11 +25,11 @@ import (
 )
 
 const (
-	Mnt2Strategy     = "mnt2"
-	SvcStrategy      = "svc"
-	LbSvcStrategy    = "lbsvc"
-	LocalStrategy    = "local"
-	NodePortStrategy = "nodeport"
+	MountStrategy        = "mount"
+	ClusterIPStrategy    = "clusterip"
+	LoadBalancerStrategy = "loadbalancer"
+	LocalStrategy        = "local"
+	NodePortStrategy     = "nodeport"
 
 	helmValuesYAMLIndent = 2
 
@@ -38,21 +38,21 @@ const (
 )
 
 var (
-	DefaultStrategies = []string{Mnt2Strategy, SvcStrategy, LbSvcStrategy}
+	DefaultStrategies = []string{MountStrategy, ClusterIPStrategy, LoadBalancerStrategy}
 	AllStrategies     = []string{
-		Mnt2Strategy,
-		SvcStrategy,
-		LbSvcStrategy,
+		MountStrategy,
+		ClusterIPStrategy,
+		LoadBalancerStrategy,
 		NodePortStrategy,
 		LocalStrategy,
 	}
 
 	nameToStrategy = map[string]Strategy{
-		Mnt2Strategy:     &Mnt2{},
-		SvcStrategy:      &Svc{},
-		LbSvcStrategy:    &LbSvc{},
-		LocalStrategy:    &Local{},
-		NodePortStrategy: &NodePort{},
+		MountStrategy:        &Mount{},
+		ClusterIPStrategy:    &ClusterIP{},
+		LoadBalancerStrategy: &LoadBalancer{},
+		LocalStrategy:        &Local{},
+		NodePortStrategy:     &NodePort{},
 	}
 
 	helmProviders = getter.All(cli.New())
@@ -224,8 +224,8 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 	install.ReleaseName = name
 	install.WaitStrategy = kube.LegacyStrategy
 
-	if req := mig.Request; req.HelmTimeout < req.LBSvcTimeout {
-		install.Timeout = req.LBSvcTimeout
+	if req := mig.Request; req.HelmTimeout < req.LoadBalancerTimeout {
+		install.Timeout = req.LoadBalancerTimeout
 	} else {
 		install.Timeout = req.HelmTimeout
 	}

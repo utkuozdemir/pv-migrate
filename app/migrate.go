@@ -32,13 +32,13 @@ const (
 	FlagSourceNamespace  = "source-namespace"
 	FlagSourcePath       = "source-path"
 
-	FlagDest             = "dest"
-	FlagDestKubeconfig   = "dest-kubeconfig"
-	FlagDestContext      = "dest-context"
-	FlagDestNamespace    = "dest-namespace"
-	FlagDestPath         = "dest-path"
-	FlagDestHostOverride = "dest-host-override"
-	FlagLBSvcTimeout     = "lbsvc-timeout"
+	FlagDest                = "dest"
+	FlagDestKubeconfig      = "dest-kubeconfig"
+	FlagDestContext         = "dest-context"
+	FlagDestNamespace       = "dest-namespace"
+	FlagDestPath            = "dest-path"
+	FlagDestHostOverride    = "dest-host-override"
+	FlagLoadBalancerTimeout = "loadbalancer-timeout"
 
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
@@ -56,7 +56,7 @@ const (
 	FlagHelmSetString = "helm-set-string"
 	FlagHelmSetFile   = "helm-set-file"
 
-	lbSvcTimeoutDefault = 2 * time.Minute
+	loadBalancerTimeoutDefault = 2 * time.Minute
 )
 
 var completionFuncNoFileComplete = func(*cobra.Command, []string,
@@ -214,10 +214,10 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *MigrationOptions, logLevels
 		"the override for the rsync host destination when it is run over SSH, "+
 			"in cases when you need to target a different destination IP on rsync for some reason. "+
 			"By default, it is determined by used strategy and differs across strategies. "+
-			"Has no effect for mnt2 and local strategies")
-	flags.DurationVar(&req.LBSvcTimeout, FlagLBSvcTimeout, lbSvcTimeoutDefault,
+			"Has no effect for mount and local strategies")
+	flags.DurationVar(&req.LoadBalancerTimeout, FlagLoadBalancerTimeout, loadBalancerTimeoutDefault,
 		fmt.Sprintf("timeout for the load balancer service to "+
-			"receive an external IP. Only used by the %s strategy", strategy.LbSvcStrategy),
+			"receive an external IP. Only used by the %s strategy", strategy.LoadBalancerStrategy),
 	)
 	flags.BoolVar(&req.Compress, FlagCompress, true,
 		"compress data during migration ('-z' flag of rsync)")

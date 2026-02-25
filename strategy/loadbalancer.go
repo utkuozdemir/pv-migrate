@@ -12,10 +12,10 @@ import (
 	"github.com/utkuozdemir/pv-migrate/util"
 )
 
-type LbSvc struct{}
+type LoadBalancer struct{}
 
 //nolint:funlen
-func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
+func (r *LoadBalancer) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 
 	sourceInfo := mig.SourceInfo
@@ -48,18 +48,18 @@ func (r *LbSvc) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	sourceKubeClient := attempt.Migration.SourceInfo.ClusterClient.KubeClient
 	svcName := srcReleaseName + "-sshd"
 
-	lbSvcAddress, err := k8s.GetServiceAddress(
+	lbAddress, err := k8s.GetServiceAddress(
 		ctx,
 		sourceKubeClient,
 		sourceNs,
 		svcName,
-		mig.Request.LBSvcTimeout,
+		mig.Request.LoadBalancerTimeout,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to get service address: %w", err)
 	}
 
-	sshTargetHost := formatSSHTargetHost(lbSvcAddress)
+	sshTargetHost := formatSSHTargetHost(lbAddress)
 	if mig.Request.DestHostOverride != "" {
 		sshTargetHost = mig.Request.DestHostOverride
 	}

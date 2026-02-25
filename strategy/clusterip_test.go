@@ -11,7 +11,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/pvc"
 )
 
-func TestSvcCanDoSameCluster(t *testing.T) {
+func TestClusterIPCanDoSameCluster(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithCancel(t.Context())
@@ -42,7 +42,7 @@ func TestSvcCanDoSameCluster(t *testing.T) {
 		DestInfo:   dst,
 	}
 
-	s := Svc{}
+	s := ClusterIP{}
 	canDo := s.canDo(&mig)
 	assert.True(t, canDo)
 }

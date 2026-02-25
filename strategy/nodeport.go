@@ -47,7 +47,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	sourceKubeClient := attempt.Migration.SourceInfo.ClusterClient.KubeClient
 	svcName := srcReleaseName + "-sshd"
 
-	nodePort, err := k8s.GetNodePort(ctx, sourceKubeClient, sourceNs, svcName, mig.Request.LBSvcTimeout)
+	nodePort, err := k8s.GetNodePort(ctx, sourceKubeClient, sourceNs, svcName, mig.Request.LoadBalancerTimeout)
 	if err != nil {
 		return fmt.Errorf("failed to get NodePort: %w", err)
 	}

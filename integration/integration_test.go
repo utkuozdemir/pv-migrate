@@ -86,13 +86,13 @@ func TestIntegration(t *testing.T) {
 
 	t.Run("SameNS", testSameNS)
 	t.Run("CustomRsyncArgs", testCustomRsyncArgs)
-	t.Run("SameNSLbSvc", testSameNSLbSvc)
+	t.Run("SameNSLoadBalancer", testSameNSLoadBalancer)
 	t.Run("NoChown", testNoChown)
 	t.Run("DeleteExtraneousFiles", testDeleteExtraneousFiles)
 	t.Run("MountedError", testMountedError)
 	t.Run("DifferentNS", testDifferentNS)
 	t.Run("FailWithoutNetworkPolicies", testFailWithoutNetworkPolicies)
-	t.Run("LbSvcDestHostOverride", testLbSvcDestHostOverride)
+	t.Run("LoadBalancerDestHostOverride", testLoadBalancerDestHostOverride)
 	t.Run("RSA", testRSA)
 	t.Run("DifferentCluster", testDifferentCluster)
 	t.Run("Local", testLocal)
@@ -334,14 +334,14 @@ func testCustomRsyncArgs(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func testSameNSLbSvc(t *testing.T) {
+func testSameNSLoadBalancer(t *testing.T) {
 	clearDestsOnCleanup(t)
 	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s --lbsvc-timeout 5m --source source --dest dest", migrateCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s -s loadbalancer -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest", migrateCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -478,7 +478,7 @@ func testFailWithoutNetworkPolicies(t *testing.T) {
 		"does the cluster have a CNI that supports them and it is configured to enforce them?")
 }
 
-func testLbSvcDestHostOverride(t *testing.T) {
+func testLoadBalancerDestHostOverride(t *testing.T) {
 	clearDestsOnCleanup(t)
 	ctx := t.Context()
 

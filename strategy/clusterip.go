@@ -11,9 +11,9 @@ import (
 	"github.com/utkuozdemir/pv-migrate/ssh"
 )
 
-type Svc struct{}
+type ClusterIP struct{}
 
-func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
+func (r *ClusterIP) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	if !r.canDo(mig) {
 		return ErrUnaccepted
@@ -47,7 +47,7 @@ func (r *Svc) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.
 	return nil
 }
 
-func (r *Svc) canDo(t *migration.Migration) bool {
+func (r *ClusterIP) canDo(t *migration.Migration) bool {
 	s := t.SourceInfo
 	d := t.DestInfo
 	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host

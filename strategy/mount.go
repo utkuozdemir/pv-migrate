@@ -10,9 +10,9 @@ import (
 	"github.com/utkuozdemir/pv-migrate/rsync"
 )
 
-type Mnt2 struct{}
+type Mount struct{}
 
-func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
+func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	if !r.canDo(mig) {
 		return ErrUnaccepted
@@ -24,7 +24,7 @@ func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt, logger *slog
 
 	node := determineTargetNode(mig)
 
-	rsyncCmd, err := buildRsyncCmdMnt2(mig)
+	rsyncCmd, err := buildRsyncCmdMount(mig)
 	if err != nil {
 		return fmt.Errorf("failed to build rsync command: %w", err)
 	}
@@ -72,7 +72,7 @@ func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt, logger *slog
 	return nil
 }
 
-func (r *Mnt2) canDo(t *migration.Migration) bool {
+func (r *Mount) canDo(t *migration.Migration) bool {
 	sourceInfo := t.SourceInfo
 	destInfo := t.DestInfo
 
@@ -93,7 +93,7 @@ func (r *Mnt2) canDo(t *migration.Migration) bool {
 		destInfo.SupportsRWX
 }
 
-func buildRsyncCmdMnt2(mig *migration.Migration) (string, error) {
+func buildRsyncCmdMount(mig *migration.Migration) (string, error) {
 	srcPath := srcMountPath + "/" + mig.Request.Source.Path
 	destPath := destMountPath + "/" + mig.Request.Dest.Path
 

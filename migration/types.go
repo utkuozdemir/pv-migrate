@@ -33,7 +33,7 @@ type Request struct {
 	HelmStringValues      []string
 	Strategies            []string
 	DestHostOverride      string
-	LBSvcTimeout          time.Duration
+	LoadBalancerTimeout   time.Duration
 	Compress              bool
 }
 
