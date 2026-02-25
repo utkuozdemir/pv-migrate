@@ -39,7 +39,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	doneCh := registerCleanupHook(attempt, releaseNames, logger)
 	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installNodePortOnSource(attempt, srcReleaseName, publicKey, srcMountPath, logger)
+	err = installNodePortOnSource(attempt, srcReleaseName, publicKey, srcMountPath)
 	if err != nil {
 		return fmt.Errorf("failed to install on source: %w", err)
 	}
@@ -81,7 +81,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	}
 
 	err = installOnDestWithNodePort(attempt, destReleaseName, privateKey, privateKeyMountPath,
-		sshTargetHost, nodePort, srcMountPath, destMountPath, logger)
+		sshTargetHost, nodePort, srcMountPath, destMountPath)
 	if err != nil {
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
@@ -104,9 +104,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	return nil
 }
 
-func installNodePortOnSource(attempt *migration.Attempt, releaseName,
-	publicKey, srcMountPath string, logger *slog.Logger,
-) error {
+func installNodePortOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMountPath string) error {
 	mig := attempt.Migration
 	sourceInfo := mig.SourceInfo
 	namespace := sourceInfo.Claim.Namespace
@@ -130,11 +128,11 @@ func installNodePortOnSource(attempt *migration.Attempt, releaseName,
 		},
 	}
 
-	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
+	return installHelmChart(attempt, sourceInfo, releaseName, vals)
 }
 
 func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateKey,
-	privateKeyMountPath, sshHost string, sshPort int, srcMountPath, destMountPath string, logger *slog.Logger,
+	privateKeyMountPath, sshHost string, sshPort int, srcMountPath, destMountPath string,
 ) error {
 	mig := attempt.Migration
 	destInfo := mig.DestInfo
@@ -178,5 +176,5 @@ func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateK
 		},
 	}
 
-	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
+	return installHelmChart(attempt, destInfo, releaseName, vals)
 }

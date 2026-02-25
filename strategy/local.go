@@ -189,13 +189,12 @@ func (r *Local) installLocalReleases(
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
 
-	err = installLocalOnSource(attempt, srcReleaseName, publicKey,
-		privateKey, privateKeyMountPath, srcMountPath, logger)
+	err = installLocalOnSource(attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, srcMountPath)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	err = installLocalOnDest(attempt, destReleaseName, publicKey, destMountPath, logger)
+	err = installLocalOnDest(attempt, destReleaseName, publicKey, destMountPath)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -224,7 +223,7 @@ func getSshdPodForHelmRelease(
 }
 
 func installLocalOnSource(attempt *migration.Attempt, releaseName,
-	publicKey, privateKey, privateKeyMountPath, srcMountPath string, logger *slog.Logger,
+	publicKey, privateKey, privateKeyMountPath, srcMountPath string,
 ) error {
 	mig := attempt.Migration
 	sourceInfo := mig.SourceInfo
@@ -249,12 +248,10 @@ func installLocalOnSource(attempt *migration.Attempt, releaseName,
 		},
 	}
 
-	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
+	return installHelmChart(attempt, sourceInfo, releaseName, vals)
 }
 
-func installLocalOnDest(attempt *migration.Attempt, releaseName,
-	publicKey, destMountPath string, logger *slog.Logger,
-) error {
+func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey, destMountPath string) error {
 	mig := attempt.Migration
 	destInfo := mig.DestInfo
 	namespace := destInfo.Claim.Namespace
@@ -281,7 +278,7 @@ func installLocalOnDest(attempt *migration.Attempt, releaseName,
 
 	defer func() { _ = os.Remove(valsFile) }()
 
-	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
+	return installHelmChart(attempt, destInfo, releaseName, vals)
 }
 
 func writePrivateKeyToTempFile(privateKey string) (string, error) {

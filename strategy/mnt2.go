@@ -56,7 +56,7 @@ func (r *Mnt2) Run(ctx context.Context, attempt *migration.Attempt, logger *slog
 	doneCh := registerCleanupHook(attempt, releaseNames, logger)
 	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
+	err = installHelmChart(attempt, sourceInfo, releaseName, vals)
 	if err != nil {
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}

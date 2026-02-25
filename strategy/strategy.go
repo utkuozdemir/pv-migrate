@@ -12,11 +12,12 @@ import (
 
 	"github.com/hashicorp/go-multierror"
 	"gopkg.in/yaml.v3"
-	"helm.sh/helm/v3/pkg/action"
-	"helm.sh/helm/v3/pkg/cli"
-	"helm.sh/helm/v3/pkg/cli/values"
-	"helm.sh/helm/v3/pkg/getter"
-	"helm.sh/helm/v3/pkg/storage/driver"
+	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/cli"
+	"helm.sh/helm/v4/pkg/cli/values"
+	"helm.sh/helm/v4/pkg/getter"
+	"helm.sh/helm/v4/pkg/kube"
+	"helm.sh/helm/v4/pkg/storage/driver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/utkuozdemir/pv-migrate/migration"
@@ -135,7 +136,7 @@ func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Log
 
 	for _, info := range []*pvc.Info{mig.SourceInfo, mig.DestInfo} {
 		for _, name := range releaseNames {
-			err := cleanupForPVC(name, req.HelmTimeout, info, logger)
+			err := cleanupForPVC(name, req.HelmTimeout, info)
 			if err != nil {
 				errs = multierror.Append(errs, err)
 			}
@@ -151,16 +152,14 @@ func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Log
 	logger.Info("✨ Cleanup done")
 }
 
-func cleanupForPVC(helmReleaseName string, helmUninstallTimeout time.Duration,
-	pvcInfo *pvc.Info, logger *slog.Logger,
-) error {
-	ac, err := initHelmActionConfig(pvcInfo, logger)
+func cleanupForPVC(helmReleaseName string, helmUninstallTimeout time.Duration, pvcInfo *pvc.Info) error {
+	ac, err := initHelmActionConfig(pvcInfo)
 	if err != nil {
 		return err
 	}
 
 	uninstall := action.NewUninstall(ac)
-	uninstall.Wait = true
+	uninstall.WaitStrategy = kube.LegacyStrategy
 	uninstall.Timeout = helmUninstallTimeout
 	_, err = uninstall.Run(helmReleaseName)
 
@@ -171,13 +170,11 @@ func cleanupForPVC(helmReleaseName string, helmUninstallTimeout time.Duration,
 	return nil
 }
 
-func initHelmActionConfig(pvcInfo *pvc.Info, logger *slog.Logger) (*action.Configuration, error) {
+func initHelmActionConfig(pvcInfo *pvc.Info) (*action.Configuration, error) {
 	actionConfig := new(action.Configuration)
 
 	err := actionConfig.Init(pvcInfo.ClusterClient.RESTClientGetter,
-		pvcInfo.Claim.Namespace, os.Getenv("HELM_DRIVER"), func(format string, v ...any) {
-			logger.Debug(fmt.Sprintf(format, v...))
-		})
+		pvcInfo.Claim.Namespace, os.Getenv("HELM_DRIVER"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize helm action config: %w", err)
 	}
@@ -205,9 +202,7 @@ func getMergedHelmValues(
 	return mergedValues, nil
 }
 
-func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string,
-	values map[string]any, logger *slog.Logger,
-) error {
+func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string, values map[string]any) error {
 	helmValuesFile, err := writeHelmValuesToTempFile(attempt.ID, values)
 	if err != nil {
 		return fmt.Errorf("failed to write helm values to temp file: %w", err)
@@ -217,7 +212,7 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 		os.Remove(helmValuesFile)
 	}()
 
-	helmActionConfig, err := initHelmActionConfig(pvcInfo, logger)
+	helmActionConfig, err := initHelmActionConfig(pvcInfo)
 	if err != nil {
 		return fmt.Errorf("failed to init helm action config: %w", err)
 	}
@@ -227,7 +222,7 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 	install := action.NewInstall(helmActionConfig)
 	install.Namespace = pvcInfo.Claim.Namespace
 	install.ReleaseName = name
-	install.Wait = true
+	install.WaitStrategy = kube.LegacyStrategy
 
 	if req := mig.Request; req.HelmTimeout < req.LBSvcTimeout {
 		install.Timeout = req.LBSvcTimeout
