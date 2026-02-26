@@ -32,9 +32,9 @@ import (
 	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/utils/env"
 
-	"github.com/utkuozdemir/pv-migrate/app"
-	"github.com/utkuozdemir/pv-migrate/k8s"
-	"github.com/utkuozdemir/pv-migrate/util"
+	"github.com/utkuozdemir/pv-migrate/internal/app"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/util"
 )
 
 const (

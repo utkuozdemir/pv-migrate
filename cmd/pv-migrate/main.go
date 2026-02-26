@@ -8,7 +8,7 @@ import (
 	// load all auth plugins - needed for gcp, azure etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"github.com/utkuozdemir/pv-migrate/app"
+	"github.com/utkuozdemir/pv-migrate/internal/app"
 )
 
 var (
