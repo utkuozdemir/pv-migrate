@@ -397,7 +397,7 @@ func testDeleteExtraneousFiles(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s --compress=false -d -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s --no-compress -d -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -673,9 +673,9 @@ func setup(t *testing.T, logger *slog.Logger) {
 		logger.Warn("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
 	}
 
-	ns1 = "pv-migrate-test-1-" + util.RandomHexadecimalString(5)
-	ns2 = "pv-migrate-test-2-" + util.RandomHexadecimalString(5)
-	ns3 = "pv-migrate-test-3-" + util.RandomHexadecimalString(5)
+	ns1 = "pv-migrate-test-1-" + util.RandomString(5)
+	ns2 = "pv-migrate-test-2-" + util.RandomString(5)
+	ns3 = "pv-migrate-test-3-" + util.RandomString(5)
 
 	createNS(t, mainClusterCli, ns1)
 	createNS(t, mainClusterCli, ns2)

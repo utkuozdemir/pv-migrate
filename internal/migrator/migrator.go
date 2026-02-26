@@ -54,7 +54,7 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 	logger.Info("💭 Attempting migration", "strategies", strings.Join(request.Strategies, ","))
 
 	for _, name := range request.Strategies {
-		attemptID := util.RandomHexadecimalString(attemptIDLength)
+		attemptID := util.RandomString(attemptIDLength)
 
 		attemptLogger := logger.With("attempt_id", attemptID, "strategy", name)
 

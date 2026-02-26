@@ -39,7 +39,7 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 				{
 					"name":      sourceInfo.Claim.Name,
 					"mountPath": srcMountPath,
-					"readOnly":  mig.Request.SourceMountReadOnly,
+					"readOnly":  !mig.Request.SourceMountReadWrite,
 				},
 				{
 					"name":      destInfo.Claim.Name,
@@ -111,7 +111,7 @@ func buildRsyncCmdMount(mig *migration.Migration) (string, error) {
 		Delete:   mig.Request.DeleteExtraneousFiles,
 		SrcPath:  srcPath,
 		DestPath: destPath,
-		Compress: mig.Request.Compress,
+		Compress: !mig.Request.NoCompress,
 	}
 
 	cmd, err := rsyncCmd.Build()

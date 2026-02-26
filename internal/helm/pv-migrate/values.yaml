@@ -87,7 +87,7 @@ sshd:
 
   # -- Namespace to run SSHD pod in
   namespace: ""
-  # -- PVC mounts into the SSHD pod. For examples, see see [values.yaml](values.yaml)
+  # -- PVC mounts into the SSHD pod. For examples, see [values.yaml](values.yaml)
   pvcMounts: []
     #- name: pvc-1
     #  readOnly: false

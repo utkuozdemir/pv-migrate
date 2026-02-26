@@ -94,7 +94,7 @@ func completionLogger(cmd *cobra.Command) (*slog.Logger, error) {
 		return nil, fmt.Errorf("failed to get flag %q: %w", FlagLogFormat, err)
 	}
 
-	logger, err := buildLogger(logLevel, logFormat, false)
+	logger, err := buildLogger(logLevel, logFormat, os.Stderr, false)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build logger: %w", err)
 	}

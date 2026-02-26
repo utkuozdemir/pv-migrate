@@ -74,7 +74,7 @@ The helm chart of pv-migrate
 | sshd.publicKey | string | `""` | The public key content |
 | sshd.publicKeyMount | bool | `true` | Mount a public key into the SSHD pod |
 | sshd.publicKeyMountPath | string | `"/root/.ssh/authorized_keys"` | The path to mount the public key |
-| sshd.pvcMounts | list | `[]` | PVC mounts into the SSHD pod. For examples, see see [values.yaml](values.yaml) |
+| sshd.pvcMounts | list | `[]` | PVC mounts into the SSHD pod. For examples, see [values.yaml](values.yaml) |
 | sshd.resources | object | `{}` | SSHD pod resources |
 | sshd.securityContext | object | `{"capabilities":{"add":["SYS_CHROOT"]}}` | SSHD deployment security context |
 | sshd.service.annotations | object | `{}` | SSHD service annotations |

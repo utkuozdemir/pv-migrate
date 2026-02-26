@@ -23,9 +23,9 @@ type Request struct {
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
-	NoCleanup           bool
+	NoCleanup             bool
 	ShowProgressBar       bool
-	SourceMountReadOnly   bool
+	SourceMountReadWrite  bool
 	KeyAlgorithm          string
 	HelmTimeout           time.Duration
 	HelmValuesFiles       []string
@@ -35,7 +35,7 @@ type Request struct {
 	Strategies            []string
 	DestHostOverride      string
 	LoadBalancerTimeout   time.Duration
-	Compress              bool
+	NoCompress            bool
 	Writer                io.Writer
 }
 

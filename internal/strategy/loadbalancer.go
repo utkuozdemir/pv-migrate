@@ -105,7 +105,7 @@ func installOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMoun
 			"pvcMounts": []map[string]any{
 				{
 					"name":      sourceInfo.Claim.Name,
-					"readOnly":  mig.Request.SourceMountReadOnly,
+					"readOnly":  !mig.Request.SourceMountReadWrite,
 					"mountPath": srcMountPath,
 				},
 			},
@@ -133,7 +133,7 @@ func installOnDest(
 		DestPath:   destPath,
 		SrcUseSSH:  true,
 		SrcSSHHost: sshHost,
-		Compress:   mig.Request.Compress,
+		Compress:   !mig.Request.NoCompress,
 	}
 
 	rsyncCmdStr, err := rsyncCmd.Build()

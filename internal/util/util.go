@@ -8,8 +8,8 @@ import (
 
 var letters = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
-// RandomHexadecimalString returns a random lowercase hexadecimal string of given length.
-func RandomHexadecimalString(length int) string {
+// RandomString returns a random lowercase alphanumeric string of given length.
+func RandomString(length int) string {
 	runes := make([]rune, length)
 	for i := range runes {
 		runes[i] = letters[rand.IntN(len(letters))] //nolint:gosec // not security-sensitive

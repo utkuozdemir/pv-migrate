@@ -91,7 +91,7 @@ func buildHelmVals(
 		DestPath:   destPath,
 		SrcUseSSH:  true,
 		SrcSSHHost: sshTargetHost,
-		Compress:   mig.Request.Compress,
+		Compress:   !mig.Request.NoCompress,
 	}
 
 	rsyncCmdStr, err := rsyncCmd.Build()
@@ -123,7 +123,7 @@ func buildHelmVals(
 				{
 					"name":      sourceInfo.Claim.Name,
 					"mountPath": srcMountPath,
-					"readOnly":  mig.Request.SourceMountReadOnly,
+					"readOnly":  !mig.Request.SourceMountReadWrite,
 				},
 			},
 			"affinity": sourceInfo.AffinityHelmValues,

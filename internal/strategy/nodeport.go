@@ -121,7 +121,7 @@ func installNodePortOnSource(attempt *migration.Attempt, releaseName, publicKey,
 			"pvcMounts": []map[string]any{
 				{
 					"name":      sourceInfo.Claim.Name,
-					"readOnly":  mig.Request.SourceMountReadOnly,
+					"readOnly":  !mig.Request.SourceMountReadWrite,
 					"mountPath": srcMountPath,
 				},
 			},
@@ -149,7 +149,7 @@ func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateK
 		SrcUseSSH:  true,
 		SrcSSHHost: sshHost,
 		Port:       sshPort,
-		Compress:   mig.Request.Compress,
+		Compress:   !mig.Request.NoCompress,
 	}
 
 	rsyncCmdStr, err := rsyncCmd.Build()

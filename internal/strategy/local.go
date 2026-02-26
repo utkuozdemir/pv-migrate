@@ -159,7 +159,7 @@ func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
 		DestPath:    destPath,
 		DestUseSSH:  true,
 		DestSSHHost: "localhost",
-		Compress:    mig.Request.Compress,
+		Compress:    !mig.Request.NoCompress,
 	}
 
 	cmd, err := rsyncCmd.Build()
@@ -239,7 +239,7 @@ func installLocalOnSource(attempt *migration.Attempt, releaseName,
 			"pvcMounts": []map[string]any{
 				{
 					"name":      sourceInfo.Claim.Name,
-					"readOnly":  mig.Request.SourceMountReadOnly,
+					"readOnly":  !mig.Request.SourceMountReadWrite,
 					"mountPath": srcMountPath,
 				},
 			},

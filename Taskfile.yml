@@ -16,7 +16,7 @@ tasks:
     cmds:
       - go mod tidy --diff
       - golangci-lint run ./...
-      - helm lint helm/pv-migrate
+      - helm lint internal/helm/pv-migrate
       - shfmt -l -i 2 -ci -sr .
 
   clean:
@@ -36,7 +36,7 @@ tasks:
 
   update-helm-chart-docs:
     desc: update helm chart docs
-    dir: helm/pv-migrate
+    dir: internal/helm/pv-migrate
     cmds:
       - helm-docs
 

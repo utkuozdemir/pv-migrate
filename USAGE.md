@@ -14,7 +14,6 @@ Available Commands:
   help        Help about any command
 
 Flags:
-      --compress                        Compress data during migration (rsync -z) (default true)
       --dest string                     Destination PVC name
   -C, --dest-context string             Context in the kubeconfig file of the destination PVC
   -d, --dest-delete-extraneous-files    Delete extraneous files on the destination using rsync's --delete flag
@@ -34,21 +33,22 @@ Flags:
       --log-level string                Log level, one of DEBUG, INFO, WARN, ERROR or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText (default "INFO")
   -o, --no-chown                        Omit chown during rsync
   -x, --no-cleanup                      Do not clean up after migration
+      --no-compress                     Do not compress data during migration (disables rsync -z)
   -b, --show-progress-bar               Show a progress bar during migration (default true if stderr is a TTY)
       --source string                   Source PVC name
   -c, --source-context string           Context in the kubeconfig file of the source PVC
   -k, --source-kubeconfig string        Path of the kubeconfig file of the source PVC
-  -R, --source-mount-read-only          Mount the source PVC in read-only mode (default true)
+  -R, --source-mount-read-write         Mount the source PVC in read-write mode
   -n, --source-namespace string         Namespace of the source PVC
   -p, --source-path string              Filesystem path to migrate in the source PVC (default "/")
   -a, --ssh-key-algorithm string        SSH key algorithm, one of rsa, ed25519 (default "ed25519")
   -s, --strategies strings              Comma-separated list of strategies in order (available: mount, clusterip, loadbalancer, nodeport, local) (default [mount,clusterip,loadbalancer])
-  -v, --version                         version for pv-migrate
+  -v, --version                         Version for pv-migrate
 
 Use "pv-migrate [command] --help" for more information about a command.
 ```
 
-The Kubernetes resources created by pv-migrate are sourced from a [Helm chart](helm/pv-migrate).
+The Kubernetes resources created by pv-migrate are sourced from a [Helm chart](internal/helm/pv-migrate).
 
 You can pass raw values to the backing Helm chart
 using the `--helm-*` flags for further customization: container images,
@@ -140,4 +140,4 @@ $ pv-migrate \
 ```
 
 **For further customization on the rendered manifests**
-(custom labels, annotations, etc.), see the [Helm chart values](helm/pv-migrate).
+(custom labels, annotations, etc.), see the [Helm chart values](internal/helm/pv-migrate).

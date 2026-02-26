@@ -42,10 +42,10 @@ const (
 	FlagNoChown                   = "no-chown"
 	FlagNoCleanup                 = "no-cleanup"
 	FlagShowProgressBar           = "show-progress-bar"
-	FlagSourceMountReadOnly       = "source-mount-read-only"
+	FlagSourceMountReadWrite      = "source-mount-read-write"
 	FlagStrategies                = "strategies"
 	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
-	FlagCompress                  = "compress"
+	FlagNoCompress                = "no-compress"
 
 	FlagHelmTimeout   = "helm-timeout"
 	FlagHelmValues    = "helm-values"
@@ -80,8 +80,9 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.
 
 	writer := os.Stderr
 	isATTY := isatty.IsTerminal(writer.Fd())
-	migration := pvmigrate.NewMigration()
 
+	var migration pvmigrate.Migration
+	migration.ApplyDefaults()
 	migration.ShowProgressBar = isATTY
 
 	options := Options{
@@ -122,6 +123,10 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.
 	}
 
 	cmd.AddCommand(buildCompletionCmd())
+
+	cmd.InitDefaultVersionFlag()
+	versionFlag := cmd.Flags().Lookup("version")
+	versionFlag.Usage = strings.ToUpper(versionFlag.Usage[:1]) + versionFlag.Usage[1:]
 
 	return &cmd, nil
 }
@@ -222,8 +227,8 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	flags.BoolVarP(&migration.ShowProgressBar, FlagShowProgressBar,
 		"b", migration.ShowProgressBar, "Show a progress bar during migration")
 	flags.Lookup(FlagShowProgressBar).DefValue = "true if stderr is a TTY"
-	flags.BoolVarP(&migration.SourceMountReadOnly, FlagSourceMountReadOnly, "R", migration.SourceMountReadOnly,
-		"Mount the source PVC in read-only mode")
+	flags.BoolVarP(&migration.SourceMountReadWrite, FlagSourceMountReadWrite, "R", migration.SourceMountReadWrite,
+		"Mount the source PVC in read-write mode")
 	flags.StringSliceVarP(&options.strategies, FlagStrategies, "s", options.strategies,
 		"Comma-separated list of strategies in order (available: "+
 			strings.Join(util.ConvertStrings[string](pvmigrate.AllStrategies), ", ")+")",
@@ -243,8 +248,8 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 			pvmigrate.LoadBalancer,
 		),
 	)
-	flags.BoolVar(&migration.Compress, FlagCompress, migration.Compress,
-		"Compress data during migration (rsync -z)")
+	flags.BoolVar(&migration.NoCompress, FlagNoCompress, migration.NoCompress,
+		"Do not compress data during migration (disables rsync -z)")
 
 	flags.DurationVarP(&migration.HelmTimeout, FlagHelmTimeout, "t", migration.HelmTimeout,
 		"Helm install/uninstall timeout")
@@ -263,7 +268,7 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY bool) error {
 	ctx := cmd.Context()
 
-	logger, err := buildLogger(options.LogLevel, options.LogFormat, isATTY)
+	logger, err := buildLogger(options.LogLevel, options.LogFormat, writer, isATTY)
 	if err != nil {
 		return fmt.Errorf("failed to build logger: %w", err)
 	}
@@ -279,14 +284,14 @@ func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY
 		logger.Info("❕ Extraneous files will be deleted from the destination")
 	}
 
-	if err = pvmigrate.Run(ctx, &options.Migration); err != nil {
+	if err = pvmigrate.Run(ctx, options.Migration); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
 	return nil
 }
 
-func buildLogger(logLevel, logFormat string, isATTY bool) (*slog.Logger, error) {
+func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*slog.Logger, error) {
 	var (
 		level   slog.Level
 		handler slog.Handler
@@ -295,8 +300,6 @@ func buildLogger(logLevel, logFormat string, isATTY bool) (*slog.Logger, error) 
 	if err := level.UnmarshalText([]byte(logLevel)); err != nil {
 		return nil, fmt.Errorf("failed to parse log level: %w", err)
 	}
-
-	writer := os.Stderr
 
 	switch logFormat {
 	case logFormatJSON:

@@ -61,10 +61,10 @@ type Migration struct {
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
-	NoCleanup           bool
+	NoCleanup             bool
 	ShowProgressBar       bool
-	SourceMountReadOnly   bool
-	Compress              bool
+	SourceMountReadWrite  bool
+	NoCompress            bool
 
 	KeyAlgorithm        KeyAlgorithm
 	Strategies          []Strategy
@@ -80,39 +80,21 @@ type Migration struct {
 	Logger *slog.Logger
 }
 
-// NewMigration creates a Migration with sensible defaults.
-func NewMigration() Migration {
-	return Migration{
-		Source: PVC{
-			Path: defaultPath,
-		},
-		Dest: PVC{
-			Path: defaultPath,
-		},
-		Compress:            true,
-		SourceMountReadOnly: true,
-		KeyAlgorithm:        Ed25519,
-		Strategies:          DefaultStrategies,
-		HelmTimeout:         defaultHelmTimeout,
-		LoadBalancerTimeout: defaultLoadBalancerTimeout,
-		Writer:              os.Stderr,
-		Logger:              slog.New(slog.DiscardHandler),
-	}
-}
-
 // Run executes the migration.
-func Run(ctx context.Context, mig *Migration) error {
-	mig.applyDefaults()
-	req := toInternalRequest(mig)
+func Run(ctx context.Context, migration Migration) error {
+	migration.ApplyDefaults()
+	req := toInternalRequest(&migration)
 
-	if err := migrator.New().Run(ctx, req, mig.Logger); err != nil {
+	if err := migrator.New().Run(ctx, req, migration.Logger); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
 	return nil
 }
 
-func (m *Migration) applyDefaults() {
+// ApplyDefaults fills zero-value fields with sensible defaults.
+// A zero-value Migration is fully functional after calling ApplyDefaults.
+func (m *Migration) ApplyDefaults() {
 	if m.Source.Path == "" {
 		m.Source.Path = defaultPath
 	}
@@ -165,10 +147,10 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		DeleteExtraneousFiles: mig.DeleteExtraneousFiles,
 		IgnoreMounted:         mig.IgnoreMounted,
 		NoChown:               mig.NoChown,
-		NoCleanup:           mig.NoCleanup,
+		NoCleanup:             mig.NoCleanup,
 		ShowProgressBar:       mig.ShowProgressBar,
-		SourceMountReadOnly:   mig.SourceMountReadOnly,
-		Compress:              mig.Compress,
+		SourceMountReadWrite:  mig.SourceMountReadWrite,
+		NoCompress:            mig.NoCompress,
 		KeyAlgorithm:          string(mig.KeyAlgorithm),
 		Strategies:            util.ConvertStrings[string](mig.Strategies),
 		DestHostOverride:      mig.DestHostOverride,
