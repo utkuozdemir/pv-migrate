@@ -55,6 +55,12 @@ type PVC struct {
 
 // Migration holds all configuration for a PVC data migration.
 type Migration struct {
+	// ImageTag is the default Docker image tag for the rsync and sshd containers.
+	// When non-empty, it is injected as the lowest-priority Helm value so that
+	// user overrides via HelmValues still take precedence.
+	// Leave empty to use the chart's default (latest).
+	ImageTag string
+
 	Source PVC
 	Dest   PVC
 
@@ -130,6 +136,7 @@ func (m *Migration) ApplyDefaults() {
 
 func toInternalRequest(mig *Migration) *migration.Request {
 	return &migration.Request{
+		ImageTag: mig.ImageTag,
 		Source: migration.PVCInfo{
 			KubeconfigPath: mig.Source.KubeconfigPath,
 			Context:        mig.Source.Context,

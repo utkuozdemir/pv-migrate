@@ -68,7 +68,7 @@ func (l *Logger) startSingle(ctx context.Context, logger *slog.Logger) error {
 
 	defer func() {
 		if closeErr := logStream.Close(); closeErr != nil {
-			logger.Error("failed to close log stream", "error", closeErr)
+			logger.Warn("🔶 Failed to close log stream", "error", closeErr)
 		}
 	}()
 
@@ -165,7 +165,7 @@ func (l *Logger) handleLogs(ctx context.Context, logCh <-chan string, logger *sl
 				)
 			} else {
 				if err = updateProgressBar(progressBar, progress.Transferred, progress.Total); err != nil {
-					logger.Warn("failed to update progress bar", "error", err, "progress", progress)
+					logger.Warn("🔶 Failed to update progress bar", "error", err, "progress", progress)
 				}
 			}
 

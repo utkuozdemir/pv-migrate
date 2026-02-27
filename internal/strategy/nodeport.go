@@ -39,7 +39,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	doneCh := registerCleanupHook(attempt, releaseNames, logger)
 	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installNodePortOnSource(attempt, srcReleaseName, publicKey, srcMountPath)
+	err = installNodePortOnSource(attempt, srcReleaseName, publicKey, srcMountPath, logger)
 	if err != nil {
 		return fmt.Errorf("failed to install on source: %w", err)
 	}
@@ -64,7 +64,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 
 	nodeIP, err := k8s.GetNodeIP(ctx, sourceKubeClient, podNode)
 	if err != nil {
-		logger.Warn("Could not get sshd pod's node IP, falling back to another node",
+		logger.Warn("🔶 Could not get sshd pod's node IP, falling back to another node",
 			"node", podNode, "error", err)
 
 		nodeIP, err = k8s.GetAnyNodeIP(ctx, sourceKubeClient)
@@ -72,7 +72,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 			return fmt.Errorf("failed to find usable node IP: %w", err)
 		}
 	} else {
-		logger.Info("Using sshd pod's node for NodePort connection", "node", podNode, "ip", nodeIP)
+		logger.Info("🔗 Using sshd pod's node for NodePort connection", "node", podNode, "ip", nodeIP)
 	}
 
 	sshTargetHost := nodeIP
@@ -81,7 +81,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	}
 
 	err = installOnDestWithNodePort(attempt, destReleaseName, privateKey, privateKeyMountPath,
-		sshTargetHost, nodePort, srcMountPath, destMountPath)
+		sshTargetHost, nodePort, srcMountPath, destMountPath, logger)
 	if err != nil {
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
@@ -105,7 +105,9 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	return nil
 }
 
-func installNodePortOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMountPath string) error {
+func installNodePortOnSource(
+	attempt *migration.Attempt, releaseName, publicKey, srcMountPath string, logger *slog.Logger,
+) error {
 	mig := attempt.Migration
 	sourceInfo := mig.SourceInfo
 	namespace := sourceInfo.Claim.Namespace
@@ -129,11 +131,12 @@ func installNodePortOnSource(attempt *migration.Attempt, releaseName, publicKey,
 		},
 	}
 
-	return installHelmChart(attempt, sourceInfo, releaseName, vals)
+	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
 }
 
 func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateKey,
 	privateKeyMountPath, sshHost string, sshPort int, srcMountPath, destMountPath string,
+	logger *slog.Logger,
 ) error {
 	mig := attempt.Migration
 	destInfo := mig.DestInfo
@@ -177,5 +180,5 @@ func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateK
 		},
 	}
 
-	return installHelmChart(attempt, destInfo, releaseName, vals)
+	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
 }

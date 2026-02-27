@@ -176,10 +176,22 @@ func initHelmActionConfig(pvcInfo *pvc.Info) (*action.Configuration, error) {
 func getMergedHelmValues(
 	helmValuesFile string,
 	request *migration.Request,
+	logger *slog.Logger,
 ) (map[string]any, error) {
+	// If an image tag is set, inject it as the lowest-priority values
+	// so user overrides via --helm-set take precedence.
+	helmValues := request.HelmValues
+	if tag := request.ImageTag; tag != "" {
+		imageTagValues := []string{
+			"rsync.image.tag=" + tag,
+			"sshd.image.tag=" + tag,
+		}
+		helmValues = append(imageTagValues, helmValues...)
+	}
+
 	allValuesFiles := append([]string{helmValuesFile}, request.HelmValuesFiles...)
 	valsOptions := values.Options{
-		Values:       request.HelmValues,
+		Values:       helmValues,
 		ValueFiles:   allValuesFiles,
 		StringValues: request.HelmStringValues,
 		FileValues:   request.HelmFileValues,
@@ -190,17 +202,31 @@ func getMergedHelmValues(
 		return nil, fmt.Errorf("failed to merge helm values: %w", err)
 	}
 
+	if request.ImageTag != "" {
+		logger.Info("🏷️ Using image tag", "tag", request.ImageTag)
+	} else {
+		logger.Info("🏷️ Using chart default image tags")
+	}
+
 	return mergedValues, nil
 }
 
-func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string, values map[string]any) error {
+func installHelmChart(
+	attempt *migration.Attempt,
+	pvcInfo *pvc.Info,
+	name string,
+	values map[string]any,
+	logger *slog.Logger,
+) error {
 	helmValuesFile, err := writeHelmValuesToTempFile(attempt.ID, values)
 	if err != nil {
 		return fmt.Errorf("failed to write helm values to temp file: %w", err)
 	}
 
 	defer func() {
-		os.Remove(helmValuesFile)
+		if removeErr := os.Remove(helmValuesFile); removeErr != nil {
+			logger.Warn("🔶 Failed to remove temp helm values file", "error", removeErr)
+		}
 	}()
 
 	helmActionConfig, err := initHelmActionConfig(pvcInfo)
@@ -221,7 +247,7 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 		install.Timeout = req.HelmTimeout
 	}
 
-	vals, err := getMergedHelmValues(helmValuesFile, mig.Request)
+	vals, err := getMergedHelmValues(helmValuesFile, mig.Request, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get merged helm values: %w", err)
 	}

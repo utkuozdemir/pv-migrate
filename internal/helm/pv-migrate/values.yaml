@@ -12,7 +12,7 @@ sshd:
     # -- SSHD image pull policy
     pullPolicy: IfNotPresent
     # -- SSHD image tag
-    tag: 1.1.0
+    tag: latest
   # -- SSHD image pull secrets
   imagePullSecrets: []
   serviceAccount:
@@ -105,7 +105,7 @@ rsync:
     # -- Rsync image pull policy
     pullPolicy: IfNotPresent
     # -- Rsync image tag
-    tag: 1.0.0
+    tag: latest
   # -- Rsync image pull secrets
   imagePullSecrets: []
   serviceAccount:

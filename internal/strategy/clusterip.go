@@ -30,7 +30,7 @@ func (r *ClusterIP) Run(ctx context.Context, attempt *migration.Attempt, logger 
 	doneCh := registerCleanupHook(attempt, releaseNames, logger)
 	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installHelmChart(attempt, mig.DestInfo, releaseName, helmVals)
+	err = installHelmChart(attempt, mig.DestInfo, releaseName, helmVals, logger)
 	if err != nil {
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
