@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
+	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
@@ -14,8 +16,128 @@ import (
 
 type LoadBalancer struct{}
 
+// SharedSource holds the result of setting up a shared source sshd endpoint
+// that can serve multiple transfers in batch mode.
+type SharedSource struct {
+	// Address is the SSH target host (formatted for SSH use).
+	Address string
+	// ReleaseName is the Helm release name of the shared source endpoint.
+	ReleaseName string
+	// PrivateKey is the SSH private key for connecting to the shared source.
+	PrivateKey string
+	// KeyAlgorithm is the SSH key algorithm used.
+	KeyAlgorithm string
+	// MountPaths maps source PVC name to its mount path on the sshd pod.
+	MountPaths map[string]string
+}
+
+// SetupSharedSource installs a single sshd deployment + LoadBalancer service
+// that mounts ALL given source PVCs. This is used in batch mode to avoid
+// creating one LB service per transfer.
+func (r *LoadBalancer) SetupSharedSource(
+	ctx context.Context,
+	attempt *migration.Attempt,
+	allSourceInfos []*pvc.Info,
+	readWrite bool,
+	logger *slog.Logger,
+) (*SharedSource, error) {
+	keyAlgorithm := attempt.Migration.Request.KeyAlgorithm
+
+	logger.Info("🔑 Generating SSH key pair for shared source endpoint", "algorithm", keyAlgorithm)
+
+	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ssh key pair: %w", err)
+	}
+
+	releaseName := attempt.HelmReleaseNamePrefix + "-shared-src"
+
+	// Build PVC mounts for all source PVCs.
+	mountPaths := make(map[string]string, len(allSourceInfos))
+	pvcMounts := make([]map[string]any, 0, len(allSourceInfos))
+
+	for _, info := range allSourceInfos {
+		mountPath := srcMountPath + "/" + info.Claim.Name
+		mountPaths[info.Claim.Name] = mountPath
+		pvcMounts = append(pvcMounts, map[string]any{
+			"name":      info.Claim.Name,
+			"readOnly":  !readWrite,
+			"mountPath": mountPath,
+		})
+	}
+
+	// Use first PVC's info for namespace, client, and affinity.
+	firstInfo := allSourceInfos[0]
+
+	vals := map[string]any{
+		"sshd": map[string]any{
+			"enabled":   true,
+			"namespace": firstInfo.Claim.Namespace,
+			"publicKey": publicKey,
+			"service": map[string]any{
+				"type": "LoadBalancer",
+			},
+			"pvcMounts": pvcMounts,
+			"affinity":  firstInfo.AffinityHelmValues,
+		},
+	}
+
+	logger.Info("📦 Installing shared source sshd with all PVCs",
+		"release", releaseName, "pvc_count", len(allSourceInfos))
+
+	if err := installHelmChart(attempt, firstInfo, releaseName, vals); err != nil {
+		return nil, fmt.Errorf("failed to install shared source: %w", err)
+	}
+
+	sourceKubeClient := firstInfo.ClusterClient.KubeClient
+	svcName := releaseName + "-sshd"
+
+	lbAddress, err := k8s.GetServiceAddress(
+		ctx,
+		sourceKubeClient,
+		firstInfo.Claim.Namespace,
+		svcName,
+		attempt.Migration.Request.LoadBalancerTimeout,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get shared source service address: %w", err)
+	}
+
+	sshTargetHost := formatSSHTargetHost(lbAddress)
+
+	logger.Info("🌐 Shared source endpoint ready", "address", sshTargetHost)
+
+	return &SharedSource{
+		Address:      sshTargetHost,
+		ReleaseName:  releaseName,
+		PrivateKey:   privateKey,
+		KeyAlgorithm: keyAlgorithm,
+		MountPaths:   mountPaths,
+	}, nil
+}
+
+// CleanupSharedSource cleans up a shared source endpoint.
+func (r *LoadBalancer) CleanupSharedSource(
+	pvcInfo *pvc.Info,
+	releaseName string,
+	helmTimeout time.Duration,
+	logger *slog.Logger,
+) {
+	logger.Info("🧹 Cleaning up shared source endpoint", "release", releaseName)
+
+	if err := cleanupForPVC(releaseName, helmTimeout, pvcInfo); err != nil {
+		logger.Warn("🔶 Failed to clean up shared source endpoint", "error", err)
+	}
+}
+
 //nolint:funlen
 func (r *LoadBalancer) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
+	// If a shared source endpoint is provided (batch mode), skip source install.
+	if ep := attempt.SourceEndpoint; ep != nil {
+		return r.runWithSharedSource(ctx, attempt, ep, logger)
+	}
+
+	// Original single-transfer flow.
 	mig := attempt.Migration
 
 	sourceInfo := mig.SourceInfo
@@ -71,6 +193,56 @@ func (r *LoadBalancer) Run(ctx context.Context, attempt *migration.Attempt, logg
 	}
 
 	showProgressBar := attempt.Migration.Request.ShowProgressBar
+	kubeClient := destInfo.ClusterClient.KubeClient
+	jobName := destReleaseName + "-rsync"
+
+	if err = k8s.WaitForJobCompletion(
+		ctx,
+		kubeClient,
+		destNs,
+		jobName,
+		showProgressBar,
+		mig.Request.Writer,
+		logger,
+	); err != nil {
+		return fmt.Errorf("failed to wait for job completion: %w", err)
+	}
+
+	return nil
+}
+
+// runWithSharedSource runs a single transfer using a pre-existing shared source endpoint.
+// Only the destination rsync job is created; the source sshd is already running.
+func (r *LoadBalancer) runWithSharedSource(
+	ctx context.Context,
+	attempt *migration.Attempt,
+	ep *migration.SourceEndpoint,
+	logger *slog.Logger,
+) error {
+	mig := attempt.Migration
+	destInfo := mig.DestInfo
+	destNs := destInfo.Claim.Namespace
+
+	privateKeyMountPath := "/tmp/id_" + ep.KeyAlgorithm
+
+	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
+	releaseNames := []string{destReleaseName}
+
+	doneCh := registerCleanupHook(attempt, releaseNames, logger)
+	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
+
+	sshTargetHost := ep.Address
+	if mig.Request.DestHostOverride != "" {
+		sshTargetHost = mig.Request.DestHostOverride
+	}
+
+	err := installOnDest(attempt, destReleaseName, ep.PrivateKey, privateKeyMountPath,
+		sshTargetHost, ep.SrcMountPath, destMountPath)
+	if err != nil {
+		return fmt.Errorf("failed to install on dest: %w", err)
+	}
+
+	showProgressBar := mig.Request.ShowProgressBar
 	kubeClient := destInfo.ClusterClient.KubeClient
 	jobName := destReleaseName + "-rsync"
 

@@ -148,12 +148,13 @@ func buildMigrationRequestWithStrategies(
 func fakeClusterClientGetter() clusterClientGetter {
 	pvcA := buildTestPVC(sourceNS, sourcePVC, corev1.ReadOnlyMany)
 	pvcB := buildTestPVC(destNS, destPVC, corev1.ReadWriteOnce, corev1.ReadWriteMany)
+	pvcC := buildTestPVC(sourceNS, "pvc3", corev1.ReadOnlyMany)
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPVC)
 
 	return func(string, string, *slog.Logger) (*k8s.ClusterClient, error) {
 		return &k8s.ClusterClient{
-			KubeClient: fake.NewClientset(pvcA, pvcB, podA, podB),
+			KubeClient: fake.NewClientset(pvcA, pvcB, pvcC, podA, podB),
 		}, nil
 	}
 }
@@ -200,4 +201,81 @@ type mockStrategy struct {
 
 func (m *mockStrategy) Run(ctx context.Context, attempt *migration.Attempt, _ *slog.Logger) error {
 	return m.runFunc(ctx, attempt)
+}
+
+func TestRunBatchFallsBackToIndividualWithoutLB(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := slogt.New(t)
+
+	var runCount int
+
+	str1 := mockStrategy{
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
+			runCount++
+			return nil
+		},
+	}
+
+	migrator := Migrator{
+		getKubeClient: fakeClusterClientGetter(),
+		getStrategyMap: func([]string) (map[string]strategy.Strategy, error) {
+			return map[string]strategy.Strategy{
+				"str1": &str1,
+			}, nil
+		},
+	}
+
+	// Two requests, but no loadbalancer strategy → falls back to individual runs.
+	req1 := buildMigrationRequestWithStrategies([]string{"str1"}, true)
+	req2 := buildMigrationRequestWithStrategies([]string{"str1"}, true)
+	req2.Source.Name = "pvc3"
+
+	err := migrator.RunBatch(ctx, []*migration.Request{req1, req2}, logger)
+	require.NoError(t, err)
+	assert.Equal(t, 2, runCount)
+}
+
+func TestRunBatchSingleRequestDelegatesToRun(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := slogt.New(t)
+
+	var runCount int
+
+	str1 := mockStrategy{
+		runFunc: func(_ context.Context, _ *migration.Attempt) error {
+			runCount++
+			return nil
+		},
+	}
+
+	migrator := Migrator{
+		getKubeClient: fakeClusterClientGetter(),
+		getStrategyMap: func([]string) (map[string]strategy.Strategy, error) {
+			return map[string]strategy.Strategy{
+				"str1": &str1,
+			}, nil
+		},
+	}
+
+	req := buildMigrationRequestWithStrategies([]string{"str1"}, true)
+
+	err := migrator.RunBatch(ctx, []*migration.Request{req}, logger)
+	require.NoError(t, err)
+	assert.Equal(t, 1, runCount)
+}
+
+func TestRunBatchEmptyIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	logger := slogt.New(t)
+
+	migrator := Migrator{}
+
+	err := migrator.RunBatch(ctx, []*migration.Request{}, logger)
+	require.NoError(t, err)
 }

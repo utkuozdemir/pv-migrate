@@ -19,6 +19,11 @@ const (
 	attemptIDLength = 5
 )
 
+type resolvedTransfer struct {
+	request   *migration.Request
+	migration *migration.Migration
+}
+
 type (
 	strategyMapGetter   func(names []string) (map[string]strategy.Strategy, error)
 	clusterClientGetter func(kubeconfigPath, context string, logger *slog.Logger) (*k8s.ClusterClient, error)
@@ -202,4 +207,191 @@ func handleMounted(info *pvc.Info, ignoreMounted bool, logger *slog.Logger) erro
 
 	return fmt.Errorf("PVC is mounted to a node and --ignore-mounted is not requested: "+
 		"node: %s claim %s", info.MountedNode, info.Claim.Name)
+}
+
+// RunBatch executes a batch of migrations. When the loadbalancer strategy is available,
+// transfers sharing a source namespace are optimised to use a single shared sshd +
+// LoadBalancer service instead of one per transfer.
+func (m *Migrator) RunBatch(ctx context.Context, requests []*migration.Request, logger *slog.Logger) error {
+	if len(requests) == 0 {
+		return nil
+	}
+
+	if len(requests) == 1 {
+		return m.Run(ctx, requests[0], logger)
+	}
+
+	nameToStrategyMap, err := m.getStrategyMap(requests[0].Strategies)
+	if err != nil {
+		return err
+	}
+
+	// Check if loadbalancer strategy is available for batch optimisation.
+	lbStratRaw, hasLB := nameToStrategyMap["loadbalancer"]
+	if !hasLB {
+		logger.Warn("⚠️ Batch optimisation requires loadbalancer strategy; running individual migrations")
+
+		return m.runIndividual(ctx, requests, logger)
+	}
+
+	lbStrat, ok := lbStratRaw.(*strategy.LoadBalancer)
+	if !ok {
+		return errors.New("internal error: unexpected loadbalancer strategy type")
+	}
+
+	logger.Info("📦 Batch mode: grouping transfers by source namespace", "total_transfers", len(requests))
+
+	// Build all migrations.
+	transfers := make([]resolvedTransfer, 0, len(requests))
+
+	for _, req := range requests {
+		reqLogger := logger.With(
+			"source", req.Source.Namespace+"/"+req.Source.Name,
+			"dest", req.Dest.Namespace+"/"+req.Dest.Name,
+		)
+
+		mig, err := m.buildMigration(ctx, req, reqLogger)
+		if err != nil {
+			return fmt.Errorf("failed to build migration for %s: %w", req.Source.Name, err)
+		}
+
+		transfers = append(transfers, resolvedTransfer{request: req, migration: mig})
+	}
+
+	// Group by source namespace preserving order.
+	type nsGroup struct {
+		namespace string
+		transfers []resolvedTransfer
+	}
+
+	groupMap := make(map[string]*nsGroup)
+	groupOrder := make([]string, 0)
+
+	for _, t := range transfers {
+		ns := t.migration.SourceInfo.Claim.Namespace
+		if _, exists := groupMap[ns]; !exists {
+			groupMap[ns] = &nsGroup{namespace: ns}
+			groupOrder = append(groupOrder, ns)
+		}
+
+		groupMap[ns].transfers = append(groupMap[ns].transfers, t)
+	}
+
+	for _, ns := range groupOrder {
+		group := groupMap[ns]
+
+		logger.Info("🔄 Running batch migration for source namespace",
+			"namespace", ns, "transfers", len(group.transfers))
+
+		if err := m.runBatchLB(ctx, lbStrat, group.transfers, logger); err != nil {
+			return fmt.Errorf("batch migration failed for namespace %s: %w", ns, err)
+		}
+	}
+
+	return nil
+}
+
+// runIndividual falls back to running each request as an independent migration.
+func (m *Migrator) runIndividual(ctx context.Context, requests []*migration.Request, logger *slog.Logger) error {
+	for i, req := range requests {
+		logger.Info("🚁 Running migration", "transfer", fmt.Sprintf("%d/%d", i+1, len(requests)))
+
+		if err := m.Run(ctx, req, logger); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// runBatchLB runs a group of transfers that share a source namespace using a
+// single shared LoadBalancer source endpoint.
+func (m *Migrator) runBatchLB(
+	ctx context.Context,
+	lbStrat *strategy.LoadBalancer,
+	transfers []resolvedTransfer,
+	logger *slog.Logger,
+) error {
+	sessionID := util.RandomString(attemptIDLength)
+
+	// Collect all unique source PVC infos.
+	allSourceInfos := make([]*pvc.Info, 0, len(transfers))
+
+	for _, t := range transfers {
+		allSourceInfos = append(allSourceInfos, t.migration.SourceInfo)
+	}
+
+	// Create a synthetic attempt for the shared source setup using the first migration.
+	firstMig := transfers[0].migration
+
+	sharedAttempt := &migration.Attempt{
+		ID:                    sessionID,
+		HelmReleaseNamePrefix: "pv-migrate-" + sessionID,
+		Migration:             firstMig,
+	}
+
+	// Setup the shared source endpoint (one sshd + one LB service for all PVCs).
+	shared, err := lbStrat.SetupSharedSource(
+		ctx, sharedAttempt, allSourceInfos,
+		firstMig.Request.SourceMountReadWrite, logger,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to setup shared source endpoint: %w", err)
+	}
+
+	// Ensure the shared source is cleaned up when we're done.
+	noCleanup := firstMig.Request.NoCleanup
+
+	defer func() {
+		if !noCleanup {
+			lbStrat.CleanupSharedSource(
+				allSourceInfos[0], shared.ReleaseName,
+				firstMig.Request.HelmTimeout, logger,
+			)
+		} else {
+			logger.Info("🧹 Shared source cleanup skipped (--no-cleanup)")
+		}
+	}()
+
+	// Run individual transfers against the shared source endpoint.
+	for i, t := range transfers {
+		transferID := fmt.Sprintf("%s-%d", sessionID, i)
+
+		transferLogger := logger.With(
+			"transfer", fmt.Sprintf("%d/%d", i+1, len(transfers)),
+			"source_pvc", t.migration.SourceInfo.Claim.Name,
+			"dest_pvc", t.migration.DestInfo.Claim.Name,
+		)
+
+		transferLogger.Info("🚁 Running transfer")
+
+		srcMountPath, ok := shared.MountPaths[t.migration.SourceInfo.Claim.Name]
+		if !ok {
+			return fmt.Errorf("internal error: no mount path for source PVC %s",
+				t.migration.SourceInfo.Claim.Name)
+		}
+
+		attempt := &migration.Attempt{
+			ID:                    transferID,
+			HelmReleaseNamePrefix: "pv-migrate-" + transferID,
+			Migration:             t.migration,
+			SourceEndpoint: &migration.SourceEndpoint{
+				Address:      shared.Address,
+				ReleaseName:  shared.ReleaseName,
+				SrcMountPath: srcMountPath,
+				PrivateKey:   shared.PrivateKey,
+				KeyAlgorithm: shared.KeyAlgorithm,
+			},
+		}
+
+		if runErr := lbStrat.Run(ctx, attempt, transferLogger); runErr != nil {
+			return fmt.Errorf("transfer %d failed (%s → %s): %w",
+				i+1, t.migration.SourceInfo.Claim.Name,
+				t.migration.DestInfo.Claim.Name, runErr)
+		}
+
+		transferLogger.Info("✅ Transfer succeeded")
+	}
+
+	return nil
 }

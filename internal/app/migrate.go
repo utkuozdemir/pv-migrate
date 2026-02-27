@@ -52,6 +52,8 @@ const (
 	FlagHelmSet       = "helm-set"
 	FlagHelmSetString = "helm-set-string"
 	FlagHelmSetFile   = "helm-set-file"
+
+	FlagTransfersFile = "transfers-file"
 )
 
 var completionFuncNoFileComplete = func(*cobra.Command, []string,
@@ -65,6 +67,9 @@ type Options struct {
 	LogFormat string
 
 	Migration pvmigrate.Migration
+
+	// TransfersFile is the path to a YAML file listing source→dest PVC pairs for batch mode.
+	TransfersFile string
 
 	// intermediate fields for cobra flag binding
 	strategies   []string
@@ -191,10 +196,6 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 		"Namespace of the source PVC")
 	flags.StringVar(&migration.Source.Name, FlagSource, migration.Source.Name, "Source PVC name")
 
-	if err := cmd.MarkFlagRequired(FlagSource); err != nil {
-		return fmt.Errorf("failed to mark flag %q as required: %w", FlagSource, err)
-	}
-
 	flags.StringVarP(&migration.Source.Path, FlagSourcePath, "p", migration.Source.Path,
 		"Filesystem path to migrate in the source PVC")
 
@@ -205,10 +206,6 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	flags.StringVarP(&migration.Dest.Namespace, FlagDestNamespace, "N", migration.Dest.Namespace,
 		"Namespace of the destination PVC")
 	flags.StringVar(&migration.Dest.Name, FlagDest, migration.Dest.Name, "Destination PVC name")
-
-	if err := cmd.MarkFlagRequired(FlagDest); err != nil {
-		return fmt.Errorf("failed to mark flag %q as required: %w", FlagDest, err)
-	}
 
 	flags.StringVarP(&migration.Dest.Path, FlagDestPath, "P", migration.Dest.Path,
 		"Filesystem path to migrate in the destination PVC")
@@ -262,6 +259,9 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	flags.StringSliceVar(&migration.HelmFileValues, FlagHelmSetFile, migration.HelmFileValues,
 		"Additional Helm values from files (key1=path1,key2=path2)")
 
+	flags.StringVar(&options.TransfersFile, FlagTransfersFile, "",
+		"YAML file with source→dest PVC pairs for batch mode (overrides --source/--dest)")
+
 	return nil
 }
 
@@ -271,6 +271,20 @@ func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY
 	logger, err := buildLogger(options.LogLevel, options.LogFormat, writer, isATTY)
 	if err != nil {
 		return fmt.Errorf("failed to build logger: %w", err)
+	}
+
+	// Batch mode: --transfers-file is set.
+	if options.TransfersFile != "" {
+		return runBatchMigration(ctx, options, writer, logger)
+	}
+
+	// Single transfer mode: require --source and --dest.
+	if options.Migration.Source.Name == "" {
+		return fmt.Errorf("required flag %q not set (required when --%s is not used)", FlagSource, FlagTransfersFile)
+	}
+
+	if options.Migration.Dest.Name == "" {
+		return fmt.Errorf("required flag %q not set (required when --%s is not used)", FlagDest, FlagTransfersFile)
 	}
 
 	options.Migration.Strategies = util.ConvertStrings[pvmigrate.Strategy](options.strategies)
@@ -286,6 +300,74 @@ func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY
 
 	if err = pvmigrate.Run(ctx, options.Migration); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
+	}
+
+	return nil
+}
+
+func runBatchMigration(ctx context.Context, options *Options, writer io.Writer, logger *slog.Logger) error {
+	transfers, err := parseTransfersFile(options.TransfersFile)
+	if err != nil {
+		return fmt.Errorf("failed to parse transfers file: %w", err)
+	}
+
+	// Apply CLI-provided defaults (kubeconfig, context, namespace) to each transfer.
+	for i := range transfers {
+		if transfers[i].Source.KubeconfigPath == "" {
+			transfers[i].Source.KubeconfigPath = options.Migration.Source.KubeconfigPath
+		}
+
+		if transfers[i].Source.Context == "" {
+			transfers[i].Source.Context = options.Migration.Source.Context
+		}
+
+		if transfers[i].Source.Namespace == "" {
+			transfers[i].Source.Namespace = options.Migration.Source.Namespace
+		}
+
+		if transfers[i].Dest.KubeconfigPath == "" {
+			transfers[i].Dest.KubeconfigPath = options.Migration.Dest.KubeconfigPath
+		}
+
+		if transfers[i].Dest.Context == "" {
+			transfers[i].Dest.Context = options.Migration.Dest.Context
+		}
+
+		if transfers[i].Dest.Namespace == "" {
+			transfers[i].Dest.Namespace = options.Migration.Dest.Namespace
+		}
+	}
+
+	batch := pvmigrate.BatchMigration{
+		Transfers:             transfers,
+		DeleteExtraneousFiles: options.Migration.DeleteExtraneousFiles,
+		IgnoreMounted:         options.Migration.IgnoreMounted,
+		NoChown:               options.Migration.NoChown,
+		NoCleanup:             options.Migration.NoCleanup,
+		ShowProgressBar:       options.Migration.ShowProgressBar,
+		SourceMountReadWrite:  options.Migration.SourceMountReadWrite,
+		NoCompress:            options.Migration.NoCompress,
+		KeyAlgorithm:          pvmigrate.KeyAlgorithm(options.keyAlgorithm),
+		Strategies:            util.ConvertStrings[pvmigrate.Strategy](options.strategies),
+		DestHostOverride:      options.Migration.DestHostOverride,
+		HelmTimeout:           options.Migration.HelmTimeout,
+		LoadBalancerTimeout:   options.Migration.LoadBalancerTimeout,
+		HelmValuesFiles:       options.Migration.HelmValuesFiles,
+		HelmValues:            options.Migration.HelmValues,
+		HelmFileValues:        options.Migration.HelmFileValues,
+		HelmStringValues:      options.Migration.HelmStringValues,
+		Writer:                writer,
+		Logger:                logger,
+	}
+
+	logger.Info("🚀 Starting batch migration", "transfers", len(transfers))
+
+	if options.Migration.DeleteExtraneousFiles {
+		logger.Info("❕ Extraneous files will be deleted from the destination")
+	}
+
+	if err := pvmigrate.RunBatch(ctx, batch); err != nil {
+		return fmt.Errorf("batch migration failed: %w", err)
 	}
 
 	return nil

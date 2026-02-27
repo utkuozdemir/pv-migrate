@@ -28,8 +28,20 @@ func GetServiceAddress(
 	resCli := cli.CoreV1().Services(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 
-	ctx, cancel := context.WithTimeout(ctx, lbTimeout)
-	defer cancel()
+	// Use a detached context with its own timeout so that cancellation of
+	// the parent context (e.g. during cleanup) does not cause the reflector
+	// to log spurious "Failed to watch" errors after the address is obtained.
+	watchCtx, watchCancel := context.WithTimeout(context.Background(), lbTimeout)
+	defer watchCancel()
+
+	// Still respect the parent context: if it's cancelled, abort the watch.
+	go func() {
+		select {
+		case <-ctx.Done():
+			watchCancel()
+		case <-watchCtx.Done():
+		}
+	}()
 
 	listWatch := &cache.ListWatch{
 		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
@@ -54,7 +66,7 @@ func GetServiceAddress(
 		},
 	}
 
-	if _, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Service{}, nil,
+	if _, err := watchtools.UntilWithSync(watchCtx, listWatch, &corev1.Service{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Service)
 			if !ok {

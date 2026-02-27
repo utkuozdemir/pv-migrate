@@ -42,6 +42,7 @@ var (
 		mountStrategy:        &Mount{},
 		clusterIPStrategy:    &ClusterIP{},
 		loadBalancerStrategy: &LoadBalancer{},
+		"lbsvc":              &LoadBalancer{}, // alias for backward compatibility
 		localStrategy:        &Local{},
 		nodePortStrategy:     &NodePort{},
 	}
