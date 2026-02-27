@@ -8,7 +8,7 @@ import (
 	// load all auth plugins - needed for gcp, azure etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"github.com/utkuozdemir/pv-migrate/app"
+	"github.com/utkuozdemir/pv-migrate/internal/app"
 )
 
 var (
@@ -28,7 +28,12 @@ func run() int {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	rootCmd := app.BuildMigrateCmd(ctx, version, commit, date, false)
+	rootCmd, err := app.BuildMigrateCmd(ctx, version, commit, date)
+	if err != nil {
+		slog.Default().Error("❌ Failed to build command", "error", err.Error())
+
+		return 1
+	}
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
 		slog.Default().Error("❌ Failed to run", "error", err.Error())

@@ -13,7 +13,7 @@
 ![SSHD Docker Pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-sshd?label=sshd%20-%20docker%20pulls)
 ![Rsync Docker Pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-rsync?label=rsync%20-%20docker%20pulls)
 
-`pv-migrate` is a CLI tool/kubectl plugin to easily migrate 
+`pv-migrate` is a CLI tool/kubectl plugin to easily migrate
 the contents of one Kubernetes `PersistentVolumeClaim` to another.
 
 ---
@@ -29,7 +29,7 @@ the contents of one Kubernetes `PersistentVolumeClaim` to another.
 
 ## Introduction
 
-On Kubernetes, if you need to rename a resource (like a `Deployment`) or to move it to a different namespace, 
+On Kubernetes, if you need to rename a resource (like a `Deployment`) or to move it to a different namespace,
 you can simply create a copy of its manifest with the new namespace and/or name and apply it.
 
 However, it is not as simple with `PersistentVolumeClaim` resources: They are not only metadata,
@@ -54,20 +54,20 @@ and you need to move the data from one Kubernetes cluster to the other.
 Just use `pv-migrate` to copy the data **securely over the internet**.
 
 :arrow_right: You need to change the `StorageClass` of a volume, for instance,
-from a `ReadWriteOnce` one like `local-path`) to a `ReadWriteMany` like NFS.
-As the `storageClass` is not editable, you can use `pv-migrate` to transfer
-the data from the old PVC to the new one with the desired StorageClass.
+from a `ReadWriteOnce` one (like `local-path`) to a `ReadWriteMany` like NFS.
+As the `StorageClass` is not editable, you can use `pv-migrate` to transfer
+the data from the old PVC to the new one with the desired `StorageClass`.
 
 ## Highlights
 
 - Supports in-namespace, in-cluster as well as cross-cluster migrations
-- Uses rsync over SSH with a freshly generated [Ed25519](https://en.wikipedia.org/wiki/EdDSA) 
-  or RSA keys each time to securely migrate the files
-- Allows full customization of the manifests (e.g. specifying your own docker images for rsync and sshd, configuring affinity etc.)
+- Uses rsync over SSH with a freshly generated [Ed25519](https://en.wikipedia.org/wiki/EdDSA)
+  or RSA key pair each time to securely migrate the files
+- Allows full customization of the manifests (e.g. specifying your own container images for rsync and sshd, configuring affinity, etc.)
 - Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed:
-  - Mount both PVCs in a single pod (mnt2)
-  - ClusterIP service (svc)
-  - LoadBalancer service (lbsvc)
+  - Mount both PVCs in a single pod (mount)
+  - ClusterIP service (clusterip)
+  - LoadBalancer service (loadbalancer)
   - NodePort service (nodeport, opt-in)
   - Local port-forward transfer (local, opt-in)
 - Customizable strategy order
@@ -82,8 +82,7 @@ See [INSTALL.md](INSTALL.md) for various installation methods and shell completi
 
 See [USAGE.md](USAGE.md) for the CLI reference and examples.
 
-
-# Star History
+## Star History
 
 <a href="https://star-history.com/#utkuozdemir/pv-migrate&Date">
  <picture>
@@ -93,6 +92,6 @@ See [USAGE.md](USAGE.md) for the CLI reference and examples.
  </picture>
 </a>
 
-# Contributing
+## Contributing
 
 See [CONTRIBUTING](CONTRIBUTING.md) for details.

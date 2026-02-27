@@ -14,41 +14,41 @@ Available Commands:
   help        Help about any command
 
 Flags:
-      --compress                       compress data during migration ('-z' flag of rsync) (default true)
-      --dest string                    destination PVC name
-  -C, --dest-context string            context in the kubeconfig file of the destination PVC
-  -d, --dest-delete-extraneous-files   delete extraneous files on the destination by using rsync's '--delete' flag
-  -H, --dest-host-override string      the override for the rsync host destination when it is run over SSH, in cases when you need to target a different destination IP on rsync for some reason. By default, it is determined by used strategy and differs across strategies. Has no effect for mnt2 and local strategies
-  -K, --dest-kubeconfig string         path of the kubeconfig file of the destination PVC
-  -N, --dest-namespace string          namespace of the destination PVC
-  -P, --dest-path string               the filesystem path to migrate in the destination PVC (default "/")
-      --helm-set strings               set additional Helm values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
-      --helm-set-file strings          set additional Helm values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)
-      --helm-set-string strings        set additional Helm STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)
-  -t, --helm-timeout duration          install/uninstall timeout for helm releases (default 1m0s)
-  -f, --helm-values strings            set additional Helm values by a YAML file or a URL (can specify multiple)
-  -h, --help                           help for pv-migrate
-  -i, --ignore-mounted                 do not fail if the source or destination PVC is mounted
-      --lbsvc-timeout duration         timeout for the load balancer service to receive an external IP. Only used by the lbsvc strategy (default 2m0s)
-      --log-format string              log format, must be one of: text, json (default "text")
-      --log-level string               log level, must be one of "DEBUG, INFO, WARN, ERROR" or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText (default "INFO")
-  -o, --no-chown                       omit chown on rsync
-  -b, --no-progress-bar                do not display a progress bar
-  -x, --skip-cleanup                   skip cleanup of the migration
-      --source string                  source PVC name
-  -c, --source-context string          context in the kubeconfig file of the source PVC
-  -k, --source-kubeconfig string       path of the kubeconfig file of the source PVC
-  -R, --source-mount-read-only         mount the source PVC in ReadOnly mode (default true)
-  -n, --source-namespace string        namespace of the source PVC
-  -p, --source-path string             the filesystem path to migrate in the source PVC (default "/")
-  -a, --ssh-key-algorithm string       ssh key algorithm to be used. Valid values are rsa,ed25519 (default "ed25519")
-  -s, --strategies strings             the comma-separated list of strategies to be used in the given order (available: mnt2,svc,lbsvc,nodeport,local) (default [mnt2,svc,lbsvc])
-  -v, --version                        version for pv-migrate
+      --dest string                     Destination PVC name
+  -C, --dest-context string             Context in the kubeconfig file of the destination PVC
+  -d, --dest-delete-extraneous-files    Delete extraneous files on the destination using rsync's --delete flag
+  -H, --dest-host-override string       Override for the rsync destination host over SSH. By default, determined by the strategy. Has no effect for the mount and local strategies
+  -K, --dest-kubeconfig string          Path of the kubeconfig file of the destination PVC
+  -N, --dest-namespace string           Namespace of the destination PVC
+  -P, --dest-path string                Filesystem path to migrate in the destination PVC (default "/")
+      --helm-set strings                Additional Helm values (key1=val1,key2=val2)
+      --helm-set-file strings           Additional Helm values from files (key1=path1,key2=path2)
+      --helm-set-string strings         Additional Helm string values (key1=val1,key2=val2)
+  -t, --helm-timeout duration           Helm install/uninstall timeout (default 1m0s)
+  -f, --helm-values strings             Additional Helm values files (YAML file or URL, can specify multiple)
+  -h, --help                            help for pv-migrate
+  -i, --ignore-mounted                  Do not fail if the source or destination PVC is mounted
+      --loadbalancer-timeout duration   Timeout for the load balancer to receive an external IP. Only used by the loadbalancer strategy (default 2m0s)
+      --log-format string               Log format, one of text, json (default "text")
+      --log-level string                Log level, one of DEBUG, INFO, WARN, ERROR or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText (default "INFO")
+  -o, --no-chown                        Omit chown during rsync
+  -x, --no-cleanup                      Do not clean up after migration
+      --no-compress                     Do not compress data during migration (disables rsync -z)
+  -b, --show-progress-bar               Show a progress bar during migration (default true if stderr is a TTY)
+      --source string                   Source PVC name
+  -c, --source-context string           Context in the kubeconfig file of the source PVC
+  -k, --source-kubeconfig string        Path of the kubeconfig file of the source PVC
+  -R, --source-mount-read-write         Mount the source PVC in read-write mode
+  -n, --source-namespace string         Namespace of the source PVC
+  -p, --source-path string              Filesystem path to migrate in the source PVC (default "/")
+  -a, --ssh-key-algorithm string        SSH key algorithm, one of rsa, ed25519 (default "ed25519")
+  -s, --strategies strings              Comma-separated list of strategies in order (available: mount, clusterip, loadbalancer, nodeport, local) (default [mount,clusterip,loadbalancer])
+  -v, --version                         Version for pv-migrate
 
 Use "pv-migrate [command] --help" for more information about a command.
 ```
 
-The Kubernetes resources created by pv-migrate are sourced from a [Helm chart](helm/pv-migrate).
+The Kubernetes resources created by pv-migrate are sourced from a [Helm chart](internal/helm/pv-migrate).
 
 You can pass raw values to the backing Helm chart
 using the `--helm-*` flags for further customization: container images,
@@ -140,4 +140,4 @@ $ pv-migrate \
 ```
 
 **For further customization on the rendered manifests**
-(custom labels, annotations, etc.), see the [Helm chart values](helm/pv-migrate).
+(custom labels, annotations, etc.), see the [Helm chart values](internal/helm/pv-migrate).

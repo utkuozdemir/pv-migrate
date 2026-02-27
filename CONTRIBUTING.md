@@ -9,7 +9,7 @@ Contributing to the project is simple. Just do the following:
 
 3. Fork the repo, do your changes, create a PR.
 
-4. Make sure the build succeeds. Do the changes from after the review if needed.
+4. Make sure the build succeeds. Address review feedback if needed.
 
 That's it.
 
@@ -25,7 +25,7 @@ That's it.
   git tag -a "docker-sshd-1.0.0" -m "Docker Sshd Image Release 1.0.0"
   git tag -a "docker-rsync-1.0.0" -m "Docker Rsync Image Release 1.0.0"
   git push
-  push --tags
+  git push --tags
   ```
   These will result in the Docker images with the following tags being pushed:
   ```
@@ -35,8 +35,7 @@ That's it.
 
 ## Editing the helm chart
 
-The `pv-migrate` helm chart is located at `helm/pv-migrate`. It is inserted into the go code during build. 
-The source is a helm package located in `migrator/helm-chart.tgz`.
+The `pv-migrate` helm chart is located at `internal/helm/pv-migrate`. It is embedded into the Go binary during build.
 
 If you want to tweak the helm chart, you must run the following command before recompiling the code in order
 to update the chart (you need [helm](https://helm.sh/docs/intro/install/) and [helm-docs](https://github.com/norwoodj/helm-docs) installed):

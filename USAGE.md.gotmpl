@@ -6,7 +6,7 @@ Root command:
 {{ .Env.USAGE }}
 ```
 
-The Kubernetes resources created by pv-migrate are sourced from a [Helm chart](helm/pv-migrate).
+The Kubernetes resources created by pv-migrate are sourced from a [Helm chart](internal/helm/pv-migrate).
 
 You can pass raw values to the backing Helm chart
 using the `--helm-*` flags for further customization: container images,
@@ -98,4 +98,4 @@ $ pv-migrate \
 ```
 
 **For further customization on the rendered manifests**
-(custom labels, annotations, etc.), see the [Helm chart values](helm/pv-migrate).
+(custom labels, annotations, etc.), see the [Helm chart values](internal/helm/pv-migrate).

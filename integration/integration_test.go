@@ -32,9 +32,9 @@ import (
 	watchtools "k8s.io/client-go/tools/watch"
 	"k8s.io/utils/env"
 
-	"github.com/utkuozdemir/pv-migrate/app"
-	"github.com/utkuozdemir/pv-migrate/k8s"
-	"github.com/utkuozdemir/pv-migrate/util"
+	"github.com/utkuozdemir/pv-migrate/internal/app"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/util"
 )
 
 const (
@@ -49,8 +49,7 @@ const (
 	longDestPvcName = "dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-" +
 		"dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest-dest"
 
-	migrateCmdline       = "--helm-set rsync.networkPolicy.enabled=true --helm-set sshd.networkPolicy.enabled=true"
-	migrateLegacyCmdline = "migrate " + migrateCmdline
+	migrateCmdline = "--helm-set rsync.networkPolicy.enabled=true --helm-set sshd.networkPolicy.enabled=true"
 )
 
 var (
@@ -87,13 +86,13 @@ func TestIntegration(t *testing.T) {
 
 	t.Run("SameNS", testSameNS)
 	t.Run("CustomRsyncArgs", testCustomRsyncArgs)
-	t.Run("SameNSLbSvc", testSameNSLbSvc)
+	t.Run("SameNSLoadBalancer", testSameNSLoadBalancer)
 	t.Run("NoChown", testNoChown)
 	t.Run("DeleteExtraneousFiles", testDeleteExtraneousFiles)
 	t.Run("MountedError", testMountedError)
 	t.Run("DifferentNS", testDifferentNS)
 	t.Run("FailWithoutNetworkPolicies", testFailWithoutNetworkPolicies)
-	t.Run("LbSvcDestHostOverride", testLbSvcDestHostOverride)
+	t.Run("LoadBalancerDestHostOverride", testLoadBalancerDestHostOverride)
 	t.Run("RSA", testRSA)
 	t.Run("DifferentCluster", testDifferentCluster)
 	t.Run("Local", testLocal)
@@ -114,7 +113,7 @@ func testNodePort(t *testing.T) {
 	require.NoError(t, err)
 
 	// Run the migration using the NodePort strategy specifically
-	cmd := fmt.Sprintf("%s -s nodeport -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s -s nodeport -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	// Verify the data was migrated correctly
@@ -213,8 +212,8 @@ func testNodePortDestHostOverride(t *testing.T) {
 	// Set the destination host override to use our custom service
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
-		"%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s -H %s source dest",
-		migrateLegacyCmdline, customNodePort, ns1, ns2, destHostOverride)
+		"%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s -H %s --source source --dest dest",
+		migrateCmdline, customNodePort, ns1, ns2, destHostOverride)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	// Verify the data was migrated correctly
@@ -251,8 +250,8 @@ func testNodePortCustomPort(t *testing.T) {
 	require.NoError(t, err)
 
 	// Run the migration using the NodePort strategy with a custom port
-	cmd := fmt.Sprintf("%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s source dest",
-		migrateLegacyCmdline, customNodePort, ns1, ns2)
+	cmd := fmt.Sprintf("%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s --source source --dest dest",
+		migrateCmdline, customNodePort, ns1, ns2)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	// Verify the data was migrated correctly
@@ -283,7 +282,7 @@ func testSameNS(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -312,8 +311,8 @@ func testCustomRsyncArgs(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", migrateLegacyCmdline, ns1, ns1))
-	cmdArgs = append(cmdArgs, "--helm-set", "rsync.extraArgs=--partial --inplace --sparse", "source", "dest")
+	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", migrateCmdline, ns1, ns1))
+	cmdArgs = append(cmdArgs, "--helm-set", "rsync.extraArgs=--partial --inplace --sparse", "--source", "source", "--dest", "dest")
 
 	require.NoError(t, runCliAppWithArgs(ctx, cmdArgs...))
 
@@ -335,14 +334,14 @@ func testCustomRsyncArgs(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func testSameNSLbSvc(t *testing.T) {
+func testSameNSLoadBalancer(t *testing.T) {
 	clearDestsOnCleanup(t)
 	ctx := t.Context()
 
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -s lbsvc -i -n %s -N %s --lbsvc-timeout 5m source dest", migrateLegacyCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s -s loadbalancer -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest", migrateCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -370,7 +369,7 @@ func testNoChown(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -o -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s -i -o -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -398,7 +397,7 @@ func testDeleteExtraneousFiles(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s --compress=false -d -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s --no-compress -d -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
@@ -427,7 +426,7 @@ func testMountedError(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns1)
+	cmd := fmt.Sprintf("%s -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns1)
 	err = runCliApp(ctx, cmd)
 	assert.ErrorContains(t, err, "ignore-mounted is not requested")
 }
@@ -479,7 +478,7 @@ func testFailWithoutNetworkPolicies(t *testing.T) {
 		"does the cluster have a CNI that supports them and it is configured to enforce them?")
 }
 
-func testLbSvcDestHostOverride(t *testing.T) {
+func testLoadBalancerDestHostOverride(t *testing.T) {
 	clearDestsOnCleanup(t)
 	ctx := t.Context()
 
@@ -514,7 +513,7 @@ func testLbSvcDestHostOverride(t *testing.T) {
 	// Set the destination host override to use our custom service
 	destHostOverride := svcName + "." + ns1
 	cmd := fmt.Sprintf(
-		"%s -i -n %s -N %s -H %s source dest", migrateLegacyCmdline, ns1, ns2, destHostOverride)
+		"%s -i -n %s -N %s -H %s --source source --dest dest", migrateCmdline, ns1, ns2, destHostOverride)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	// Verify the data was migrated correctly
@@ -545,7 +544,7 @@ func testRSA(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s source dest", migrateLegacyCmdline, ns1, ns2)
+	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s --source source --dest dest", migrateCmdline, ns1, ns2)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
@@ -573,7 +572,7 @@ func testDifferentCluster(t *testing.T) {
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s source dest", migrateLegacyCmdline,
+	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s --source source --dest dest", migrateCmdline,
 		extraClusterKubeconfig, ns1, ns3)
 	require.NoError(t, runCliApp(ctx, cmd))
 
@@ -602,7 +601,7 @@ func testLocal(t *testing.T) {
 	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s source dest", migrateLegacyCmdline,
+	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s --source source --dest dest", migrateCmdline,
 		extraClusterKubeconfig, ns1, ns3)
 	require.NoError(t, runCliApp(ctx, cmd))
 
@@ -631,8 +630,8 @@ func testLongPVCNames(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "long-dest", clearDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -i -n %s -N %s %s %s",
-		migrateLegacyCmdline, ns1, ns1, longSourcePvcName, longDestPvcName)
+	cmd := fmt.Sprintf("%s -i -n %s -N %s --source %s --dest %s",
+		migrateCmdline, ns1, ns1, longSourcePvcName, longDestPvcName)
 	require.NoError(t, runCliApp(ctx, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "long-dest", printDataUIDGIDContentShellCommand)
@@ -674,9 +673,9 @@ func setup(t *testing.T, logger *slog.Logger) {
 		logger.Warn("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
 	}
 
-	ns1 = "pv-migrate-test-1-" + util.RandomHexadecimalString(5)
-	ns2 = "pv-migrate-test-2-" + util.RandomHexadecimalString(5)
-	ns3 = "pv-migrate-test-3-" + util.RandomHexadecimalString(5)
+	ns1 = "pv-migrate-test-1-" + util.RandomString(5)
+	ns2 = "pv-migrate-test-2-" + util.RandomString(5)
+	ns3 = "pv-migrate-test-3-" + util.RandomString(5)
 
 	createNS(t, mainClusterCli, ns1)
 	createNS(t, mainClusterCli, ns2)
@@ -927,7 +926,11 @@ func runCliApp(ctx context.Context, cmd string) error {
 }
 
 func runCliAppWithArgs(ctx context.Context, args ...string) error {
-	cliApp := app.BuildMigrateCmd(ctx, "", "", "", false)
+	cliApp, err := app.BuildMigrateCmd(ctx, "", "", "")
+	if err != nil {
+		return fmt.Errorf("failed to build command: %w", err)
+	}
+
 	cliApp.SetArgs(args)
 
 	if err := cliApp.Execute(); err != nil {
