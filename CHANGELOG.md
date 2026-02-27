@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (2026-02-27)
+## v2.9.9-bedag (2026-02-27)
 
 ### Added
 
