@@ -42,7 +42,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.2
       - name: Install go
-        uses: actions/setup-go@v6.2.0
+        uses: actions/setup-go@v6.3.0
         with:
           go-version-file: go.mod
       - name: Install Task
@@ -64,7 +64,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v7.0.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.14.0
+          version: v2.14.1
           args: build --snapshot --clean --single-target
       - name: Update usage
         run: task update-usage
@@ -76,7 +76,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.2
       - name: Install go
-        uses: actions/setup-go@v6.2.0
+        uses: actions/setup-go@v6.3.0
         with:
           go-version-file: go.mod
       - name: Install helm
@@ -84,7 +84,7 @@ jobs:
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
-          CILIUM_CLI_VERSION: v0.19.1
+          CILIUM_CLI_VERSION: v0.19.2
         run: |
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
