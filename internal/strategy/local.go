@@ -280,13 +280,6 @@ func installLocalOnDest(
 		},
 	}
 
-	valsFile, err := writeHelmValuesToTempFile("", vals)
-	if err != nil {
-		return err
-	}
-
-	defer func() { _ = os.Remove(valsFile) }()
-
 	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
 }
 

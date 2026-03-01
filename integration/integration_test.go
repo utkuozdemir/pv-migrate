@@ -32,6 +32,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/remotecommand"
 	watchtools "k8s.io/client-go/tools/watch"
+	"k8s.io/klog/v2"
 	"k8s.io/utils/env"
 
 	"github.com/utkuozdemir/pv-migrate/internal/app"
@@ -84,6 +85,8 @@ var (
 
 func TestIntegration(t *testing.T) {
 	logger := slogt.New(t)
+	slog.SetDefault(logger)
+	klog.SetSlogLogger(logger)
 
 	setup(t, logger)
 	teardownOnCleanup(t, logger)
@@ -1012,14 +1015,14 @@ func runCliApp(ctx context.Context, t *testing.T, cmd string) error {
 func runCliAppWithArgs(ctx context.Context, t *testing.T, args ...string) error {
 	t.Logf("running command: %s", strings.Join(args, " "))
 
-	cliApp, err := app.BuildMigrateCmd(ctx, "", "", "")
+	cliApp, err := app.BuildMigrateCmd(ctx, "", "", "", slogt.New(t))
 	if err != nil {
 		return fmt.Errorf("failed to build command: %w", err)
 	}
 
 	cliApp.SetArgs(args)
 
-	if err := cliApp.Execute(); err != nil {
+	if err = cliApp.Execute(); err != nil {
 		return fmt.Errorf("failed to execute command: %w", err)
 	}
 
@@ -1072,4 +1075,3 @@ func getImages(t *testing.T) (rsyncImage, sshdImage string) {
 
 	return rsyncImage, sshdImage
 }
-

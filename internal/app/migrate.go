@@ -11,6 +11,7 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"github.com/utkuozdemir/pv-migrate/pvmigrate"
@@ -83,7 +84,7 @@ type Options struct {
 	keyAlgorithm string
 }
 
-func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.Command, error) {
+func BuildMigrateCmd(ctx context.Context, version, commit, date string, logger *slog.Logger) (*cobra.Command, error) {
 	versionStr := fmt.Sprintf("%s (commit: %s) (build date: %s)", version, commit, date)
 	use := fmt.Sprintf(
 		"%s [--%s=<source-ns>] --%s=<source-pvc> [--%s=<dest-ns>] --%s=<dest-pvc>",
@@ -113,7 +114,7 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.
 		Args:    cobra.NoArgs,
 		Version: versionStr,
 		RunE: func(cmd *cobra.Command, _ []string) error { //nolint:contextcheck
-			return runMigration(cmd, &options, writer, isATTY)
+			return runMigration(cmd, &options, writer, isATTY, logger)
 		},
 	}
 
@@ -279,12 +280,15 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	return nil
 }
 
-func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY bool) error {
+func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY bool, logger *slog.Logger) error {
 	ctx := cmd.Context()
 
-	logger, err := buildLogger(options.LogLevel, options.LogFormat, writer, isATTY)
-	if err != nil {
-		return fmt.Errorf("failed to build logger: %w", err)
+	if logger == nil { // no external logger, build the default logger with options and override the globals
+		var err error
+
+		if logger, err = buildLogger(options.LogLevel, options.LogFormat, writer, isATTY); err != nil {
+			return fmt.Errorf("failed to build logger: %w", err)
+		}
 	}
 
 	options.Migration.Strategies = util.ConvertStrings[pvmigrate.Strategy](options.strategies)
@@ -298,7 +302,7 @@ func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY
 		logger.Info("❕ Extraneous files will be deleted from the destination")
 	}
 
-	if err = pvmigrate.Run(ctx, options.Migration); err != nil {
+	if err := pvmigrate.Run(ctx, options.Migration); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
@@ -331,6 +335,7 @@ func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*sl
 
 	slog.SetLogLoggerLevel(level)
 	slog.SetDefault(logger)
+	klog.SetSlogLogger(logger)
 
 	return logger, nil
 }
