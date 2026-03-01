@@ -34,8 +34,14 @@ func (c *Cmd) Build() (string, error) {
 	}
 
 	sshArgs := []string{
-		"ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+		"ssh",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "ConnectTimeout=5",
+		// ServerAliveInterval/CountMax prevent intermediate load balancers and proxies
+		// from dropping idle SSH connections during long file-list-building phases.
+		"-o", "ServerAliveInterval=10",
+		"-o", "ServerAliveCountMax=3",
 	}
 	if c.Port != 0 {
 		sshArgs = append(sshArgs, "-p", strconv.Itoa(c.Port))
