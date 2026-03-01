@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
-	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
@@ -30,8 +30,6 @@ const (
 	loadBalancerStrategy = "loadbalancer"
 	localStrategy        = "local"
 	nodePortStrategy     = "nodeport"
-
-	helmValuesYAMLIndent = 2
 
 	srcMountPath  = "/source"
 	destMountPath = "/dest"
@@ -174,11 +172,11 @@ func initHelmActionConfig(pvcInfo *pvc.Info) (*action.Configuration, error) {
 }
 
 func getMergedHelmValues(
-	helmValuesFile string,
+	baseValues map[string]any,
 	request *migration.Request,
 	logger *slog.Logger,
 ) (map[string]any, error) {
-	// If an image tag is set, inject it as the lowest-priority values
+	// If an image tag is set, inject it as the lowest-priority --set values
 	// so user overrides via --helm-set take precedence.
 	helmValues := request.HelmValues
 	if tag := request.ImageTag; tag != "" {
@@ -189,18 +187,20 @@ func getMergedHelmValues(
 		helmValues = append(imageTagValues, helmValues...)
 	}
 
-	allValuesFiles := append([]string{helmValuesFile}, request.HelmValuesFiles...)
 	valsOptions := values.Options{
+		ValueFiles:   request.HelmValuesFiles,
 		Values:       helmValues,
-		ValueFiles:   allValuesFiles,
 		StringValues: request.HelmStringValues,
 		FileValues:   request.HelmFileValues,
 	}
 
-	mergedValues, err := valsOptions.MergeValues(helmProviders)
+	userValues, err := valsOptions.MergeValues(helmProviders)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge helm values: %w", err)
 	}
+
+	// Merge using Helm's own MergeMaps: user values override base values.
+	merged := loader.MergeMaps(baseValues, userValues)
 
 	if request.ImageTag != "" {
 		logger.Info("🏷️ Using image tag", "tag", request.ImageTag)
@@ -208,7 +208,7 @@ func getMergedHelmValues(
 		logger.Info("🏷️ Using chart default image tags")
 	}
 
-	return mergedValues, nil
+	return merged, nil
 }
 
 func installHelmChart(
@@ -218,17 +218,6 @@ func installHelmChart(
 	values map[string]any,
 	logger *slog.Logger,
 ) error {
-	helmValuesFile, err := writeHelmValuesToTempFile(attempt.ID, values)
-	if err != nil {
-		return fmt.Errorf("failed to write helm values to temp file: %w", err)
-	}
-
-	defer func() {
-		if removeErr := os.Remove(helmValuesFile); removeErr != nil {
-			logger.Warn("🔶 Failed to remove temp helm values file", "error", removeErr)
-		}
-	}()
-
 	helmActionConfig, err := initHelmActionConfig(pvcInfo)
 	if err != nil {
 		return fmt.Errorf("failed to init helm action config: %w", err)
@@ -247,7 +236,7 @@ func installHelmChart(
 		install.Timeout = req.HelmTimeout
 	}
 
-	vals, err := getMergedHelmValues(helmValuesFile, mig.Request, logger)
+	vals, err := getMergedHelmValues(values, mig.Request, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get merged helm values: %w", err)
 	}
@@ -257,23 +246,4 @@ func installHelmChart(
 	}
 
 	return nil
-}
-
-func writeHelmValuesToTempFile(id string, vals map[string]any) (string, error) {
-	file, err := os.CreateTemp("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file for helm values: %w", err)
-	}
-
-	defer func() { _ = file.Close() }()
-
-	encoder := yaml.NewEncoder(file)
-	encoder.SetIndent(helmValuesYAMLIndent)
-
-	err = encoder.Encode(vals)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode helm values: %w", err)
-	}
-
-	return file.Name(), nil
 }
