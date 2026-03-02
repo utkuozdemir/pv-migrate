@@ -148,8 +148,8 @@ func runCmdLocal(
 }
 
 func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
-	srcPath := srcMountPath + "/" + mig.Request.Source.Path
-	destPath := destMountPath + "/" + mig.Request.Dest.Path
+	srcPath := SrcMountPath + "/" + mig.Request.Source.Path
+	destPath := DestMountPath + "/" + mig.Request.Dest.Path
 
 	rsyncCmd := rsync.Cmd{
 		Port:        sshReverseTunnelPort,
@@ -188,12 +188,12 @@ func (r *Local) installLocalReleases(
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
 
-	err = installLocalOnSource(attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, srcMountPath)
+	err = installLocalOnSource(attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, SrcMountPath)
 	if err != nil {
 		return "", "", "", err
 	}
 
-	err = installLocalOnDest(attempt, destReleaseName, publicKey, destMountPath)
+	err = installLocalOnDest(attempt, destReleaseName, publicKey, DestMountPath)
 	if err != nil {
 		return "", "", "", err
 	}

@@ -92,6 +92,39 @@ func Run(ctx context.Context, migration Migration) error {
 	return nil
 }
 
+// RunBatch executes a batch of migrations. When the loadbalancer strategy is
+// in use, transfers sharing a source namespace are optimised to use a single
+// shared sshd pod + LoadBalancer service on the source side and a single
+// rsync job on the destination side (1 sshd <-> 1 rsync per namespace).
+func RunBatch(ctx context.Context, migrations []Migration) error {
+	if len(migrations) == 0 {
+		return nil
+	}
+
+	if len(migrations) == 1 {
+		return Run(ctx, migrations[0])
+	}
+
+	// Apply defaults and convert to internal requests.
+	requests := make([]*migration.Request, 0, len(migrations))
+	var logger *slog.Logger
+
+	for i := range migrations {
+		migrations[i].ApplyDefaults()
+		requests = append(requests, toInternalRequest(&migrations[i]))
+
+		if logger == nil {
+			logger = migrations[i].Logger
+		}
+	}
+
+	if err := migrator.New().RunBatch(ctx, requests, logger); err != nil {
+		return fmt.Errorf("batch migration failed: %w", err)
+	}
+
+	return nil
+}
+
 // ApplyDefaults fills zero-value fields with sensible defaults.
 // A zero-value Migration is fully functional after calling ApplyDefaults.
 func (m *Migration) ApplyDefaults() {
@@ -161,129 +194,5 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		HelmFileValues:        mig.HelmFileValues,
 		HelmStringValues:      mig.HelmStringValues,
 		Writer:                mig.Writer,
-	}
-}
-
-// Transfer defines a single source→dest PVC pair for batch migration.
-type Transfer struct {
-	Source PVC
-	Dest   PVC
-}
-
-// BatchMigration holds all configuration for a batch PVC data migration.
-// In batch mode, transfers that share a source namespace are optimised to
-// reuse a single LoadBalancer endpoint instead of creating one per transfer.
-type BatchMigration struct {
-	Transfers []Transfer
-
-	DeleteExtraneousFiles bool
-	IgnoreMounted         bool
-	NoChown               bool
-	NoCleanup             bool
-	ShowProgressBar       bool
-	SourceMountReadWrite  bool
-	NoCompress            bool
-
-	KeyAlgorithm        KeyAlgorithm
-	Strategies          []Strategy
-	DestHostOverride    string
-	HelmTimeout         time.Duration
-	LoadBalancerTimeout time.Duration
-	HelmValuesFiles     []string
-	HelmValues          []string
-	HelmFileValues      []string
-	HelmStringValues    []string
-
-	Writer io.Writer
-	Logger *slog.Logger
-}
-
-// ApplyDefaults fills zero-value fields with sensible defaults.
-func (b *BatchMigration) ApplyDefaults() {
-	for i := range b.Transfers {
-		if b.Transfers[i].Source.Path == "" {
-			b.Transfers[i].Source.Path = defaultPath
-		}
-
-		if b.Transfers[i].Dest.Path == "" {
-			b.Transfers[i].Dest.Path = defaultPath
-		}
-	}
-
-	if len(b.Strategies) == 0 {
-		b.Strategies = DefaultStrategies
-	}
-
-	if b.KeyAlgorithm == "" {
-		b.KeyAlgorithm = Ed25519
-	}
-
-	if b.HelmTimeout == 0 {
-		b.HelmTimeout = defaultHelmTimeout
-	}
-
-	if b.LoadBalancerTimeout == 0 {
-		b.LoadBalancerTimeout = defaultLoadBalancerTimeout
-	}
-
-	if b.Writer == nil {
-		b.Writer = os.Stderr
-	}
-
-	if b.Logger == nil {
-		b.Logger = slog.New(slog.DiscardHandler)
-	}
-}
-
-// RunBatch executes a batch migration.
-func RunBatch(ctx context.Context, batch BatchMigration) error {
-	batch.ApplyDefaults()
-
-	requests := make([]*migration.Request, 0, len(batch.Transfers))
-	for i := range batch.Transfers {
-		req := toBatchInternalRequest(&batch, &batch.Transfers[i])
-		requests = append(requests, req)
-	}
-
-	if err := migrator.New().RunBatch(ctx, requests, batch.Logger); err != nil {
-		return fmt.Errorf("batch migration failed: %w", err)
-	}
-
-	return nil
-}
-
-func toBatchInternalRequest(batch *BatchMigration, t *Transfer) *migration.Request {
-	return &migration.Request{
-		Source: migration.PVCInfo{
-			KubeconfigPath: t.Source.KubeconfigPath,
-			Context:        t.Source.Context,
-			Namespace:      t.Source.Namespace,
-			Name:           t.Source.Name,
-			Path:           t.Source.Path,
-		},
-		Dest: migration.PVCInfo{
-			KubeconfigPath: t.Dest.KubeconfigPath,
-			Context:        t.Dest.Context,
-			Namespace:      t.Dest.Namespace,
-			Name:           t.Dest.Name,
-			Path:           t.Dest.Path,
-		},
-		DeleteExtraneousFiles: batch.DeleteExtraneousFiles,
-		IgnoreMounted:         batch.IgnoreMounted,
-		NoChown:               batch.NoChown,
-		NoCleanup:             batch.NoCleanup,
-		ShowProgressBar:       batch.ShowProgressBar,
-		SourceMountReadWrite:  batch.SourceMountReadWrite,
-		NoCompress:            batch.NoCompress,
-		KeyAlgorithm:          string(batch.KeyAlgorithm),
-		Strategies:            util.ConvertStrings[string](batch.Strategies),
-		DestHostOverride:      batch.DestHostOverride,
-		HelmTimeout:           batch.HelmTimeout,
-		LoadBalancerTimeout:   batch.LoadBalancerTimeout,
-		HelmValuesFiles:       batch.HelmValuesFiles,
-		HelmValues:            batch.HelmValues,
-		HelmFileValues:        batch.HelmFileValues,
-		HelmStringValues:      batch.HelmStringValues,
-		Writer:                batch.Writer,
 	}
 }

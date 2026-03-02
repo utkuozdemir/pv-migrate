@@ -39,7 +39,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	doneCh := registerCleanupHook(attempt, releaseNames, logger)
 	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installNodePortOnSource(attempt, srcReleaseName, publicKey, srcMountPath)
+	err = installNodePortOnSource(attempt, srcReleaseName, publicKey, SrcMountPath)
 	if err != nil {
 		return fmt.Errorf("failed to install on source: %w", err)
 	}
@@ -81,7 +81,7 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 	}
 
 	err = installOnDestWithNodePort(attempt, destReleaseName, privateKey, privateKeyMountPath,
-		sshTargetHost, nodePort, srcMountPath, destMountPath)
+		sshTargetHost, nodePort, SrcMountPath, DestMountPath)
 	if err != nil {
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}

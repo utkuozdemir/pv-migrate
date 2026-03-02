@@ -82,8 +82,8 @@ func buildHelmVals(
 		sshTargetHost = mig.Request.DestHostOverride
 	}
 
-	srcPath := srcMountPath + "/" + mig.Request.Source.Path
-	destPath := destMountPath + "/" + mig.Request.Dest.Path
+	srcPath := SrcMountPath + "/" + mig.Request.Source.Path
+	destPath := DestMountPath + "/" + mig.Request.Dest.Path
 	rsyncCmd := rsync.Cmd{
 		NoChown:    mig.Request.NoChown,
 		Delete:     mig.Request.DeleteExtraneousFiles,
@@ -109,7 +109,7 @@ func buildHelmVals(
 			"pvcMounts": []map[string]any{
 				{
 					"name":      destInfo.Claim.Name,
-					"mountPath": destMountPath,
+					"mountPath": DestMountPath,
 				},
 			},
 			"command":  rsyncCmdStr,
@@ -122,7 +122,7 @@ func buildHelmVals(
 			"pvcMounts": []map[string]any{
 				{
 					"name":      sourceInfo.Claim.Name,
-					"mountPath": srcMountPath,
+					"mountPath": SrcMountPath,
 					"readOnly":  !mig.Request.SourceMountReadWrite,
 				},
 			},

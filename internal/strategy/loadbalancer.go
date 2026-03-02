@@ -57,7 +57,7 @@ func (r *LoadBalancer) SetupSharedSource(
 	pvcMounts := make([]map[string]any, 0, len(allSourceInfos))
 
 	for _, info := range allSourceInfos {
-		mountPath := srcMountPath + "/" + info.Claim.Name
+		mountPath := SrcMountPath + "/" + info.Claim.Name
 		mountPaths[info.Claim.Name] = mountPath
 		pvcMounts = append(pvcMounts, map[string]any{
 			"name":      info.Claim.Name,
@@ -162,7 +162,7 @@ func (r *LoadBalancer) Run(ctx context.Context, attempt *migration.Attempt, logg
 	doneCh := registerCleanupHook(attempt, releaseNames, logger)
 	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
-	err = installOnSource(attempt, srcReleaseName, publicKey, srcMountPath)
+	err = installOnSource(attempt, srcReleaseName, publicKey, SrcMountPath)
 	if err != nil {
 		return fmt.Errorf("failed to install on source: %w", err)
 	}
@@ -187,7 +187,7 @@ func (r *LoadBalancer) Run(ctx context.Context, attempt *migration.Attempt, logg
 	}
 
 	err = installOnDest(attempt, destReleaseName, privateKey, privateKeyMountPath,
-		sshTargetHost, srcMountPath, destMountPath)
+		sshTargetHost, SrcMountPath, DestMountPath)
 	if err != nil {
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
@@ -237,7 +237,7 @@ func (r *LoadBalancer) runWithSharedSource(
 	}
 
 	err := installOnDest(attempt, destReleaseName, ep.PrivateKey, privateKeyMountPath,
-		sshTargetHost, ep.SrcMountPath, destMountPath)
+		sshTargetHost, ep.SrcMountPath, DestMountPath)
 	if err != nil {
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
@@ -341,4 +341,121 @@ func formatSSHTargetHost(host string) string {
 	}
 
 	return host
+}
+
+// BatchTransferInfo describes a single PVC pair within a batch transfer.
+type BatchTransferInfo struct {
+	// SourceMountPath is the mount path of this source PVC on the shared sshd pod.
+	SourceMountPath string
+	// DestInfo is the PVC info for the destination PVC.
+	DestInfo *pvc.Info
+	// DestMountPath is the mount path for this dest PVC on the batch rsync pod.
+	DestMountPath string
+	// Request is the migration request for this specific PVC pair.
+	Request *migration.Request
+}
+
+// RunBatchTransfer installs a single rsync job that mounts ALL dest PVCs
+// and runs a compound rsync command covering every (src, dest) pair.
+// This achieves the "1 sshd <-> 1 rsync" pattern per namespace.
+func (r *LoadBalancer) RunBatchTransfer(
+	ctx context.Context,
+	attempt *migration.Attempt,
+	sshHost string,
+	privateKey string,
+	keyAlgorithm string,
+	transfers []BatchTransferInfo,
+	logger *slog.Logger,
+) error {
+	if len(transfers) == 0 {
+		return fmt.Errorf("no transfers provided for batch")
+	}
+
+	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
+
+	destReleaseName := attempt.HelmReleaseNamePrefix + "-batch-dest"
+	releaseNames := []string{destReleaseName}
+
+	doneCh := registerCleanupHook(attempt, releaseNames, logger)
+	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
+
+	// Use the first transfer's request as representative for common settings.
+	firstReq := transfers[0].Request
+
+	if firstReq.DestHostOverride != "" {
+		sshHost = firstReq.DestHostOverride
+	}
+
+	// Build compound rsync command for all pairs.
+	batchCmd := rsync.Cmd{
+		NoChown:    firstReq.NoChown,
+		Delete:     firstReq.DeleteExtraneousFiles,
+		SrcUseSSH:  true,
+		SrcSSHHost: sshHost,
+		Compress:   !firstReq.NoCompress,
+	}
+
+	entries := make([]rsync.BatchEntry, 0, len(transfers))
+	for _, t := range transfers {
+		srcPath := t.SourceMountPath + "/" + t.Request.Source.Path
+		destPath := t.DestMountPath + "/" + t.Request.Dest.Path
+		entries = append(entries, rsync.BatchEntry{SrcPath: srcPath, DestPath: destPath})
+	}
+
+	rsyncCmdStr, err := batchCmd.BuildBatch(entries)
+	if err != nil {
+		return fmt.Errorf("failed to build batch rsync command: %w", err)
+	}
+
+	// Build pvcMounts for ALL dest PVCs.
+	pvcMounts := make([]map[string]any, 0, len(transfers))
+	for _, t := range transfers {
+		pvcMounts = append(pvcMounts, map[string]any{
+			"name":      t.DestInfo.Claim.Name,
+			"mountPath": t.DestMountPath,
+		})
+	}
+
+	// Use the first transfer's dest info for Helm install context (namespace, client).
+	firstDestInfo := transfers[0].DestInfo
+
+	vals := map[string]any{
+		"rsync": map[string]any{
+			"enabled":             true,
+			"namespace":           firstDestInfo.Claim.Namespace,
+			"privateKeyMount":     true,
+			"privateKey":          privateKey,
+			"privateKeyMountPath": privateKeyMountPath,
+			"sshRemoteHost":       sshHost,
+			"pvcMounts":           pvcMounts,
+			"command":             rsyncCmdStr,
+			"affinity":            firstDestInfo.AffinityHelmValues,
+		},
+	}
+
+	logger.Info("📦 Installing batch rsync job with all dest PVCs",
+		"release", destReleaseName, "pvc_count", len(transfers))
+
+	if err := installHelmChart(attempt, firstDestInfo, destReleaseName, vals); err != nil {
+		return fmt.Errorf("failed to install batch rsync: %w", err)
+	}
+
+	// Wait for the job to finish.
+	showProgressBar := firstReq.ShowProgressBar
+	kubeClient := firstDestInfo.ClusterClient.KubeClient
+	jobName := destReleaseName + "-rsync"
+
+	if err := k8s.WaitForJobCompletion(
+		ctx,
+		kubeClient,
+		firstDestInfo.Claim.Namespace,
+		jobName,
+		showProgressBar,
+		firstReq.Writer,
+		logger,
+	); err != nil {
+		return fmt.Errorf("failed to wait for batch rsync job completion: %w", err)
+	}
+
+	return nil
 }

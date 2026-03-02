@@ -305,7 +305,8 @@ func (m *Migrator) runIndividual(ctx context.Context, requests []*migration.Requ
 }
 
 // runBatchLB runs a group of transfers that share a source namespace using a
-// single shared LoadBalancer source endpoint.
+// single shared LoadBalancer source endpoint and a single batch dest rsync job.
+// This achieves: 1 sshd pod (all source PVCs) <-> 1 rsync job (all dest PVCs).
 func (m *Migrator) runBatchLB(
 	ctx context.Context,
 	lbStrat *strategy.LoadBalancer,
@@ -353,45 +354,42 @@ func (m *Migrator) runBatchLB(
 		}
 	}()
 
-	// Run individual transfers against the shared source endpoint.
-	for i, t := range transfers {
-		transferID := fmt.Sprintf("%s-%d", sessionID, i)
-
-		transferLogger := logger.With(
-			"transfer", fmt.Sprintf("%d/%d", i+1, len(transfers)),
-			"source_pvc", t.migration.SourceInfo.Claim.Name,
-			"dest_pvc", t.migration.DestInfo.Claim.Name,
-		)
-
-		transferLogger.Info("🚁 Running transfer")
-
+	// Build batch transfer infos for the single rsync job.
+	batchTransfers := make([]strategy.BatchTransferInfo, 0, len(transfers))
+	for _, t := range transfers {
 		srcMountPath, ok := shared.MountPaths[t.migration.SourceInfo.Claim.Name]
 		if !ok {
 			return fmt.Errorf("internal error: no mount path for source PVC %s",
 				t.migration.SourceInfo.Claim.Name)
 		}
 
-		attempt := &migration.Attempt{
-			ID:                    transferID,
-			HelmReleaseNamePrefix: "pv-migrate-" + transferID,
-			Migration:             t.migration,
-			SourceEndpoint: &migration.SourceEndpoint{
-				Address:      shared.Address,
-				ReleaseName:  shared.ReleaseName,
-				SrcMountPath: srcMountPath,
-				PrivateKey:   shared.PrivateKey,
-				KeyAlgorithm: shared.KeyAlgorithm,
-			},
-		}
-
-		if runErr := lbStrat.Run(ctx, attempt, transferLogger); runErr != nil {
-			return fmt.Errorf("transfer %d failed (%s → %s): %w",
-				i+1, t.migration.SourceInfo.Claim.Name,
-				t.migration.DestInfo.Claim.Name, runErr)
-		}
-
-		transferLogger.Info("✅ Transfer succeeded")
+		destMP := strategy.DestMountPath + "/" + t.migration.DestInfo.Claim.Name
+		batchTransfers = append(batchTransfers, strategy.BatchTransferInfo{
+			SourceMountPath: srcMountPath,
+			DestInfo:        t.migration.DestInfo,
+			DestMountPath:   destMP,
+			Request:         t.request,
+		})
 	}
+
+	// Create a synthetic attempt for the batch dest rsync job.
+	destAttempt := &migration.Attempt{
+		ID:                    sessionID,
+		HelmReleaseNamePrefix: "pv-migrate-" + sessionID,
+		Migration:             firstMig,
+	}
+
+	logger.Info("🚁 Running batch transfer (1 sshd ↔ 1 rsync)",
+		"source_pvcs", len(transfers), "dest_pvcs", len(transfers))
+
+	if err := lbStrat.RunBatchTransfer(
+		ctx, destAttempt, shared.Address, shared.PrivateKey,
+		shared.KeyAlgorithm, batchTransfers, logger,
+	); err != nil {
+		return fmt.Errorf("batch transfer failed: %w", err)
+	}
+
+	logger.Info("✅ Batch transfer succeeded", "transfers", len(transfers))
 
 	return nil
 }

@@ -33,8 +33,8 @@ const (
 
 	helmValuesYAMLIndent = 2
 
-	srcMountPath  = "/source"
-	destMountPath = "/dest"
+	SrcMountPath  = "/source"
+	DestMountPath = "/dest"
 )
 
 var (
