@@ -1,12 +1,11 @@
 # Changelog
 
-## v2.9.9-bedag (2026-02-27)
+## v2.9.9-bedag (2026-03-03)
 
 ### Added
 
-- **Batch migration mode (`--transfers-file`)**
-  A new `--transfers-file` flag accepts a YAML file listing multiple source→dest
-  PVC pairs. When used with the `lbsvc`/`loadbalancer` strategy, all PVCs within
+- **Batch migration mode**
+ When used with the `lbsvc`/`loadbalancer` strategy, all PVCs within
   the same source namespace are mounted into a **single** sshd pod behind a
   **single** LoadBalancer service. Rsync jobs then run sequentially against that
   shared endpoint.
@@ -15,16 +14,11 @@
   `lbsvc` is now accepted as an alias for `loadbalancer`, preserving
   compatibility with existing wrapper scripts.
 
-- **Public Go API for batch migrations**
-  `pvmigrate.RunBatch()` and the `pvmigrate.BatchMigration` / `pvmigrate.Transfer`
-  types allow programmatic batch usage.
-
-### Fixed
+### Known Bugs
 
 - **Spurious "Failed to watch" log during cleanup**
-  The Kubernetes service watcher now uses a detached context so that parent
-  context cancellation during cleanup no longer causes the client-go reflector
-  to emit noisy error-level log lines.
+
+This occurrs during the cleanup phase and is a harmless warning.
 
 ---
 
