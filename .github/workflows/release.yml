@@ -46,7 +46,7 @@ jobs:
           PRIVATE_ACCESS_TOKEN: ${{ secrets.PRIVATE_ACCESS_TOKEN }}
       - name: Update new version in krew-index
         if: ${{ !contains(github.ref_name, '-') }}
-        uses: rajatjindal/krew-release-bot@v0.0.50
+        uses: rajatjindal/krew-release-bot@v0.0.51
 
   release-images:
     runs-on: ubuntu-24.04
