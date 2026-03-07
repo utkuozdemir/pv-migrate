@@ -58,17 +58,32 @@ checksum:
 
 changelog:
   sort: asc
+  groups:
+    - title: "New Features"
+      regexp: '^feat(\(.+\))?:'
+      order: 0
+    - title: "Bug Fixes"
+      regexp: '^fix(\(.+\))?:'
+      order: 1
+    - title: "Performance Improvements"
+      regexp: '^perf(\(.+\))?:'
+      order: 2
+    - title: "Documentation"
+      regexp: '^docs(\(.+\))?:'
+      order: 3
+    - title: "Refactors & Internal Changes"
+      regexp: '^refactor(\(.+\))?:'
+      order: 4
+    - title: "Dependency Updates"
+      regexp: '^chore\(deps\):'
+      order: 5
+    - title: "Build, CI & Chores"
+      regexp: '^(build|ci|cd|cicd|docker|test|chore)(\(.+\))?:'
+      order: 6
+    - title: "Other Changes"
+      order: 999
   filters:
     exclude:
-      - '^build(\(.+\))?:'
-      - '^chore(\(.+\))?:'
-      - '^cd(\(.+\))?:'
-      - '^ci(\(.+\))?:'
-      - '^cicd(\(.+\))?:'
-      - '^docker(\(.+\))?:'
-      - '^docs(\(.+\))?:'
-      - '^refactor(\(.+\))?:'
-      - '^test(\(.+\))?:'
       - Merge pull request
       - Merge branch
       - go mod tidy
