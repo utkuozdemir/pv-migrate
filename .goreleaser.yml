@@ -56,6 +56,10 @@ checksum:
   name_template: checksums.txt
   algorithm: sha256
 
+git:
+  ignore_tags: # skip prereleases (alpha, beta, rc) on finding previous commit to generate the changelog
+    - "*-*"
+
 changelog:
   sort: asc
   groups:
