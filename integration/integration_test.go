@@ -80,7 +80,7 @@ var (
 		"cat /volume/restricted_dir/hidden.txt"
 
 	clearRestrictedDataShellCommand = "rm -f /volume/root_only.txt && rm -rf /volume/restricted_dir"
-	generateExtraDataShellCommand = fmt.Sprintf("echo -n %s > %s",
+	generateExtraDataShellCommand   = fmt.Sprintf("echo -n %s > %s",
 		generateDataContent, extraDataFilePath)
 	printDataUIDGIDContentShellCommand = fmt.Sprintf(
 		"stat -c '%%u' %s && stat -c '%%g' %s && cat %s",
@@ -336,7 +336,15 @@ func testCustomRsyncArgs(t *testing.T) {
 	require.NoError(t, err)
 
 	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", defaultHelmArgs(t), ns1, ns1))
-	cmdArgs = append(cmdArgs, "--helm-set", "rsync.extraArgs=--partial --inplace --sparse", "--source", "source", "--dest", "dest")
+	cmdArgs = append(
+		cmdArgs,
+		"--helm-set",
+		"rsync.extraArgs=--partial --inplace --sparse",
+		"--source",
+		"source",
+		"--dest",
+		"dest",
+	)
 
 	require.NoError(t, runCliAppWithArgs(ctx, t, cmdArgs...))
 
@@ -365,7 +373,12 @@ func testSameNSLoadBalancer(t *testing.T) {
 	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
-	cmd := fmt.Sprintf("%s -s loadbalancer -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
+	cmd := fmt.Sprintf(
+		"%s -s loadbalancer -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest",
+		defaultHelmArgs(t),
+		ns1,
+		ns1,
+	)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)

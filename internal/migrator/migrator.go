@@ -94,7 +94,7 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 func (m *Migrator) buildMigration(ctx context.Context, request *migration.Request,
 	logger *slog.Logger,
 ) (*migration.Migration, error) {
-	chart, err := helm.LoadChart()
+	chart, err := helm.LoadChart(request.ChartVersion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load helm chart: %w", err)
 	}
