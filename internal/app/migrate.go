@@ -17,16 +17,33 @@ import (
 	"github.com/utkuozdemir/pv-migrate/pvmigrate"
 )
 
+// isReleaseVersion reports whether version looks like a real GoReleaser release
+// (e.g. "2.3.0", "2.3.0-rc.1") as opposed to a dev or snapshot build.
+func isReleaseVersion(version string) bool {
+	return version != "" && !strings.Contains(version, "SNAPSHOT") && !strings.Contains(version, "dev")
+}
+
 // releaseImageTag returns the version as an image tag suitable for Docker images.
 // GoReleaser sets version without the "v" prefix (e.g. "2.3.0", "2.3.0-rc.1",
 // "2.2.1-SNAPSHOT-43a0f03"), while local builds default to "dev".
 // Returns empty string for dev and snapshot builds.
 func releaseImageTag(version string) string {
-	if version == "" || strings.Contains(version, "SNAPSHOT") || strings.Contains(version, "dev") {
+	if !isReleaseVersion(version) {
 		return ""
 	}
 
 	return "v" + version
+}
+
+// releaseChartVersion returns the version for the embedded Helm chart metadata.
+// Returns empty string for dev and snapshot builds, letting the chart's built-in
+// version (0.0.0) remain unchanged.
+func releaseChartVersion(version string) string {
+	if !isReleaseVersion(version) {
+		return ""
+	}
+
+	return version
 }
 
 const (
@@ -99,6 +116,7 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string, logger *
 	var migration pvmigrate.Migration
 
 	migration.ImageTag = releaseImageTag(version)
+	migration.ChartVersion = releaseChartVersion(version)
 	migration.ApplyDefaults()
 	migration.ShowProgressBar = isATTY
 

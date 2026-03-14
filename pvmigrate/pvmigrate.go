@@ -65,6 +65,11 @@ type Migration struct {
 	// Leave empty to use the chart's default (latest).
 	ImageTag string
 
+	// ChartVersion overrides the version and appVersion fields in the embedded
+	// Helm chart metadata. When non-empty, this version is visible in helm list
+	// output. Leave empty to use the chart's built-in version.
+	ChartVersion string
+
 	Source PVC
 	Dest   PVC
 
@@ -151,7 +156,8 @@ func (m *Migration) ApplyDefaults() {
 
 func toInternalRequest(mig *Migration) *migration.Request {
 	return &migration.Request{
-		ImageTag: mig.ImageTag,
+		ImageTag:     mig.ImageTag,
+		ChartVersion: mig.ChartVersion,
 		Source: migration.PVCInfo{
 			KubeconfigPath: mig.Source.KubeconfigPath,
 			Context:        mig.Source.Context,

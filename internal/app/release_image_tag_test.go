@@ -40,3 +40,25 @@ func TestReleaseImageTag(t *testing.T) {
 		})
 	}
 }
+
+func TestReleaseChartVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		version  string
+		expected string
+	}{
+		{"2.3.0", "2.3.0"},
+		{"2.3.0-rc.1", "2.3.0-rc.1"},
+		{"2.2.1-SNAPSHOT-43a0f03", ""},
+		{"dev", ""},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.version, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, releaseChartVersion(tt.version))
+		})
+	}
+}

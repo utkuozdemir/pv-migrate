@@ -8,7 +8,9 @@ tasks:
         sh: head -n 1 go.mod | cut -d' ' -f2
     cmds:
       - go mod tidy
+      - go fix ./...
       - golangci-lint run --fix ./...
+      - golangci-lint fmt ./...
       - shfmt -l -i 2 -ci -sr -w .
 
   lint:

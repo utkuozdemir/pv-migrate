@@ -12,11 +12,21 @@ import (
 func TestLoadChart(t *testing.T) {
 	t.Parallel()
 
-	chart, err := helm.LoadChart()
+	chart, err := helm.LoadChart("")
 	require.NoError(t, err)
 
 	assert.Equal(t, "pv-migrate", chart.Metadata.Name)
 	assert.NotEmpty(t, chart.Metadata.Version, "chart version should not be empty")
 	assert.NotEmpty(t, chart.Values, "chart values should not be empty")
 	assert.NotEmpty(t, chart.Templates, "chart templates should not be empty")
+}
+
+func TestLoadChartVersionOverride(t *testing.T) {
+	t.Parallel()
+
+	chart, err := helm.LoadChart("1.2.3")
+	require.NoError(t, err)
+
+	assert.Equal(t, "1.2.3", chart.Metadata.Version)
+	assert.Equal(t, "1.2.3", chart.Metadata.AppVersion)
 }
