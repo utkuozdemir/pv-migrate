@@ -28,6 +28,7 @@ type Request struct {
 	ShowProgressBar       bool
 	SourceMountReadWrite  bool
 	KeyAlgorithm          string
+	SSHReverseTunnelPort  int
 	HelmTimeout           time.Duration
 	HelmValuesFiles       []string
 	HelmValues            []string

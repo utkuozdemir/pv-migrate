@@ -58,6 +58,7 @@ const (
 	FlagSourceMountReadWrite      = "source-mount-read-write"
 	FlagStrategies                = "strategies"
 	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
+	FlagSSHReverseTunnelPort      = "ssh-reverse-tunnel-port"
 	FlagNoCompress                = "no-compress"
 
 	FlagHelmTimeout   = "helm-timeout"
@@ -250,6 +251,11 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	)
 	flags.StringVarP(&options.keyAlgorithm, FlagSSHKeyAlgorithm, "a", options.keyAlgorithm,
 		"SSH key algorithm, one of "+strings.Join(util.ConvertStrings[string](pvmigrate.KeyAlgorithms), ", "))
+	flags.IntVar(&migration.SSHReverseTunnelPort, FlagSSHReverseTunnelPort, migration.SSHReverseTunnelPort,
+		fmt.Sprintf(
+			"Port opened on the source pod's loopback for the SSH reverse tunnel. Only used by the %s strategy",
+			pvmigrate.Local,
+		))
 	flags.StringVarP(&migration.DestHostOverride, FlagDestHostOverride, "H", migration.DestHostOverride,
 		"Override for the rsync destination host over SSH. "+
 			"By default, determined by the strategy. "+
