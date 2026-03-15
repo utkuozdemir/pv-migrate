@@ -36,6 +36,10 @@ const (
 	defaultHelmTimeout         = 1 * time.Minute
 	defaultLoadBalancerTimeout = 2 * time.Minute
 	defaultPath                = "/"
+	// DefaultSSHReverseTunnelPort is the default port opened on the source pod's loopback
+	// interface for the SSH reverse tunnel. Chosen below the IANA ephemeral range (49152–65535)
+	// and below the typical Linux ephemeral range (32768–60999) to minimise collision risk.
+	DefaultSSHReverseTunnelPort = 22000
 )
 
 var (
@@ -72,15 +76,16 @@ type Migration struct {
 	SourceMountReadWrite  bool
 	NoCompress            bool
 
-	KeyAlgorithm        KeyAlgorithm
-	Strategies          []Strategy
-	DestHostOverride    string
-	HelmTimeout         time.Duration
-	LoadBalancerTimeout time.Duration
-	HelmValuesFiles     []string
-	HelmValues          []string
-	HelmFileValues      []string
-	HelmStringValues    []string
+	KeyAlgorithm         KeyAlgorithm
+	SSHReverseTunnelPort int
+	Strategies           []Strategy
+	DestHostOverride     string
+	HelmTimeout          time.Duration
+	LoadBalancerTimeout  time.Duration
+	HelmValuesFiles      []string
+	HelmValues           []string
+	HelmFileValues       []string
+	HelmStringValues     []string
 
 	Writer io.Writer
 	Logger *slog.Logger
@@ -89,6 +94,11 @@ type Migration struct {
 // Run executes the migration.
 func Run(ctx context.Context, migration Migration) error {
 	migration.ApplyDefaults()
+
+	if p := migration.SSHReverseTunnelPort; p < 1 || p > 65535 {
+		return fmt.Errorf("invalid ssh-reverse-tunnel-port %d: must be between 1 and 65535", p)
+	}
+
 	req := toInternalRequest(&migration)
 
 	if err := migrator.New().Run(ctx, req, migration.Logger); err != nil {
@@ -115,6 +125,10 @@ func (m *Migration) ApplyDefaults() {
 
 	if m.KeyAlgorithm == "" {
 		m.KeyAlgorithm = Ed25519
+	}
+
+	if m.SSHReverseTunnelPort == 0 {
+		m.SSHReverseTunnelPort = DefaultSSHReverseTunnelPort
 	}
 
 	if m.HelmTimeout == 0 {
@@ -159,6 +173,7 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		SourceMountReadWrite:  mig.SourceMountReadWrite,
 		NoCompress:            mig.NoCompress,
 		KeyAlgorithm:          string(mig.KeyAlgorithm),
+		SSHReverseTunnelPort:  mig.SSHReverseTunnelPort,
 		Strategies:            util.ConvertStrings[string](mig.Strategies),
 		DestHostOverride:      mig.DestHostOverride,
 		HelmTimeout:           mig.HelmTimeout,

@@ -184,7 +184,9 @@ func getMergedHelmValues(
 			"rsync.image.tag=" + tag,
 			"sshd.image.tag=" + tag,
 		}
-		helmValues = append(imageTagValues, helmValues...)
+		merged := make([]string, 0, len(imageTagValues)+len(helmValues))
+		merged = append(merged, imageTagValues...)
+		helmValues = append(merged, helmValues...)
 	}
 
 	valsOptions := values.Options{
