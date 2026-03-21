@@ -46,7 +46,7 @@ jobs:
         uses: arduino/setup-task@v2.0.0
         with:
           # renovate: depName=go-task/task datasource=github-releases
-          version: 3.48.0
+          version: 3.49.1
       - name: Tidy go.mod
         run: go mod tidy
       - name: Run linters
@@ -61,7 +61,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v7.0.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.14.1
+          version: v2.14.3
           args: build --snapshot --clean --single-target
       - name: Update usage
         run: task update-usage
@@ -215,7 +215,7 @@ jobs:
           SSHD_IMAGE: integration-test-sshd:${{ steps.vars.outputs.sha }}
         run: go test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
       - name: Send coverage
-        uses: codecov/codecov-action@v5.5.2
+        uses: codecov/codecov-action@v5.5.3
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
