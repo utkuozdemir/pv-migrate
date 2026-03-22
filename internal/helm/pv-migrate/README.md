@@ -29,7 +29,7 @@ The helm chart of pv-migrate
 | rsync.extraArgs | string | `""` | Extra args to be appended to the rsync command. Setting this might cause the tool to not function properly. |
 | rsync.image.pullPolicy | string | `"IfNotPresent"` | Rsync image pull policy |
 | rsync.image.repository | string | `"docker.io/utkuozdemir/pv-migrate-rsync"` | Rsync image repository |
-| rsync.image.tag | string | `"1.0.0"` | Rsync image tag |
+| rsync.image.tag | string | `"latest"` | Rsync image tag (overridden at runtime by pv-migrate to match the CLI version) |
 | rsync.imagePullSecrets | list | `[]` | Rsync image pull secrets |
 | rsync.jobAnnotations | object | `{}` | Rsync job annotations |
 | rsync.jobLabels | object | `{}` | Rsync job labels |
@@ -54,12 +54,13 @@ The helm chart of pv-migrate
 | rsync.serviceAccount.name | string | `""` | Rsync service account name to use |
 | rsync.tolerations | list | see [values.yaml](values.yaml) | Rsync pod tolerations |
 | sshd.affinity | object | `{}` | SSHD pod affinity |
+| sshd.containerPort | int | `22` | SSHD container port (the port sshd listens on inside the container) |
 | sshd.deploymentAnnotations | object | `{}` | SSHD deployment annotations |
 | sshd.deploymentLabels | object | `{}` | SSHD deployment labels |
 | sshd.enabled | bool | `false` | Enable SSHD server deployment |
 | sshd.image.pullPolicy | string | `"IfNotPresent"` | SSHD image pull policy |
 | sshd.image.repository | string | `"docker.io/utkuozdemir/pv-migrate-sshd"` | SSHD image repository |
-| sshd.image.tag | string | `"1.1.0"` | SSHD image tag |
+| sshd.image.tag | string | `"latest"` | SSHD image tag (overridden at runtime by pv-migrate to match the CLI version) |
 | sshd.imagePullSecrets | list | `[]` | SSHD image pull secrets |
 | sshd.namespace | string | `""` | Namespace to run SSHD pod in |
 | sshd.networkPolicy.enabled | bool | `false` | Enable SSHD network policy |
@@ -78,6 +79,7 @@ The helm chart of pv-migrate
 | sshd.resources | object | `{}` | SSHD pod resources |
 | sshd.securityContext | object | `{"capabilities":{"add":["SYS_CHROOT"]}}` | SSHD deployment security context |
 | sshd.service.annotations | object | `{}` | SSHD service annotations |
+| sshd.service.loadBalancerClass | string | `""` | SSHD service load balancer class |
 | sshd.service.loadBalancerIP | string | `""` | SSHD service load balancer IP |
 | sshd.service.nodePort | string | `nil` | SSHD service node port (only used when type is NodePort) |
 | sshd.service.port | int | `22` | SSHD service port |

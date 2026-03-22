@@ -146,11 +146,13 @@ func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateK
 	destPath := destMountPath + "/" + mig.Request.Dest.Path
 	rsyncCmd := rsync.Cmd{
 		NoChown:    mig.Request.NoChown,
+		NonRoot:    mig.Request.NonRoot,
 		Delete:     mig.Request.DeleteExtraneousFiles,
 		SrcPath:    srcPath,
 		DestPath:   destPath,
 		SrcUseSSH:  true,
 		SrcSSHHost: sshHost,
+		SrcSSHUser: sshUser(mig.Request),
 		Port:       sshPort,
 		Compress:   !mig.Request.NoCompress,
 	}

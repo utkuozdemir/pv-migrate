@@ -86,11 +86,13 @@ func buildHelmVals(
 	destPath := destMountPath + "/" + mig.Request.Dest.Path
 	rsyncCmd := rsync.Cmd{
 		NoChown:    mig.Request.NoChown,
+		NonRoot:    mig.Request.NonRoot,
 		Delete:     mig.Request.DeleteExtraneousFiles,
 		SrcPath:    srcPath,
 		DestPath:   destPath,
 		SrcUseSSH:  true,
 		SrcSSHHost: sshTargetHost,
+		SrcSSHUser: sshUser(mig.Request),
 		Compress:   !mig.Request.NoCompress,
 	}
 

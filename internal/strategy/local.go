@@ -21,10 +21,7 @@ import (
 	internalssh "github.com/utkuozdemir/pv-migrate/internal/ssh"
 )
 
-const (
-	portForwardTimeout = 30 * time.Second
-	localSSHPort       = 22
-)
+const portForwardTimeout = 30 * time.Second
 
 type Local struct{}
 
@@ -76,7 +73,7 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 		return fmt.Errorf("failed to get dest sshd pod: %w", err)
 	}
 
-	return runLocalMigration(ctx, attempt, mig, privateKey, srcPod, destPod, logger)
+	return runLocalMigration(ctx, attempt, mig, privateKey, srcPod, destPod, sshPort(mig.Request), logger)
 }
 
 func runLocalMigration(
@@ -85,6 +82,7 @@ func runLocalMigration(
 	mig *migration.Migration,
 	privateKey string,
 	srcPod, destPod *corev1.Pod,
+	containerSSHPort int,
 	logger *slog.Logger,
 ) error {
 	// Size-1 buffers so the port-notifier goroutine inside PortForward can send
@@ -107,7 +105,7 @@ func runLocalMigration(
 			RestConfig:   mig.SourceInfo.ClusterClient.RestConfig,
 			PodNs:        srcPod.Namespace,
 			PodName:      srcPod.Name,
-			PodPort:      localSSHPort,
+			PodPort:      containerSSHPort,
 			ActualPortCh: srcPortCh,
 		}, logger)
 	})
@@ -117,7 +115,7 @@ func runLocalMigration(
 			RestConfig:   mig.DestInfo.ClusterClient.RestConfig,
 			PodNs:        destPod.Namespace,
 			PodName:      destPod.Name,
-			PodPort:      localSSHPort,
+			PodPort:      containerSSHPort,
 			ActualPortCh: destPortCh,
 		}, logger)
 	})
@@ -179,7 +177,7 @@ func runRsyncOverSSH(
 	}
 
 	sshConfig := &gossh.ClientConfig{
-		User:            "root",
+		User:            sshUser(attempt.Migration.Request),
 		Auth:            []gossh.AuthMethod{gossh.PublicKeys(signer)},
 		HostKeyCallback: gossh.InsecureIgnoreHostKey(), //nolint:gosec
 	}
@@ -353,11 +351,13 @@ func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
 	rsyncCmd := rsync.Cmd{
 		Port:        mig.Request.SSHReverseTunnelPort,
 		NoChown:     mig.Request.NoChown,
+		NonRoot:     mig.Request.NonRoot,
 		Delete:      mig.Request.DeleteExtraneousFiles,
 		SrcPath:     srcPath,
 		DestPath:    destPath,
 		DestUseSSH:  true,
 		DestSSHHost: "localhost",
+		DestSSHUser: sshUser(mig.Request),
 		Compress:    !mig.Request.NoCompress,
 	}
 

@@ -60,6 +60,7 @@ const (
 	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
 	FlagSSHReverseTunnelPort      = "ssh-reverse-tunnel-port"
 	FlagNoCompress                = "no-compress"
+	FlagNonRoot                   = "non-root"
 
 	FlagHelmTimeout   = "helm-timeout"
 	FlagHelmValues    = "helm-values"
@@ -271,6 +272,10 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	)
 	flags.BoolVar(&migration.NoCompress, FlagNoCompress, migration.NoCompress,
 		"Do not compress data during migration (disables rsync -z)")
+	flags.BoolVar(&migration.NonRoot, FlagNonRoot, migration.NonRoot,
+		"Run containers as non-root (removes SYS_CHROOT; required for restricted PodSecurity clusters). "+
+			"Skips ownership and directory timestamp preservation (--no-o --no-g --omit-dir-times). "+
+			"Migration will fail if the source PVC contains files not readable by the non-root user")
 
 	flags.DurationVarP(&migration.HelmTimeout, FlagHelmTimeout, "t", migration.HelmTimeout,
 		"Helm install/uninstall timeout")

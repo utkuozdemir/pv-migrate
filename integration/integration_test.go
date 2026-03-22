@@ -65,6 +65,21 @@ var (
 
 	generateDataShellCommand = fmt.Sprintf("echo -n %s > %s && chown %s:%s %s",
 		generateDataContent, dataFilePath, dataFileUID, dataFileGID, dataFilePath)
+
+	// generateRestrictedDataShellCommand creates root-owned files with permissions
+	// that are inaccessible to non-root rsync but work fine as root:
+	// - file with mode 0600 (unreadable by non-root even with fsGroup)
+	// - directory with mode 0700 containing a file (untraversable by non-root)
+	generateRestrictedDataShellCommand = "echo -n PRIVATE > /volume/root_only.txt && " +
+		"chmod 0600 /volume/root_only.txt && " +
+		"mkdir -p /volume/restricted_dir && " +
+		"echo -n SECRET > /volume/restricted_dir/hidden.txt && " +
+		"chmod 0700 /volume/restricted_dir"
+
+	checkRestrictedDataShellCommand = "cat /volume/root_only.txt && " +
+		"cat /volume/restricted_dir/hidden.txt"
+
+	clearRestrictedDataShellCommand = "rm -f /volume/root_only.txt && rm -rf /volume/restricted_dir"
 	generateExtraDataShellCommand = fmt.Sprintf("echo -n %s > %s",
 		generateDataContent, extraDataFilePath)
 	printDataUIDGIDContentShellCommand = fmt.Sprintf(
@@ -108,6 +123,8 @@ func TestIntegration(t *testing.T) {
 	t.Run("NodePortDifferentNS", testNodePortDifferentNS)
 	t.Run("NodePortDestHostOverride", testNodePortDestHostOverride)
 	t.Run("NodePortCustomPort", testNodePortCustomPort)
+	t.Run("NonRoot", testNonRoot)
+	t.Run("NonRootFailOnRestrictedFiles", testNonRootFailOnRestrictedFiles)
 }
 
 // testNodePort tests the NodePort strategy in the same namespace
@@ -442,7 +459,18 @@ func testDifferentNS(t *testing.T) {
 	clearDestsOnCleanup(t)
 	ctx := t.Context()
 
-	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(ctx, mainClusterCli, ns1, "source", generateRestrictedDataShellCommand)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		_, err := execInPod(cleanupCtx, mainClusterCli, ns1, "source", clearRestrictedDataShellCommand)
+		require.NoError(t, err)
+	})
+
+	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	podWatchCancel := startPodWatches(t)
@@ -472,8 +500,60 @@ func testDifferentNS(t *testing.T) {
 	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
+	// Verify restricted files were migrated (root can read everything)
+	stdout, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkRestrictedDataShellCommand)
+	require.NoError(t, err)
+	assert.Equal(t, "PRIVATESECRET", stdout)
+
 	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
+}
+
+func testNonRoot(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf(
+		"%s --non-root -i -n %s -N %s --source source --dest dest",
+		defaultHelmArgs(t),
+		ns1,
+		ns2,
+	)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", "cat /volume/file.txt")
+	require.NoError(t, err)
+	assert.Equal(t, generateDataContent, stdout)
+
+	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+func testNonRootFailOnRestrictedFiles(t *testing.T) {
+	clearDestsOnCleanup(t)
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, mainClusterCli, ns1, "source", generateRestrictedDataShellCommand)
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		_, err := execInPod(cleanupCtx, mainClusterCli, ns1, "source", clearRestrictedDataShellCommand)
+		require.NoError(t, err)
+	})
+
+	cmd := fmt.Sprintf(
+		"%s --non-root -i -n %s -N %s --source source --dest dest",
+		defaultHelmArgs(t),
+		ns1,
+		ns2,
+	)
+	require.Error(t, runCliApp(ctx, t, cmd))
 }
 
 func startPodWatches(t *testing.T) (cancelFunc func() []*corev1.Pod) {
