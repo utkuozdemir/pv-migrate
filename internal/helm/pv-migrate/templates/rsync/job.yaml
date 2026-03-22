@@ -44,6 +44,7 @@ spec:
             - -c
             - |
               set -x
+              export HOME=$(awk -F: -v uid="$(id -u)" '$3==uid{print $6}' /etc/passwd)
               n=0
               rc=1
               retries={{ .Values.rsync.maxRetries }}

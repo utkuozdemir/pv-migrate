@@ -75,6 +75,7 @@ type Migration struct {
 	ShowProgressBar       bool
 	SourceMountReadWrite  bool
 	NoCompress            bool
+	NonRoot               bool
 
 	KeyAlgorithm         KeyAlgorithm
 	SSHReverseTunnelPort int
@@ -172,6 +173,7 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		ShowProgressBar:       mig.ShowProgressBar,
 		SourceMountReadWrite:  mig.SourceMountReadWrite,
 		NoCompress:            mig.NoCompress,
+		NonRoot:               mig.NonRoot,
 		KeyAlgorithm:          string(mig.KeyAlgorithm),
 		SSHReverseTunnelPort:  mig.SSHReverseTunnelPort,
 		Strategies:            util.ConvertStrings[string](mig.Strategies),

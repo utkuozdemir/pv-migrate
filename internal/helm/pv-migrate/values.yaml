@@ -11,7 +11,7 @@ sshd:
     repository: docker.io/utkuozdemir/pv-migrate-sshd
     # -- SSHD image pull policy
     pullPolicy: IfNotPresent
-    # -- SSHD image tag
+    # -- SSHD image tag (overridden at runtime by pv-migrate to match the CLI version)
     tag: latest
   # -- SSHD image pull secrets
   imagePullSecrets: []
@@ -33,6 +33,8 @@ sshd:
     capabilities:
       add:
       - SYS_CHROOT
+  # -- SSHD container port (the port sshd listens on inside the container)
+  containerPort: 22
   service:
     # -- SSHD service type
     type: ClusterIP
@@ -44,6 +46,8 @@ sshd:
     annotations: {}
     # -- SSHD service load balancer IP
     loadBalancerIP: ""
+    # -- SSHD service load balancer class
+    loadBalancerClass: ""
   # -- SSHD pod resources
   resources: {}
   # -- The node name to schedule SSHD pod on
@@ -104,7 +108,7 @@ rsync:
     repository: docker.io/utkuozdemir/pv-migrate-rsync
     # -- Rsync image pull policy
     pullPolicy: IfNotPresent
-    # -- Rsync image tag
+    # -- Rsync image tag (overridden at runtime by pv-migrate to match the CLI version)
     tag: latest
   # -- Rsync image pull secrets
   imagePullSecrets: []

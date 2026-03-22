@@ -10,6 +10,7 @@ import (
 type Cmd struct {
 	Port        int
 	NoChown     bool
+	NonRoot     bool
 	Delete      bool
 	SrcUseSSH   bool
 	DestUseSSH  bool
@@ -58,8 +59,12 @@ func (c *Cmd) Build() (string, error) {
 		rsyncArgs = append(rsyncArgs, "-z")
 	}
 
-	if c.NoChown {
+	if c.NoChown || c.NonRoot {
 		rsyncArgs = append(rsyncArgs, "--no-o", "--no-g")
+	}
+
+	if c.NonRoot {
+		rsyncArgs = append(rsyncArgs, "--omit-dir-times")
 	}
 
 	if c.Delete {

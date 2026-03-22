@@ -34,6 +34,7 @@ Flags:
   -o, --no-chown                        Omit chown during rsync
   -x, --no-cleanup                      Do not clean up after migration
       --no-compress                     Do not compress data during migration (disables rsync -z)
+      --non-root                        Run containers as non-root (removes SYS_CHROOT; required for restricted PodSecurity clusters). Skips ownership and directory timestamp preservation (--no-o --no-g --omit-dir-times). Migration will fail if the source PVC contains files not readable by the non-root user
   -b, --show-progress-bar               Show a progress bar during migration (default true if stderr is a TTY)
       --source string                   Source PVC name
   -c, --source-context string           Context in the kubeconfig file of the source PVC

@@ -108,6 +108,7 @@ func buildRsyncCmdMount(mig *migration.Migration) (string, error) {
 
 	rsyncCmd := rsync.Cmd{
 		NoChown:  mig.Request.NoChown,
+		NonRoot:  mig.Request.NonRoot,
 		Delete:   mig.Request.DeleteExtraneousFiles,
 		SrcPath:  srcPath,
 		DestPath: destPath,

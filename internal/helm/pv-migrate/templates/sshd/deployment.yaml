@@ -48,6 +48,9 @@ spec:
             - -c
             - |
               set -x
+              export HOME=$(awk -F: -v uid="$(id -u)" '$3==uid{print $6}' /etc/passwd)
+              ssh-keygen -t ed25519 -f /tmp/ssh_host_ed25519_key -N ""
+              ssh-keygen -t ecdsa -f /tmp/ssh_host_ecdsa_key -N ""
               {{ if .Values.sshd.privateKeyMount -}}
               privateKeyFilename=$(basename "{{ .Values.sshd.privateKeyMountPath }}")
               mkdir -p "$HOME/.ssh"
@@ -55,7 +58,7 @@ spec:
               cp -v "{{ .Values.sshd.privateKeyMountPath }}" "$HOME/.ssh/"
               chmod 400 "$HOME/.ssh/$privateKeyFilename"
               {{- end }}
-              /usr/sbin/sshd -D -e -f /etc/ssh/sshd_config
+              /usr/sbin/sshd -D -e -f /etc/ssh/sshd_config -o Port={{ .Values.sshd.containerPort }} -o HostKey=/tmp/ssh_host_ed25519_key -o HostKey=/tmp/ssh_host_ecdsa_key
           securityContext:
             {{- toYaml .Values.sshd.securityContext | nindent 12 }}
           image: "{{ .Values.sshd.image.repository }}:{{ .Values.sshd.image.tag }}"

@@ -16,9 +16,12 @@ spec:
   {{- with .Values.sshd.service.loadBalancerIP }}
   loadBalancerIP: {{ . }}
   {{- end }}
+  {{- if and .Values.sshd.service.loadBalancerClass (eq .Values.sshd.service.type "LoadBalancer") }}
+  loadBalancerClass: {{ .Values.sshd.service.loadBalancerClass | quote }}
+  {{- end }}
   ports:
     - port: {{ .Values.sshd.service.port }}
-      targetPort: 22
+      targetPort: {{ .Values.sshd.containerPort }}
       protocol: TCP
       name: ssh
       {{- if and (eq .Values.sshd.service.type "NodePort") .Values.sshd.service.nodePort }}

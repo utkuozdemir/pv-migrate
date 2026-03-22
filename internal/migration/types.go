@@ -38,6 +38,7 @@ type Request struct {
 	DestHostOverride      string
 	LoadBalancerTimeout   time.Duration
 	NoCompress            bool
+	NonRoot               bool
 	Writer                io.Writer
 }
 

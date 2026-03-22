@@ -65,6 +65,8 @@ jobs:
           args: build --snapshot --clean --single-target
       - name: Update usage
         run: task update-usage
+      - name: Update helm chart docs
+        run: task update-helm-chart-docs
       - name: Check for dirty files
         run: git diff --exit-code
   test:
@@ -221,5 +223,11 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Teardown tmate session
-        if: ${{ success() }}
-        run: sudo touch /continue
+        if: ${{ always() }}
+        run: |
+          if [ "${{ job.status }}" = "failure" ]; then
+            echo "Job failed - keeping tmate session open for debugging"
+            echo "Waiting up to 30 minutes..."
+            sleep 1800
+          fi
+          sudo touch /continue

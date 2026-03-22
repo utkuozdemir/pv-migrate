@@ -36,9 +36,13 @@ tasks:
 
   update-helm-chart-docs:
     desc: update helm chart docs
-    dir: internal/helm/pv-migrate
-    cmds:
-      - helm-docs
+    vars:
+      # renovate: depName=norwoodj/helm-docs datasource=github-releases
+      HELM_DOCS_VERSION: v1.14.2
+    cmd: >-
+        docker run --rm -v {{.ROOT_DIR}}:/helm-docs
+        jnorwood/helm-docs:{{.HELM_DOCS_VERSION}}
+        --chart-search-root /helm-docs/internal/helm
 
   build:
     desc: build

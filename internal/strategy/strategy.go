@@ -33,6 +33,12 @@ const (
 
 	srcMountPath  = "/source"
 	destMountPath = "/dest"
+
+	rootSSHUser    = "root"
+	rootSSHPort    = 22
+	nonRootSSHUser = "pvmigrate"
+	nonRootSSHPort = 2222
+	nonRootUID     = 10000
 )
 
 var (
@@ -171,6 +177,53 @@ func initHelmActionConfig(pvcInfo *pvc.Info) (*action.Configuration, error) {
 	return actionConfig, nil
 }
 
+func sshUser(req *migration.Request) string {
+	if req.NonRoot {
+		return nonRootSSHUser
+	}
+
+	return rootSSHUser
+}
+
+func sshPort(req *migration.Request) int {
+	if req.NonRoot {
+		return nonRootSSHPort
+	}
+
+	return rootSSHPort
+}
+
+func applyNonRootValues(vals map[string]any, req *migration.Request) {
+	if !req.NonRoot {
+		return
+	}
+
+	nonRootSecCtx := map[string]any{
+		"runAsNonRoot":             true,
+		"runAsUser":                nonRootUID,
+		"runAsGroup":               nonRootUID,
+		"allowPrivilegeEscalation": false,
+	}
+	nonRootPodSecCtx := map[string]any{
+		"fsGroup": nonRootUID,
+	}
+
+	for _, component := range []string{"sshd", "rsync"} {
+		section, ok := vals[component].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		section["securityContext"] = nonRootSecCtx
+		section["podSecurityContext"] = nonRootPodSecCtx
+	}
+
+	if sshd, ok := vals["sshd"].(map[string]any); ok {
+		sshd["containerPort"] = nonRootSSHPort
+		sshd["publicKeyMountPath"] = "/home/pvmigrate/.ssh/authorized_keys"
+	}
+}
+
 func getMergedHelmValues(
 	baseValues map[string]any,
 	request *migration.Request,
@@ -237,6 +290,8 @@ func installHelmChart(
 	} else {
 		install.Timeout = req.HelmTimeout
 	}
+
+	applyNonRootValues(values, mig.Request)
 
 	vals, err := getMergedHelmValues(values, mig.Request, logger)
 	if err != nil {
