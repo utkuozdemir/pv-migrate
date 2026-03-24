@@ -107,12 +107,13 @@ func buildRsyncCmdMount(mig *migration.Migration) (string, error) {
 	destPath := destMountPath + "/" + mig.Request.Dest.Path
 
 	rsyncCmd := rsync.Cmd{
-		NoChown:  mig.Request.NoChown,
-		NonRoot:  mig.Request.NonRoot,
-		Delete:   mig.Request.DeleteExtraneousFiles,
-		SrcPath:  srcPath,
-		DestPath: destPath,
-		Compress: !mig.Request.NoCompress,
+		NoChown:   mig.Request.NoChown,
+		NonRoot:   mig.Request.NonRoot,
+		Delete:    mig.Request.DeleteExtraneousFiles,
+		SrcPath:   srcPath,
+		DestPath:  destPath,
+		Compress:  !mig.Request.NoCompress,
+		ExtraArgs: mig.Request.RsyncExtraArgs,
 	}
 
 	cmd, err := rsyncCmd.Build()

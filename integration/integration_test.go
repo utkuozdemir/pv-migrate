@@ -107,7 +107,7 @@ func TestIntegration(t *testing.T) {
 	teardownOnCleanup(t, logger)
 
 	t.Run("SameNS", testSameNS)
-	t.Run("CustomRsyncArgs", testCustomRsyncArgs)
+	t.Run("RsyncExtraArgs", testRsyncExtraArgs)
 	t.Run("SameNSLoadBalancer", testSameNSLoadBalancer)
 	t.Run("NoChown", testNoChown)
 	t.Run("DeleteExtraneousFiles", testDeleteExtraneousFiles)
@@ -327,43 +327,85 @@ func testSameNS(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestCustomRsyncArgs is the same as TestSameNS except it also passes custom args to rsync.
-func testCustomRsyncArgs(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmdArgs := strings.Fields(fmt.Sprintf("%s -i -n %s -N %s", defaultHelmArgs(t), ns1, ns1))
-	cmdArgs = append(
-		cmdArgs,
-		"--helm-set",
-		"rsync.extraArgs=--partial --inplace --sparse",
-		"--source",
-		"source",
-		"--dest",
-		"dest",
-	)
-
-	require.NoError(t, runCliAppWithArgs(ctx, t, cmdArgs...))
-
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
+// testRsyncExtraArgs verifies that --rsync-extra-args passes flags through to rsync.
+// It uses --log-file to make rsync write a log file, then asserts the file exists.
+// Two sub-tests cover Job-based (clusterip) and SSH-based (local) strategies.
+// The log file path and check pod differ because rsync runs in different places:
+// in Job-based strategies it runs on the dest side, in local it runs on the source side.
+func testRsyncExtraArgs(t *testing.T) {
+	tests := []struct {
+		name        string
+		extraFlags  string
+		logFilePath string // path as seen by the rsync process
+		checkPod    string // test pod where the log file ends up
+	}{
+		{
+			name:        "ClusterIP",
+			extraFlags:  "-s clusterip",
+			logFilePath: "/dest/rsync.log",
+			checkPod:    "dest",
+		},
+		{
+			name:        "Local",
+			extraFlags:  "-s local -R",
+			logFilePath: "/source/rsync.log",
+			checkPod:    "source",
+		},
 	}
 
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			clearDestsOnCleanup(t)
+			t.Cleanup(func() {
+				cleanupCtx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+				defer cancel()
 
-	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
+				_, cleanupErr := execInPod(cleanupCtx, mainClusterCli, ns1, tc.checkPod, "rm -f /volume/rsync.log")
+				require.NoError(t, cleanupErr)
+			})
+			ctx := t.Context()
+
+			_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
+			require.NoError(t, err)
+
+			cmd := fmt.Sprintf("%s -i -n %s -N %s --rsync-extra-args=--log-file=%s --source source --dest dest",
+				defaultHelmArgs(t), ns1, ns1, tc.logFilePath)
+			if tc.extraFlags != "" {
+				cmd += " " + tc.extraFlags
+			}
+
+			require.NoError(t, runCliApp(ctx, t, cmd))
+
+			stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
+			require.NoError(t, err)
+
+			parts := strings.Split(stdout, "\n")
+			assert.Equal(t, len(parts), 3)
+
+			if len(parts) < 3 {
+				return
+			}
+
+			assert.Equal(t, dataFileUID, parts[0])
+			assert.Equal(t, dataFileGID, parts[1])
+			assert.Equal(t, generateDataContent, parts[2])
+
+			_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
+			require.NoError(t, err)
+
+			logger := slogt.New(t)
+
+			// Verify rsync actually received the extra arg by checking the log file it wrote.
+			_, err = execInPod(ctx, mainClusterCli, ns1, tc.checkPod, "test -f /volume/rsync.log")
+			require.NoError(t, err)
+
+			logger.Info(
+				"Verified custom rsync extra args were passed through and log file was created",
+				"logFilePath",
+				"/volume/rsync.log",
+			)
+		})
+	}
 }
 
 func testSameNSLoadBalancer(t *testing.T) {
