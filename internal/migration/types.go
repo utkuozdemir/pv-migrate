@@ -40,6 +40,7 @@ type Request struct {
 	LoadBalancerTimeout   time.Duration
 	NoCompress            bool
 	NonRoot               bool
+	RsyncExtraArgs        string
 	Writer                io.Writer
 }
 

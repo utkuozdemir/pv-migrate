@@ -359,6 +359,7 @@ func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
 		DestSSHHost: "localhost",
 		DestSSHUser: sshUser(mig.Request),
 		Compress:    !mig.Request.NoCompress,
+		ExtraArgs:   mig.Request.RsyncExtraArgs,
 	}
 
 	cmd, err := rsyncCmd.Build()

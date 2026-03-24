@@ -81,6 +81,7 @@ type Migration struct {
 	SourceMountReadWrite  bool
 	NoCompress            bool
 	NonRoot               bool
+	RsyncExtraArgs        string
 
 	KeyAlgorithm         KeyAlgorithm
 	SSHReverseTunnelPort int
@@ -180,6 +181,7 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		SourceMountReadWrite:  mig.SourceMountReadWrite,
 		NoCompress:            mig.NoCompress,
 		NonRoot:               mig.NonRoot,
+		RsyncExtraArgs:        mig.RsyncExtraArgs,
 		KeyAlgorithm:          string(mig.KeyAlgorithm),
 		SSHReverseTunnelPort:  mig.SSHReverseTunnelPort,
 		Strategies:            util.ConvertStrings[string](mig.Strategies),

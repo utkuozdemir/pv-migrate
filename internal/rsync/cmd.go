@@ -22,8 +22,10 @@ type Cmd struct {
 	DestSSHHost string
 	DestPath    string
 	Compress    bool
+	ExtraArgs   string
 }
 
+//nolint:cyclop
 func (c *Cmd) Build() (string, error) {
 	if c.SrcUseSSH && c.DestUseSSH {
 		return "", errors.New("cannot use ssh on both source and destination")
@@ -69,6 +71,10 @@ func (c *Cmd) Build() (string, error) {
 
 	if c.Delete {
 		rsyncArgs = append(rsyncArgs, "--delete")
+	}
+
+	if c.ExtraArgs != "" {
+		rsyncArgs = append(rsyncArgs, c.ExtraArgs)
 	}
 
 	rsyncArgsStr := strings.Join(rsyncArgs, " ")

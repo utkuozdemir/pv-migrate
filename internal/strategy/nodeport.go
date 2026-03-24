@@ -155,6 +155,7 @@ func installOnDestWithNodePort(attempt *migration.Attempt, releaseName, privateK
 		SrcSSHUser: sshUser(mig.Request),
 		Port:       sshPort,
 		Compress:   !mig.Request.NoCompress,
+		ExtraArgs:  mig.Request.RsyncExtraArgs,
 	}
 
 	rsyncCmdStr, err := rsyncCmd.Build()

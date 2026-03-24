@@ -139,6 +139,7 @@ func installOnDest(
 		SrcSSHHost: sshHost,
 		SrcSSHUser: sshUser(mig.Request),
 		Compress:   !mig.Request.NoCompress,
+		ExtraArgs:  mig.Request.RsyncExtraArgs,
 	}
 
 	rsyncCmdStr, err := rsyncCmd.Build()
