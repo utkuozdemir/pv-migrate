@@ -2,10 +2,12 @@ package pvmigrate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"regexp"
 	"time"
 
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
@@ -59,6 +61,13 @@ type PVC struct {
 
 // Migration holds all configuration for a PVC data migration.
 type Migration struct {
+	// ID is an optional custom migration identifier. When empty, a petname-style
+	// identifier (e.g. "fuzzy-panda") is generated automatically. The value must be
+	// lowercase alphanumeric with optional hyphens, not start or end with a hyphen,
+	// and be at most maxIDLength characters long. The ID becomes part of Helm release
+	// names and Kubernetes resource names, so it must be DNS-compatible.
+	ID string
+
 	// ImageTag is the default Docker image tag for the rsync and sshd containers.
 	// When non-empty, it is injected as the lowest-priority Helm value so that
 	// user overrides via HelmValues still take precedence.
@@ -76,6 +85,7 @@ type Migration struct {
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
+	Detach                bool
 	NoCleanup             bool
 	ShowProgressBar       bool
 	SourceMountReadWrite  bool
@@ -98,9 +108,42 @@ type Migration struct {
 	Logger *slog.Logger
 }
 
+// maxIDLength limits the migration ID so that the longest possible Kubernetes
+// resource name stays within the 63-character DNS label limit.
+// Worst case: "pv-migrate-" (11) + <id> + "-loadbalancer" (13) + "-dest" (5) + "-rsync" (6) = 35 overhead.
+const maxIDLength = 63 - 35
+
+var validIDRegex = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// validateID checks that the given migration ID is valid for use in Kubernetes
+// resource names. It must be lowercase alphanumeric with optional hyphens,
+// must not start or end with a hyphen, and be at most maxIDLength characters.
+func validateID(id string) error {
+	if len(id) == 0 {
+		return errors.New("migration ID must not be empty")
+	}
+
+	if len(id) > maxIDLength {
+		return fmt.Errorf("migration ID %q is too long (%d chars), maximum is %d", id, len(id), maxIDLength)
+	}
+
+	if !validIDRegex.MatchString(id) {
+		return fmt.Errorf("migration ID %q is invalid: must be lowercase alphanumeric with optional hyphens, "+
+			"and must not start or end with a hyphen", id)
+	}
+
+	return nil
+}
+
 // Run executes the migration.
 func Run(ctx context.Context, migration Migration) error {
 	migration.ApplyDefaults()
+
+	if migration.ID != "" {
+		if err := validateID(migration.ID); err != nil {
+			return err
+		}
+	}
 
 	if p := migration.SSHReverseTunnelPort; p < 1 || p > 65535 {
 		return fmt.Errorf("invalid ssh-reverse-tunnel-port %d: must be between 1 and 65535", p)
@@ -157,6 +200,7 @@ func (m *Migration) ApplyDefaults() {
 
 func toInternalRequest(mig *Migration) *migration.Request {
 	return &migration.Request{
+		ID:           mig.ID,
 		ImageTag:     mig.ImageTag,
 		ChartVersion: mig.ChartVersion,
 		Source: migration.PVCInfo{
@@ -176,6 +220,7 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		DeleteExtraneousFiles: mig.DeleteExtraneousFiles,
 		IgnoreMounted:         mig.IgnoreMounted,
 		NoChown:               mig.NoChown,
+		Detach:                mig.Detach,
 		NoCleanup:             mig.NoCleanup,
 		ShowProgressBar:       mig.ShowProgressBar,
 		SourceMountReadWrite:  mig.SourceMountReadWrite,

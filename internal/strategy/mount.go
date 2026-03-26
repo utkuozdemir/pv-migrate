@@ -15,8 +15,8 @@ type Mount struct{}
 //nolint:funlen
 func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
-	if !r.canDo(mig) {
-		return ErrUnaccepted
+	if reason := r.cannotDoReason(mig); reason != "" {
+		return fmt.Errorf("%s: %w", reason, ErrUnaccepted)
 	}
 
 	sourceInfo := attempt.Migration.SourceInfo
@@ -62,16 +62,25 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
-	showProgressBar := mig.Request.ShowProgressBar
 	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
 	jobName := attempt.HelmReleaseNamePrefix + "-rsync"
+
+	if mig.Request.Detach {
+		if _, err = k8s.WaitForJobStart(ctx, kubeClient, namespace, jobName, logger); err != nil {
+			return fmt.Errorf("failed to wait for job to start: %w", err)
+		}
+
+		attempt.Detached = true
+
+		return nil
+	}
 
 	if err = k8s.WaitForJobCompletion(
 		ctx,
 		kubeClient,
 		namespace,
 		jobName,
-		showProgressBar,
+		mig.Request.ShowProgressBar,
 		mig.Request.Writer,
 		logger,
 	); err != nil {
@@ -81,25 +90,29 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	return nil
 }
 
-func (r *Mount) canDo(t *migration.Migration) bool {
+func (r *Mount) cannotDoReason(t *migration.Migration) string {
 	sourceInfo := t.SourceInfo
 	destInfo := t.DestInfo
 
 	sameCluster := sourceInfo.ClusterClient.RestConfig.Host == destInfo.ClusterClient.RestConfig.Host
 	if !sameCluster {
-		return false
+		return "source and destination are on different clusters"
 	}
 
 	sameNamespace := sourceInfo.Claim.Namespace == destInfo.Claim.Namespace
 	if !sameNamespace {
-		return false
+		return "source and destination are in different namespaces"
 	}
 
 	sameNode := sourceInfo.MountedNode == destInfo.MountedNode
 	oneUnmounted := sourceInfo.MountedNode == "" || destInfo.MountedNode == ""
 
-	return sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX ||
-		destInfo.SupportsRWX
+	if sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX ||
+		destInfo.SupportsRWX {
+		return ""
+	}
+
+	return "PVCs are mounted on different nodes and do not support multi-access modes"
 }
 
 func buildRsyncCmdMount(mig *migration.Migration) (string, error) {

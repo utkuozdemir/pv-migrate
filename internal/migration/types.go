@@ -18,6 +18,7 @@ type PVCInfo struct {
 }
 
 type Request struct {
+	ID                    string
 	ImageTag              string
 	ChartVersion          string
 	Source                PVCInfo
@@ -25,6 +26,7 @@ type Request struct {
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
+	Detach                bool
 	NoCleanup             bool
 	ShowProgressBar       bool
 	SourceMountReadWrite  bool
@@ -55,4 +57,5 @@ type Attempt struct {
 	ID                    string
 	HelmReleaseNamePrefix string
 	Migration             *Migration
+	Detached              bool
 }

@@ -29,6 +29,43 @@ type Progress struct {
 	Total       int64
 }
 
+// FindLast returns the last progress entry found anywhere in text.
+// Rsync uses \r to overwrite progress in-place, so a single log line
+// may contain many concatenated progress entries.
+func FindLast(text string) Progress {
+	matches := progressRegex.FindAllStringSubmatch(text, -1)
+	if len(matches) == 0 {
+		return Progress{}
+	}
+
+	last := matches[len(matches)-1]
+
+	names := progressRegex.SubexpNames()
+	named := make(map[string]string, len(names))
+
+	for i, name := range names {
+		named[name] = last[i]
+	}
+
+	percentage, err := strconv.Atoi(named["percentage"])
+	if err != nil || percentage == 0 {
+		return Progress{}
+	}
+
+	transferred, err := parseNumBytes(named["bytes"])
+	if err != nil {
+		return Progress{}
+	}
+
+	total := max(transferred, int64((float64(transferred)/float64(percentage))*percentHundred))
+
+	return Progress{
+		Percentage:  percentage,
+		Transferred: transferred,
+		Total:       total,
+	}
+}
+
 func ParseLine(line string) (Progress, error) {
 	endMatches := findNamedMatches(rsyncEndRegex, line)
 	if len(endMatches) > 0 {

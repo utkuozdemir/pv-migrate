@@ -29,6 +29,11 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	mig := attempt.Migration
 	req := mig.Request
 
+	if req.Detach {
+		return fmt.Errorf("local strategy requires a persistent connection through the local machine: %w",
+			ErrUnaccepted)
+	}
+
 	if hasHelmOverrides(req) {
 		logger.Warn("⚠️  Local strategy does not deploy an rsync Job; " +
 			"rsync-related Helm values (e.g. rsync.*) will have no effect")

@@ -10,8 +10,10 @@ Usage:
   pv-migrate [command]
 
 Available Commands:
+  cleanup     Clean up resources from a detached migration
   completion  Generate completion script
   help        Help about any command
+  status      Show the status of a detached migration
 
 Flags:
       --dest string                     Destination PVC name
@@ -21,12 +23,14 @@ Flags:
   -K, --dest-kubeconfig string          Path of the kubeconfig file of the destination PVC
   -N, --dest-namespace string           Namespace of the destination PVC
   -P, --dest-path string                Filesystem path to migrate in the destination PVC (default "/")
+      --detach                          Detach after the migration job starts running in the cluster. The CLI will exit and the migration will continue in the background. Use 'pv-migrate cleanup' to remove resources after completion
       --helm-set strings                Additional Helm values (key1=val1,key2=val2)
       --helm-set-file strings           Additional Helm values from files (key1=path1,key2=path2)
       --helm-set-string strings         Additional Helm string values (key1=val1,key2=val2)
   -t, --helm-timeout duration           Helm install/uninstall timeout (default 1m0s)
   -f, --helm-values strings             Additional Helm values files (YAML file or URL, can specify multiple)
   -h, --help                            help for pv-migrate
+      --id string                       Custom migration ID (lowercase alphanumeric with optional hyphens, max 28 chars). If not set, a random ID is generated. Used to identify the migration in 'status' and 'cleanup' commands
   -i, --ignore-mounted                  Do not fail if the source or destination PVC is mounted
       --loadbalancer-timeout duration   Timeout for the load balancer to receive an external IP. Only used by the loadbalancer strategy (default 2m0s)
       --log-format string               Log format, one of text, json (default "text")
@@ -140,6 +144,31 @@ $ pv-migrate \
   --helm-set sshd.service.nodePort=30555 \
   --source old-pvc \
   --dest new-pvc
+```
+
+### Example 8: Detached mode for large transfers
+
+For large migrations that take a long time, use `--detach` to let the migration
+run in the cluster without keeping the CLI connected:
+
+```bash
+$ pv-migrate --source old-pvc --dest new-pvc --detach
+# CLI prints a migration ID (e.g. "fuzzy-panda") and exits
+
+# Or use a custom ID for easier reference:
+$ pv-migrate --source old-pvc --dest new-pvc --detach --id my-db-migration
+
+# Check progress:
+$ pv-migrate status fuzzy-panda
+
+# Follow progress with a live progress bar:
+$ pv-migrate status fuzzy-panda --follow
+
+# Clean up after completion:
+$ pv-migrate cleanup fuzzy-panda
+
+# Clean up all pv-migrate releases:
+$ pv-migrate cleanup --all
 ```
 
 **For further customization on the rendered manifests**
