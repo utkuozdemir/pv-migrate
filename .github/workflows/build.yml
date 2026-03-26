@@ -217,7 +217,7 @@ jobs:
           SSHD_IMAGE: integration-test-sshd:${{ steps.vars.outputs.sha }}
         run: go test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
       - name: Send coverage
-        uses: codecov/codecov-action@v5.5.3
+        uses: codecov/codecov-action@v6.0.0
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
