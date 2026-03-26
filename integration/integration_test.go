@@ -26,6 +26,7 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -37,7 +38,6 @@ import (
 
 	"github.com/utkuozdemir/pv-migrate/internal/app"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
-	"github.com/utkuozdemir/pv-migrate/internal/util"
 )
 
 const (
@@ -125,6 +125,7 @@ func TestIntegration(t *testing.T) {
 	t.Run("NodePortCustomPort", testNodePortCustomPort)
 	t.Run("NonRoot", testNonRoot)
 	t.Run("NonRootFailOnRestrictedFiles", testNonRootFailOnRestrictedFiles)
+	t.Run("DetachMode", testDetachMode)
 }
 
 // testNodePort tests the NodePort strategy in the same namespace
@@ -869,6 +870,55 @@ func testLongPVCNames(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 }
 
+func testDetachMode(t *testing.T) {
+	clearDestsOnCleanup(t)
+
+	ctx := t.Context()
+	migrationID := "detach-test"
+
+	// Run the migration in detach mode with a custom ID
+	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest --detach --id %s",
+		defaultHelmArgs(t), ns1, ns1, migrationID)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	// Find the rsync job created by the detached migration
+	releasePrefix := "pv-migrate-" + migrationID + "-"
+	job, err := k8s.FindRsyncJob(ctx, mainClusterCli.KubeClient, ns1, releasePrefix)
+	require.NoError(t, err)
+	assert.Contains(t, job.Name, migrationID)
+
+	// Wait for the job to complete
+	require.Eventually(t, func() bool {
+		j, err := mainClusterCli.KubeClient.BatchV1().Jobs(job.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
+		if err != nil {
+			return false
+		}
+
+		return j.Status.Succeeded > 0 || j.Status.Failed > 0
+	}, 2*time.Minute, 2*time.Second, "rsync job did not complete in time")
+
+	// Run status (without --follow) and verify it doesn't error
+	require.NoError(t, runCliAppWithArgs(ctx, t, "status", "-n", ns1, migrationID))
+
+	// Verify that the data was actually migrated
+	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	require.Len(t, parts, 3)
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	// Clean up using the cleanup subcommand
+	require.NoError(t, runCliAppWithArgs(ctx, t, "cleanup", "-n", ns1, "--force", migrationID))
+
+	// Verify the Helm releases are gone by running cleanup again (should error: no releases found)
+	err = runCliAppWithArgs(ctx, t, "cleanup", "-n", ns1, migrationID)
+	require.ErrorContains(t, err, "no releases found")
+}
+
 func setup(t *testing.T, logger *slog.Logger) {
 	logger.Info("set up integration tests")
 
@@ -893,9 +943,9 @@ func setup(t *testing.T, logger *slog.Logger) {
 		logger.Warn("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
 	}
 
-	ns1 = "pv-migrate-test-1-" + util.RandomString(5)
-	ns2 = "pv-migrate-test-2-" + util.RandomString(5)
-	ns3 = "pv-migrate-test-3-" + util.RandomString(5)
+	ns1 = "pv-migrate-test-1-" + utilrand.String(5)
+	ns2 = "pv-migrate-test-2-" + utilrand.String(5)
+	ns3 = "pv-migrate-test-3-" + utilrand.String(5)
 
 	createNS(t, mainClusterCli, ns1)
 	createNS(t, mainClusterCli, ns2)

@@ -9,6 +9,8 @@ linters:
     - testpackage # todo: consider enabling
     - wsl # deprecated
     - noinlineerr # big fan of inline errors
+    - wrapcheck # don't want to wrap errors everywhere
+    - mnd # magic numbers are sometimes ok, this linter is too noisy
   settings:
     goconst:
       min-occurrences: 5

@@ -70,6 +70,7 @@ the data from the old PVC to the new one with the desired `StorageClass`.
   - LoadBalancer service (loadbalancer)
   - NodePort service (nodeport, opt-in)
   - Local port-forward transfer (local, opt-in)
+- Detach mode (`--detach`) for large transfers that take a long time, allowing the migration to continue in the cluster without keeping the CLI connected
 - Customizable strategy order
 - Supports arm32v7 (Raspberry Pi etc.) and arm64 architectures as well as amd64
 - Supports completion for popular shells: bash, zsh, fish, powershell

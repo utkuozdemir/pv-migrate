@@ -15,8 +15,8 @@ type ClusterIP struct{}
 
 func (r *ClusterIP) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
-	if !r.canDo(mig) {
-		return ErrUnaccepted
+	if reason := r.cannotDoReason(mig); reason != "" {
+		return fmt.Errorf("%s: %w", reason, ErrUnaccepted)
 	}
 
 	releaseName := attempt.HelmReleaseNamePrefix
@@ -35,24 +35,38 @@ func (r *ClusterIP) Run(ctx context.Context, attempt *migration.Attempt, logger 
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
-	showProgressBar := mig.Request.ShowProgressBar
 	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
+	destNs := mig.DestInfo.Claim.Namespace
 	jobName := releaseName + "-rsync"
 
+	if mig.Request.Detach {
+		if _, err = k8s.WaitForJobStart(ctx, kubeClient, destNs, jobName, logger); err != nil {
+			return fmt.Errorf("failed to wait for job to start: %w", err)
+		}
+
+		attempt.Detached = true
+
+		return nil
+	}
+
 	if err = k8s.WaitForJobCompletion(ctx, kubeClient,
-		mig.DestInfo.Claim.Namespace, jobName, showProgressBar, mig.Request.Writer, logger); err != nil {
+		destNs, jobName, mig.Request.ShowProgressBar, mig.Request.Writer, logger); err != nil {
 		return fmt.Errorf("failed to wait for job completion: %w", err)
 	}
 
 	return nil
 }
 
-func (r *ClusterIP) canDo(t *migration.Migration) bool {
+func (r *ClusterIP) cannotDoReason(t *migration.Migration) string {
 	s := t.SourceInfo
 	d := t.DestInfo
 	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
 
-	return sameCluster
+	if !sameCluster {
+		return "source and destination are on different clusters"
+	}
+
+	return ""
 }
 
 //

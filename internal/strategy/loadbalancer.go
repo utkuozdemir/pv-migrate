@@ -70,16 +70,25 @@ func (r *LoadBalancer) Run(ctx context.Context, attempt *migration.Attempt, logg
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
 
-	showProgressBar := attempt.Migration.Request.ShowProgressBar
 	kubeClient := destInfo.ClusterClient.KubeClient
 	jobName := destReleaseName + "-rsync"
+
+	if mig.Request.Detach {
+		if _, err = k8s.WaitForJobStart(ctx, kubeClient, destNs, jobName, logger); err != nil {
+			return fmt.Errorf("failed to wait for job to start: %w", err)
+		}
+
+		attempt.Detached = true
+
+		return nil
+	}
 
 	if err = k8s.WaitForJobCompletion(
 		ctx,
 		kubeClient,
 		destNs,
 		jobName,
-		showProgressBar,
+		mig.Request.ShowProgressBar,
 		mig.Request.Writer,
 		logger,
 	); err != nil {

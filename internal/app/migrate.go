@@ -67,9 +67,12 @@ const (
 	FlagDestHostOverride    = "dest-host-override"
 	FlagLoadBalancerTimeout = "loadbalancer-timeout"
 
+	FlagID = "id"
+
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
 	FlagNoChown                   = "no-chown"
+	FlagDetach                    = "detach"
 	FlagNoCleanup                 = "no-cleanup"
 	FlagShowProgressBar           = "show-progress-bar"
 	FlagSourceMountReadWrite      = "source-mount-read-write"
@@ -104,6 +107,7 @@ type Options struct {
 	keyAlgorithm string
 }
 
+//nolint:funlen
 func BuildMigrateCmd(ctx context.Context, version, commit, date string, logger *slog.Logger) (*cobra.Command, error) {
 	versionStr := fmt.Sprintf("%s (commit: %s) (build date: %s)", version, commit, date)
 	use := fmt.Sprintf(
@@ -130,12 +134,28 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string, logger *
 	}
 
 	cmd := cobra.Command{
-		Use:     use,
-		Short:   "Migrate data from one Kubernetes PersistentVolumeClaim to another",
-		Args:    cobra.NoArgs,
-		Version: versionStr,
+		Use:           use,
+		Short:         "Migrate data from one Kubernetes PersistentVolumeClaim to another",
+		Args:          cobra.NoArgs,
+		Version:       versionStr,
+		SilenceErrors: true, // we log the error with our own logger with custom format and wrapping
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SilenceUsage = true // usage should only be printed when there is a usage error (e.g., invalid flags)
+
+			if logger != nil { // external logger provided (e.g. tests)
+				return nil
+			}
+
+			var err error
+
+			if logger, err = buildLogger(options.LogLevel, options.LogFormat, writer, isATTY); err != nil {
+				return fmt.Errorf("failed to build logger: %w", err)
+			}
+
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, _ []string) error { //nolint:contextcheck
-			return runMigration(cmd, &options, writer, isATTY, logger)
+			return runMigration(cmd, &options, writer, logger)
 		},
 	}
 
@@ -159,6 +179,8 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string, logger *
 	}
 
 	cmd.AddCommand(buildCompletionCmd())
+	cmd.AddCommand(buildCleanupCmd(&logger)) //nolint:contextcheck
+	cmd.AddCommand(buildStatusCmd(&logger))  //nolint:contextcheck
 
 	cmd.InitDefaultVersionFlag()
 	versionFlag := cmd.Flags().Lookup("version")
@@ -186,6 +208,7 @@ func setMigrateCmdCompletion(
 		{FlagDestPath, completionFuncNoFileComplete},
 		{FlagStrategies, buildSliceCompletionFunc(util.ConvertStrings[string](pvmigrate.AllStrategies))},
 		{FlagSSHKeyAlgorithm, buildStaticSliceCompletionFunc(util.ConvertStrings[string](pvmigrate.KeyAlgorithms))},
+		{FlagID, completionFuncNoFileComplete},
 		{FlagHelmSet, completionFuncNoFileComplete},
 		{FlagHelmSetString, completionFuncNoFileComplete},
 		{FlagHelmSetFile, completionFuncNoFileComplete},
@@ -259,6 +282,13 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	flags.BoolVarP(&migration.IgnoreMounted, FlagIgnoreMounted, "i", migration.IgnoreMounted,
 		"Do not fail if the source or destination PVC is mounted")
 	flags.BoolVarP(&migration.NoChown, FlagNoChown, "o", migration.NoChown, "Omit chown during rsync")
+	flags.StringVar(&migration.ID, FlagID, migration.ID,
+		"Custom migration ID (lowercase alphanumeric with optional hyphens, max 28 chars). "+
+			"If not set, a random ID is generated. Used to identify the migration in 'status' and 'cleanup' commands")
+	flags.BoolVar(&migration.Detach, FlagDetach, migration.Detach,
+		"Detach after the migration job starts running in the cluster. "+
+			"The CLI will exit and the migration will continue in the background. "+
+			"Use 'pv-migrate cleanup' to remove resources after completion")
 	flags.BoolVarP(&migration.NoCleanup, FlagNoCleanup, "x", migration.NoCleanup, "Do not clean up after migration")
 	flags.BoolVarP(&migration.ShowProgressBar, FlagShowProgressBar,
 		"b", migration.ShowProgressBar, "Show a progress bar during migration")
@@ -313,16 +343,8 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	return nil
 }
 
-func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY bool, logger *slog.Logger) error {
+func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, logger *slog.Logger) error {
 	ctx := cmd.Context()
-
-	if logger == nil { // no external logger, build the default logger with options and override the globals
-		var err error
-
-		if logger, err = buildLogger(options.LogLevel, options.LogFormat, writer, isATTY); err != nil {
-			return fmt.Errorf("failed to build logger: %w", err)
-		}
-	}
 
 	options.Migration.Strategies = util.ConvertStrings[pvmigrate.Strategy](options.strategies)
 	options.Migration.KeyAlgorithm = pvmigrate.KeyAlgorithm(options.keyAlgorithm)

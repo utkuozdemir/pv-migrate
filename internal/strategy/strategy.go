@@ -116,7 +116,7 @@ func cleanupAndReleaseHook(ctx context.Context, a *migration.Attempt,
 }
 
 func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Logger) {
-	if attempt.Migration.Request.NoCleanup {
+	if attempt.Migration.Request.NoCleanup || attempt.Detached {
 		logger.Info("🧹 Cleanup skipped")
 
 		return

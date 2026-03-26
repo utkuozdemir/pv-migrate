@@ -46,7 +46,7 @@ func TestCanDoSameNode(t *testing.T) {
 	}
 
 	s := Mount{}
-	canDo := s.canDo(&mig)
+	canDo := s.cannotDoReason(&mig) == ""
 	assert.True(t, canDo)
 }
 
@@ -81,7 +81,7 @@ func TestCanDoSourceUnmounted(t *testing.T) {
 	}
 
 	s := Mount{}
-	canDo := s.canDo(&mig)
+	canDo := s.cannotDoReason(&mig) == ""
 	assert.True(t, canDo)
 }
 
@@ -116,7 +116,7 @@ func TestCanDoDestUnmounted(t *testing.T) {
 	}
 
 	s := Mount{}
-	canDo := s.canDo(&mig)
+	canDo := s.cannotDoReason(&mig) == ""
 	assert.True(t, canDo)
 }
 
@@ -151,7 +151,7 @@ func TestCanDoBothUnmounted(t *testing.T) {
 	}
 
 	s := Mount{}
-	canDo := s.canDo(&mig)
+	canDo := s.cannotDoReason(&mig) == ""
 	assert.True(t, canDo)
 }
 
@@ -186,7 +186,7 @@ func TestCanDoDestRWX(t *testing.T) {
 	}
 
 	s := Mount{}
-	canDo := s.canDo(&mig)
+	canDo := s.cannotDoReason(&mig) == ""
 	assert.True(t, canDo)
 }
 
@@ -221,7 +221,7 @@ func TestCanDoSourceROX(t *testing.T) {
 	}
 
 	s := Mount{}
-	canDo := s.canDo(&mig)
+	canDo := s.cannotDoReason(&mig) == ""
 	assert.True(t, canDo)
 }
 
@@ -256,7 +256,7 @@ func TestCannotDoSameClusterDifferentNS(t *testing.T) {
 	}
 
 	s := Mount{}
-	canDo := s.canDo(&mig)
+	canDo := s.cannotDoReason(&mig) == ""
 	assert.False(t, canDo)
 }
 
@@ -292,7 +292,7 @@ func TestMountCannotDoDifferentCluster(t *testing.T) {
 	}
 
 	s := Mount{}
-	canDo := s.canDo(&mig)
+	canDo := s.cannotDoReason(&mig) == ""
 	assert.False(t, canDo)
 }
 

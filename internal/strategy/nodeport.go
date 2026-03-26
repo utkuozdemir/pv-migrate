@@ -13,7 +13,7 @@ import (
 
 type NodePort struct{}
 
-//nolint:funlen
+//nolint:funlen,cyclop
 func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 
@@ -86,17 +86,26 @@ func (r *NodePort) Run(ctx context.Context, attempt *migration.Attempt, logger *
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
 
-	showProgressBar := attempt.Migration.Request.ShowProgressBar
 	kubeClient := destInfo.ClusterClient.KubeClient
 	jobName := destReleaseName + "-rsync"
+
+	if mig.Request.Detach {
+		if _, err = k8s.WaitForJobStart(ctx, kubeClient, destNs, jobName, logger); err != nil {
+			return fmt.Errorf("failed to wait for job to start: %w", err)
+		}
+
+		attempt.Detached = true
+
+		return nil
+	}
 
 	if err = k8s.WaitForJobCompletion(
 		ctx,
 		kubeClient,
 		destNs,
 		jobName,
-		showProgressBar,
-		attempt.Migration.Request.Writer,
+		mig.Request.ShowProgressBar,
+		mig.Request.Writer,
 		logger,
 	); err != nil {
 		return fmt.Errorf("failed to wait for job completion: %w", err)
