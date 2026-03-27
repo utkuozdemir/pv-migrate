@@ -122,5 +122,21 @@ $ pv-migrate cleanup fuzzy-panda
 $ pv-migrate cleanup --all
 ```
 
+### Example 9: Push mode (source cluster behind NAT)
+
+By default, sshd runs on the source side and rsync pulls data from it.
+When the source side cannot expose a service, e.g., behind a firewall or NAT,
+use `--rsync-push` to reverse the direction:
+sshd runs on the destination side and rsync pushes data to it.
+
+```bash
+$ pv-migrate \
+  --source-kubeconfig /path/to/source/kubeconfig \
+  --source old-pvc \
+  --dest-kubeconfig /path/to/dest/kubeconfig \
+  --dest new-pvc \
+  --rsync-push
+```
+
 **For further customization on the rendered manifests**
 (custom labels, annotations, etc.), see the [Helm chart values](internal/helm/pv-migrate).

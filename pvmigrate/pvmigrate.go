@@ -86,6 +86,7 @@ type Migration struct {
 	IgnoreMounted         bool
 	NoChown               bool
 	Detach                bool
+	Push                  bool
 	NoCleanup             bool
 	ShowProgressBar       bool
 	SourceMountReadWrite  bool
@@ -221,6 +222,7 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		IgnoreMounted:         mig.IgnoreMounted,
 		NoChown:               mig.NoChown,
 		Detach:                mig.Detach,
+		Push:                  mig.Push,
 		NoCleanup:             mig.NoCleanup,
 		ShowProgressBar:       mig.ShowProgressBar,
 		SourceMountReadWrite:  mig.SourceMountReadWrite,

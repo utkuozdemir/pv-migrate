@@ -18,7 +18,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync/progress"
-	internalssh "github.com/utkuozdemir/pv-migrate/internal/ssh"
 )
 
 const portForwardTimeout = 30 * time.Second
@@ -39,16 +38,11 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 			"rsync-related Helm values (e.g. rsync.*) will have no effect")
 	}
 
-	keyAlgorithm := req.KeyAlgorithm
-
-	logger.Info("🔑 Generating SSH key pair", "algorithm", keyAlgorithm)
-
-	publicKey, privateKey, err := internalssh.CreateSSHKeyPair(keyAlgorithm)
+	publicKey, privateKey, privateKeyMountPath, err := generateSSHKeys(req.KeyAlgorithm, logger)
 	if err != nil {
-		return fmt.Errorf("failed to generate SSH key pair: %w", err)
+		return err
 	}
 
-	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
 	releaseNames := []string{srcReleaseName, destReleaseName}
@@ -59,12 +53,12 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
 	if err = installLocalOnSource(
-		attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, srcMountPath, logger,
+		attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, logger,
 	); err != nil {
 		return fmt.Errorf("failed to install on source: %w", err)
 	}
 
-	if err = installLocalOnDest(attempt, destReleaseName, publicKey, destMountPath, logger); err != nil {
+	if err = installLocalOnDest(attempt, destReleaseName, publicKey, logger); err != nil {
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
 
@@ -397,60 +391,31 @@ func getSshdPodForHelmRelease(
 
 func installLocalOnSource(
 	attempt *migration.Attempt,
-	releaseName, publicKey, privateKey, privateKeyMountPath, srcMountPath string,
+	releaseName, publicKey, privateKey, privateKeyMountPath string,
 	logger *slog.Logger,
 ) error {
 	mig := attempt.Migration
-	sourceInfo := mig.SourceInfo
-	namespace := sourceInfo.Claim.Namespace
-
-	vals := map[string]any{
-		"sshd": map[string]any{
-			"enabled":             true,
-			"namespace":           namespace,
-			"publicKey":           publicKey,
-			"privateKeyMount":     true,
-			"privateKey":          privateKey,
-			"privateKeyMountPath": privateKeyMountPath,
-			"pvcMounts": []map[string]any{
-				{
-					"name":      sourceInfo.Claim.Name,
-					"readOnly":  !mig.Request.SourceMountReadWrite,
-					"mountPath": srcMountPath,
-				},
-			},
-			"affinity": sourceInfo.AffinityHelmValues,
-		},
+	side := componentSide{
+		info:      mig.SourceInfo,
+		mountPath: srcMountPath,
+		readOnly:  !mig.Request.SourceMountReadWrite,
 	}
 
-	return installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
+	sshdVals := buildSshdHelmValues(side, publicKey)
+	sshdVals["privateKeyMount"] = true
+	sshdVals["privateKey"] = privateKey
+	sshdVals["privateKeyMountPath"] = privateKeyMountPath
+
+	return installHelmChart(attempt, mig.SourceInfo, releaseName, map[string]any{"sshd": sshdVals}, logger)
 }
 
-func installLocalOnDest(
-	attempt *migration.Attempt,
-	releaseName, publicKey, destMountPath string,
-	logger *slog.Logger,
-) error {
+func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey string, logger *slog.Logger) error {
 	mig := attempt.Migration
-	destInfo := mig.DestInfo
-	namespace := destInfo.Claim.Namespace
+	side := componentSide{info: mig.DestInfo, mountPath: destMountPath}
 
-	vals := map[string]any{
-		"sshd": map[string]any{
-			"enabled":   true,
-			"namespace": namespace,
-			"publicKey": publicKey,
-			"pvcMounts": []map[string]any{
-				{
-					"name":      destInfo.Claim.Name,
-					"mountPath": destMountPath,
-				},
-			},
-			"affinity": destInfo.AffinityHelmValues,
-		},
-	}
-
-	return installHelmChart(attempt, destInfo, releaseName, vals, logger)
+	return installHelmChart(
+		attempt, mig.DestInfo, releaseName, map[string]any{"sshd": buildSshdHelmValues(side, publicKey)}, logger,
+	)
 }
 
 func logClose(c io.Closer, logger *slog.Logger, msg string) {

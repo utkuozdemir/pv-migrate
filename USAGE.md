@@ -40,6 +40,7 @@ Flags:
       --no-compress                     Do not compress data during migration (disables rsync -z)
       --non-root                        Run containers as non-root (removes SYS_CHROOT; required for restricted PodSecurity clusters). Skips ownership and directory timestamp preservation (--no-o --no-g --omit-dir-times). Migration will fail if the source PVC contains files not readable by the non-root user
       --rsync-extra-args string         Extra rsync flags appended to the rsync command (use at your own risk)
+      --rsync-push                      Push mode: run rsync on the source side and sshd on the destination side. Use when the source side cannot expose a service, e.g., behind a firewall or NAT. Has no effect on the mount and local strategies
   -b, --show-progress-bar               Show a progress bar during migration (default true if stderr is a TTY)
       --source string                   Source PVC name
   -c, --source-context string           Context in the kubeconfig file of the source PVC
@@ -169,6 +170,22 @@ $ pv-migrate cleanup fuzzy-panda
 
 # Clean up all pv-migrate releases:
 $ pv-migrate cleanup --all
+```
+
+### Example 9: Push mode (source cluster behind NAT)
+
+By default, sshd runs on the source side and rsync pulls data from it.
+When the source side cannot expose a service, e.g., behind a firewall or NAT,
+use `--rsync-push` to reverse the direction:
+sshd runs on the destination side and rsync pushes data to it.
+
+```bash
+$ pv-migrate \
+  --source-kubeconfig /path/to/source/kubeconfig \
+  --source old-pvc \
+  --dest-kubeconfig /path/to/dest/kubeconfig \
+  --dest new-pvc \
+  --rsync-push
 ```
 
 **For further customization on the rendered manifests**
