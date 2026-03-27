@@ -82,6 +82,7 @@ const (
 	FlagNoCompress                = "no-compress"
 	FlagNonRoot                   = "non-root"
 	FlagRsyncExtraArgs            = "rsync-extra-args"
+	FlagRsyncPush                 = "rsync-push"
 
 	FlagHelmTimeout   = "helm-timeout"
 	FlagHelmValues    = "helm-values"
@@ -328,6 +329,10 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 
 	flags.StringVar(&migration.RsyncExtraArgs, FlagRsyncExtraArgs, migration.RsyncExtraArgs,
 		"Extra rsync flags appended to the rsync command (use at your own risk)")
+	flags.BoolVar(&migration.Push, FlagRsyncPush, migration.Push,
+		"Push mode: run rsync on the source side and sshd on the destination side. "+
+			"Use when the source side cannot expose a service, e.g., behind a firewall or NAT. "+
+			"Has no effect on the mount and local strategies")
 
 	flags.DurationVarP(&migration.HelmTimeout, FlagHelmTimeout, "t", migration.HelmTimeout,
 		"Helm install/uninstall timeout")

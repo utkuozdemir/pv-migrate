@@ -27,6 +27,7 @@ type Request struct {
 	IgnoreMounted         bool
 	NoChown               bool
 	Detach                bool
+	Push                  bool
 	NoCleanup             bool
 	ShowProgressBar       bool
 	SourceMountReadWrite  bool

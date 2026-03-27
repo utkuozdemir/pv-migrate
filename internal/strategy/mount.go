@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 )
 
 type Mount struct{}
 
-//nolint:funlen
 func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	if reason := r.cannotDoReason(mig); reason != "" {
@@ -62,32 +60,7 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
-	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
-	jobName := attempt.HelmReleaseNamePrefix + "-rsync"
-
-	if mig.Request.Detach {
-		if _, err = k8s.WaitForJobStart(ctx, kubeClient, namespace, jobName, logger); err != nil {
-			return fmt.Errorf("failed to wait for job to start: %w", err)
-		}
-
-		attempt.Detached = true
-
-		return nil
-	}
-
-	if err = k8s.WaitForJobCompletion(
-		ctx,
-		kubeClient,
-		namespace,
-		jobName,
-		mig.Request.ShowProgressBar,
-		mig.Request.Writer,
-		logger,
-	); err != nil {
-		return fmt.Errorf("failed to wait for job completion: %w", err)
-	}
-
-	return nil
+	return waitForRsyncJob(ctx, attempt, sourceInfo, releaseName, logger)
 }
 
 func (r *Mount) cannotDoReason(t *migration.Migration) string {

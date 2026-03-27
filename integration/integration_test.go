@@ -126,6 +126,12 @@ func TestIntegration(t *testing.T) {
 	t.Run("NonRoot", testNonRoot)
 	t.Run("NonRootFailOnRestrictedFiles", testNonRootFailOnRestrictedFiles)
 	t.Run("DetachMode", testDetachMode)
+
+	// Push mode tests
+
+	t.Run("ClusterIPPush", testClusterIPPush)
+	t.Run("LoadBalancerPush", testLoadBalancerPush)
+	t.Run("NodePortPush", testNodePortPush)
 }
 
 // testNodePort tests the NodePort strategy in the same namespace
