@@ -1,6 +1,5 @@
 //go:build integration
 
-//nolint:paralleltest
 package integration
 
 import (
@@ -20,6 +19,7 @@ import (
 	"github.com/neilotoole/slogt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -54,22 +54,13 @@ const (
 )
 
 var (
-	ns1 string
-	ns2 string
-	ns3 string
-
-	extraClusterKubeconfig string
-
-	mainClusterCli  *k8s.ClusterClient
-	extraClusterCli *k8s.ClusterClient
-
 	generateDataShellCommand = fmt.Sprintf("echo -n %s > %s && chown %s:%s %s",
 		generateDataContent, dataFilePath, dataFileUID, dataFileGID, dataFilePath)
 
 	// generateRestrictedDataShellCommand creates root-owned files with permissions
 	// that are inaccessible to non-root rsync but work fine as root:
 	// - file with mode 0600 (unreadable by non-root even with fsGroup)
-	// - directory with mode 0700 containing a file (untraversable by non-root)
+	// - directory with mode 0700 containing a file (untraversable by non-root).
 	generateRestrictedDataShellCommand = "echo -n PRIVATE > /volume/root_only.txt && " +
 		"chmod 0600 /volume/root_only.txt && " +
 		"mkdir -p /volume/restricted_dir && " +
@@ -79,8 +70,7 @@ var (
 	checkRestrictedDataShellCommand = "cat /volume/root_only.txt && " +
 		"cat /volume/restricted_dir/hidden.txt"
 
-	clearRestrictedDataShellCommand = "rm -f /volume/root_only.txt && rm -rf /volume/restricted_dir"
-	generateExtraDataShellCommand   = fmt.Sprintf("echo -n %s > %s",
+	generateExtraDataShellCommand = fmt.Sprintf("echo -n %s > %s",
 		generateDataContent, extraDataFilePath)
 	printDataUIDGIDContentShellCommand = fmt.Sprintf(
 		"stat -c '%%u' %s && stat -c '%%g' %s && cat %s",
@@ -89,70 +79,630 @@ var (
 		dataFilePath,
 	)
 	checkExtraDataShellCommand = "ls " + extraDataFilePath
-	clearDataShellCommand      = "find /volume -mindepth 1 -delete"
-
-	resourceLabels = map[string]string{
+	resourceLabels             = map[string]string{
 		"pv-migrate-test": "true",
 	}
 
 	ErrPodExecStderr = errors.New("pod exec stderr")
 )
 
-func TestIntegration(t *testing.T) {
-	logger := slogt.New(t)
-	slog.SetDefault(logger)
-	klog.SetSlogLogger(logger)
-
-	setup(t, logger)
-	teardownOnCleanup(t, logger)
-
-	t.Run("SameNS", testSameNS)
-	t.Run("RsyncExtraArgs", testRsyncExtraArgs)
-	t.Run("SameNSLoadBalancer", testSameNSLoadBalancer)
-	t.Run("NoChown", testNoChown)
-	t.Run("DeleteExtraneousFiles", testDeleteExtraneousFiles)
-	t.Run("MountedError", testMountedError)
-	t.Run("DifferentNS", testDifferentNS)
-	t.Run("FailWithoutNetworkPolicies", testFailWithoutNetworkPolicies)
-	t.Run("LoadBalancerDestHostOverride", testLoadBalancerDestHostOverride)
-	t.Run("RSA", testRSA)
-	t.Run("DifferentCluster", testDifferentCluster)
-	t.Run("Local", testLocal)
-	t.Run("LongPVCNames", testLongPVCNames)
-	t.Run("NodePort", testNodePort)
-	t.Run("NodePortDifferentNS", testNodePortDifferentNS)
-	t.Run("NodePortDestHostOverride", testNodePortDestHostOverride)
-	t.Run("NodePortCustomPort", testNodePortCustomPort)
-	t.Run("NonRoot", testNonRoot)
-	t.Run("NonRootFailOnRestrictedFiles", testNonRootFailOnRestrictedFiles)
-	t.Run("DetachMode", testDetachMode)
-
-	// Push mode tests
-
-	t.Run("ClusterIPPush", testClusterIPPush)
-	t.Run("LoadBalancerPush", testLoadBalancerPush)
-	t.Run("NodePortPush", testNodePortPush)
+// sharedInfra holds cluster clients and the shared read-only source namespace,
+// created once per test run. Tests that only read from source share this.
+type sharedInfra struct {
+	mainCli         *k8s.ClusterClient
+	extraCli        *k8s.ClusterClient
+	extraKubeconfig string
+	sourceNS        string
 }
 
-// testNodePort tests the NodePort strategy in the same namespace
-func testNodePort(t *testing.T) {
-	clearDestsOnCleanup(t)
+// testEnv holds per-test infrastructure: isolated namespace(s) for each subtest.
+type testEnv struct {
+	shared    *sharedInfra
+	sourceNS  string
+	destNS    string
+	sourceCli *k8s.ClusterClient
+	destCli   *k8s.ClusterClient
+}
+
+//nolint:funlen
+func TestIntegration(t *testing.T) {
+	t.Parallel()
+
+	si := setupShared(t)
+
+	t.Run("SameNS", func(t *testing.T) {
+		t.Parallel()
+		te := setupSameNS(t, si)
+		testSameNS(t, te)
+	})
+	t.Run("RsyncExtraArgs", func(t *testing.T) {
+		t.Parallel()
+		testRsyncExtraArgs(t, si)
+	})
+	t.Run("LoadBalancer", func(t *testing.T) {
+		t.Parallel()
+		te := setupExtraCluster(t, si)
+		testLoadBalancer(t, te)
+	})
+	t.Run("NoChown", func(t *testing.T) {
+		t.Parallel()
+		te := setupSameNS(t, si)
+		testNoChown(t, te)
+	})
+	t.Run("DeleteExtraneousFiles", func(t *testing.T) {
+		t.Parallel()
+		te := setupSameNS(t, si)
+		testDeleteExtraneousFiles(t, te)
+	})
+	t.Run("MountedError", func(t *testing.T) {
+		t.Parallel()
+		te := setupSameNS(t, si)
+		testMountedError(t, te)
+	})
+	t.Run("DifferentNS", func(t *testing.T) {
+		t.Parallel()
+		te := setupIsolatedDiffNS(t, si, generateDataShellCommand+" && "+generateRestrictedDataShellCommand)
+		testDifferentNS(t, te)
+	})
+	t.Run("FailWithoutNetworkPolicies", func(t *testing.T) {
+		t.Parallel()
+		te := setupDiffNS(t, si)
+		testFailWithoutNetworkPolicies(t, te)
+	})
+	t.Run("LoadBalancerDestHostOverride", func(t *testing.T) {
+		t.Parallel()
+		te := setupIsolatedDiffNS(t, si, generateDataShellCommand)
+		testLoadBalancerDestHostOverride(t, te)
+	})
+	t.Run("RSA", func(t *testing.T) {
+		t.Parallel()
+		te := setupDiffNS(t, si)
+		testRSA(t, te)
+	})
+	t.Run("DifferentCluster", func(t *testing.T) {
+		t.Parallel()
+		te := setupExtraCluster(t, si)
+		testDifferentCluster(t, te)
+	})
+	t.Run("Local", func(t *testing.T) {
+		t.Parallel()
+		te := setupExtraCluster(t, si)
+		testLocal(t, te)
+	})
+	t.Run("LongPVCNames", func(t *testing.T) {
+		t.Parallel()
+		te := setupLongPVCNames(t, si)
+		testLongPVCNames(t, te)
+	})
+	t.Run("NodePort", func(t *testing.T) {
+		t.Parallel()
+		te := setupExtraCluster(t, si)
+		testNodePort(t, te)
+	})
+	t.Run("NodePortDestHostOverride", func(t *testing.T) {
+		t.Parallel()
+		te := setupIsolatedDiffNS(t, si, generateDataShellCommand)
+		testNodePortDestHostOverride(t, te)
+	})
+	t.Run("NodePortCustomPort", func(t *testing.T) {
+		t.Parallel()
+		te := setupExtraCluster(t, si)
+		testNodePortCustomPort(t, te)
+	})
+	t.Run("NonRoot", func(t *testing.T) {
+		t.Parallel()
+		te := setupDiffNS(t, si)
+		testNonRoot(t, te)
+	})
+	t.Run("NonRootFailOnRestrictedFiles", func(t *testing.T) {
+		t.Parallel()
+		te := setupIsolatedDiffNS(t, si, generateDataShellCommand+" && "+generateRestrictedDataShellCommand)
+		testNonRootFailOnRestrictedFiles(t, te)
+	})
+	t.Run("DetachMode", func(t *testing.T) {
+		t.Parallel()
+		te := setupSameNS(t, si)
+		testDetachMode(t, te)
+	})
+
+	// Push mode tests
+	t.Run("ClusterIPPush", func(t *testing.T) {
+		t.Parallel()
+		te := setupDiffNS(t, si)
+		testClusterIPPush(t, te)
+	})
+	t.Run("LoadBalancerPush", func(t *testing.T) {
+		t.Parallel()
+		te := setupExtraCluster(t, si)
+		testLoadBalancerPush(t, te)
+	})
+	t.Run("NodePortPush", func(t *testing.T) {
+		t.Parallel()
+		te := setupExtraCluster(t, si)
+		testNodePortPush(t, te)
+	})
+}
+
+// --- Test functions ---
+
+//nolint:dupl,thelper
+func testSameNS(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t), te.sourceNS, te.destNS)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+// testRsyncExtraArgs verifies that --rsync-extra-args passes flags through to rsync.
+// It uses --log-file to make rsync write a log file, then asserts the file exists.
+// Two sub-tests cover Job-based (clusterip) and SSH-based (local) strategies.
+// The log file path and check pod differ because rsync runs in different places:
+// in Job-based strategies it runs on the dest side, in local it runs on the source side.
+//
+//nolint:thelper
+func testRsyncExtraArgs(t *testing.T, si *sharedInfra) {
+	tests := []struct {
+		name        string
+		extraFlags  string
+		logFilePath string // path as seen by the rsync process
+		checkPod    string // test pod where the log file ends up
+	}{
+		{
+			name:        "ClusterIP",
+			extraFlags:  "-s clusterip",
+			logFilePath: "/dest/rsync.log",
+			checkPod:    "dest",
+		},
+		{
+			name:        "Local",
+			extraFlags:  "-s local -R",
+			logFilePath: "/source/rsync.log",
+			checkPod:    "source",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			te := setupSameNS(t, si)
+			ctx := t.Context()
+
+			_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+			require.NoError(t, err)
+
+			cmd := fmt.Sprintf("%s -i -n %s -N %s --rsync-extra-args=--log-file=%s --source source --dest dest",
+				defaultHelmArgs(t), te.sourceNS, te.destNS, tc.logFilePath)
+			if tc.extraFlags != "" {
+				cmd += " " + tc.extraFlags
+			}
+
+			require.NoError(t, runCliApp(ctx, t, cmd))
+
+			stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+			require.NoError(t, err)
+
+			parts := strings.Split(stdout, "\n")
+			assert.Len(t, parts, 3)
+
+			if len(parts) < 3 {
+				return
+			}
+
+			assert.Equal(t, dataFileUID, parts[0])
+			assert.Equal(t, dataFileGID, parts[1])
+			assert.Equal(t, generateDataContent, parts[2])
+
+			_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+			require.NoError(t, err)
+
+			// Verify rsync actually received the extra arg by checking the log file it wrote.
+			_, err = execInPod(ctx, te.sourceCli, te.sourceNS, tc.checkPod, "test -f /volume/rsync.log")
+			require.NoError(t, err)
+
+			t.Log("Verified custom rsync extra args were passed through and log file was created")
+		})
+	}
+}
+
+//nolint:dupl,thelper
+func testLoadBalancer(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf(
+		"%s -K %s -s loadbalancer -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest",
+		defaultHelmArgs(t),
+		te.shared.extraKubeconfig,
+		te.sourceNS,
+		te.destNS,
+	)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+//nolint:thelper
+func testNoChown(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf("%s -i -o -n %s -N %s --source source --dest dest", defaultHelmArgs(t), te.sourceNS, te.destNS)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, "0", parts[0])
+	assert.Equal(t, "0", parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+//nolint:thelper
+func testDeleteExtraneousFiles(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf("%s --no-compress -d -i -n %s -N %s --source source --dest dest",
+		defaultHelmArgs(t), te.sourceNS, te.destNS)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "No such file or directory")
+}
+
+//nolint:thelper
+func testMountedError(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf("%s -n %s -N %s --source source --dest dest", defaultHelmArgs(t), te.sourceNS, te.destNS)
+	err = runCliApp(ctx, t, cmd)
+	assert.ErrorContains(t, err, "ignore-mounted is not requested")
+}
+
+//nolint:thelper
+func testDifferentNS(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	// Restricted source data is already seeded via init container.
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	podWatchCancel := startPodWatches(t, te.sourceCli, te.sourceNS, te.destNS)
+
+	cmd := fmt.Sprintf(
+		"%s -i -n %s -N %s --source source --dest dest",
+		defaultHelmArgs(t),
+		te.sourceNS,
+		te.destNS,
+	)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	createdPods := podWatchCancel()
+	assertImages(t, createdPods)
+
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	// Verify restricted files were migrated (root can read everything)
+	stdout, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkRestrictedDataShellCommand)
+	require.NoError(t, err)
+	assert.Equal(t, "PRIVATESECRET", stdout)
+
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+// testFailWithoutNetworkPolicies tests that the migration fails if network policies are not enabled.
+//
+// For this test to work as expected, the cluster MUST use a CNI with NetworkPolicy support,
+// AND it must be configured to block traffic across namespaces by default
+// (unless an allowing NetworkPolicy is present).
+//
+// For example, Cilium with "policyEnforcementMode=always" (what we do in CI) meets these requirements:
+// See: https://docs.cilium.io/en/stable/security/network/policyenforcement/
+//
+//nolint:thelper
+func testFailWithoutNetworkPolicies(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	// Force a single strategy, zero retries, and a short helm timeout to fail fast -- we only
+	// need to confirm that the migration fails without NetworkPolicies.
+	cmd := fmt.Sprintf(
+		"%s --helm-set rsync.maxRetries=0 --helm-timeout 30s --log-level debug --log-format json"+
+			" -s clusterip -i -n %s -N %s --source source --dest dest",
+		imageHelmArgs(t),
+		te.sourceNS,
+		te.destNS,
+	)
+	require.Error(
+		t,
+		runCliApp(ctx, t, cmd),
+		"migration was expected to have failed without NetworkPolicies - "+
+			"does the cluster have a CNI that supports them and it is configured to enforce them?",
+	)
+}
+
+//nolint:thelper
+func testLoadBalancerDestHostOverride(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	// Create a service that will be used for the override
+	svcName := "alternative-svc"
+	_, err := te.sourceCli.KubeClient.CoreV1().Services(te.sourceNS).Create(ctx,
+		&corev1.Service{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:   svcName,
+				Labels: resourceLabels,
+			},
+			Spec: corev1.ServiceSpec{
+				Selector: map[string]string{
+					"app.kubernetes.io/component": "sshd",
+					"app.kubernetes.io/name":      "pv-migrate",
+				},
+				Ports: []corev1.ServicePort{
+					{
+						Name:       "ssh",
+						Port:       22,
+						TargetPort: intstr.FromInt32(22),
+					},
+				},
+			},
+		}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	// Prepare the destination with an extra file to test it remains after migration
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	// Set the destination host override to use our custom service
+	destHostOverride := svcName + "." + te.sourceNS
+	cmd := fmt.Sprintf(
+		"%s -i -n %s -N %s -H %s --source source --dest dest",
+		defaultHelmArgs(t), te.sourceNS, te.destNS, destHostOverride)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	// Verify the data was migrated correctly
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	// Check that ownership and content were preserved
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	// Verify that the extra file still exists (no deletion)
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+//nolint:dupl,thelper
+func testRSA(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s --source source --dest dest",
+		defaultHelmArgs(t), te.sourceNS, te.destNS)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+//nolint:dupl,thelper
+func testDifferentCluster(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t),
+		te.shared.extraKubeconfig, te.sourceNS, te.destNS)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+//nolint:dupl,thelper
+func testLocal(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
+	require.NoError(t, err)
+
+	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t),
+		te.shared.extraKubeconfig, te.sourceNS, te.destNS)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
+	require.NoError(t, err)
+}
+
+//nolint:thelper
+func testLongPVCNames(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	cmd := fmt.Sprintf("%s -i -n %s -N %s --source %s --dest %s",
+		defaultHelmArgs(t), te.sourceNS, te.destNS, longSourcePvcName, longDestPvcName)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(
+		ctx,
+		te.destCli,
+		te.destNS,
+		"long-dest",
+		printDataUIDGIDContentShellCommand,
+	)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	assert.Len(t, parts, 3)
+
+	if len(parts) < 3 {
+		return
+	}
+
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
+}
+
+// testNodePort tests the NodePort strategy in the same namespace.
+//
+//nolint:dupl,thelper
+func testNodePort(t *testing.T, te *testEnv) {
 	ctx := t.Context()
 
 	// Prepare the destination with an extra file to test it remains after migration
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	// Run the migration using the NodePort strategy specifically
-	cmd := fmt.Sprintf("%s -s nodeport -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
+	cmd := fmt.Sprintf("%s -K %s -s nodeport -i -n %s -N %s --source source --dest dest",
+		defaultHelmArgs(t), te.shared.extraKubeconfig, te.sourceNS, te.destNS)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Verify the data was migrated correctly
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
+	assert.Len(t, parts, 3)
 
 	if len(parts) < 3 {
 		return
@@ -164,48 +714,14 @@ func testNodePort(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	// Verify that the extra file still exists (no deletion)
-	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
 }
 
-// testNodePortDifferentNS tests the NodePort strategy with source and destination in different namespaces
-func testNodePortDifferentNS(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	// Prepare the destination with an extra file to test it remains after migration
-	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	// Run the migration using the NodePort strategy specifically between different namespaces
-	cmd := fmt.Sprintf("%s -s nodeport -i -n %s -N %s --source source --dest dest",
-		defaultHelmArgs(t), ns1, ns2)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	// Verify the data was migrated correctly
-	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	// Check that ownership and content were preserved
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	// Verify that the extra file still exists (no deletion)
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
-}
-
-// testNodePortDestHostOverride tests the NodePort strategy with a custom destination host override
-func testNodePortDestHostOverride(t *testing.T) {
-	clearDestsOnCleanup(t)
+// testNodePortDestHostOverride tests the NodePort strategy with a custom destination host override.
+//
+//nolint:thelper
+func testNodePortDestHostOverride(t *testing.T, te *testEnv) {
 	ctx := t.Context()
 
 	// Define a custom NodePort in the valid range
@@ -213,7 +729,7 @@ func testNodePortDestHostOverride(t *testing.T) {
 
 	// Create a service that will be used for the override
 	svcName := "nodeport-override-svc"
-	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(ctx,
+	_, err := te.sourceCli.KubeClient.CoreV1().Services(te.sourceNS).Create(ctx,
 		&corev1.Service{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:   svcName,
@@ -237,22 +753,22 @@ func testNodePortDestHostOverride(t *testing.T) {
 	require.NoError(t, err)
 
 	// Prepare the destination with an extra file to test it remains after migration
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	// Set the destination host override to use our custom service
-	destHostOverride := svcName + "." + ns1
+	destHostOverride := svcName + "." + te.sourceNS
 	cmd := fmt.Sprintf(
 		"%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s -H %s --source source --dest dest",
-		defaultHelmArgs(t), customNodePort, ns1, ns2, destHostOverride)
+		defaultHelmArgs(t), customNodePort, te.sourceNS, te.destNS, destHostOverride)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Verify the data was migrated correctly
-	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
+	assert.Len(t, parts, 3)
 
 	if len(parts) < 3 {
 		return
@@ -264,33 +780,36 @@ func testNodePortDestHostOverride(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	// Verify that the extra file still exists (no deletion)
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
 }
 
-// testNodePortCustomPort tests the NodePort strategy with a custom NodePort port
-func testNodePortCustomPort(t *testing.T) {
-	clearDestsOnCleanup(t)
+// testNodePortCustomPort tests the NodePort strategy with a custom NodePort port.
+//
+//nolint:thelper
+func testNodePortCustomPort(t *testing.T, te *testEnv) {
 	ctx := t.Context()
 
 	// Define a custom NodePort in the valid range
 	customNodePort := 31234
 
 	// Prepare the destination with an extra file to test it remains after migration
-	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	// Run the migration using the NodePort strategy with a custom port
-	cmd := fmt.Sprintf("%s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s --source source --dest dest",
-		defaultHelmArgs(t), customNodePort, ns1, ns2)
+	cmd := fmt.Sprintf(
+		"%s -K %s -s nodeport --helm-set sshd.service.nodePort=%d -i -n %s -N %s --source source --dest dest",
+		defaultHelmArgs(t), te.shared.extraKubeconfig, customNodePort, te.sourceNS, te.destNS,
+	)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Verify the data was migrated correctly
-	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
+	assert.Len(t, parts, 3)
 
 	if len(parts) < 3 {
 		return
@@ -302,600 +821,70 @@ func testNodePortCustomPort(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	// Verify that the extra file still exists (no deletion)
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
 }
 
-func testSameNS(t *testing.T) {
-	clearDestsOnCleanup(t)
+//nolint:thelper
+func testNonRoot(t *testing.T, te *testEnv) {
 	ctx := t.Context()
 
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
-}
-
-// testRsyncExtraArgs verifies that --rsync-extra-args passes flags through to rsync.
-// It uses --log-file to make rsync write a log file, then asserts the file exists.
-// Two sub-tests cover Job-based (clusterip) and SSH-based (local) strategies.
-// The log file path and check pod differ because rsync runs in different places:
-// in Job-based strategies it runs on the dest side, in local it runs on the source side.
-func testRsyncExtraArgs(t *testing.T) {
-	tests := []struct {
-		name        string
-		extraFlags  string
-		logFilePath string // path as seen by the rsync process
-		checkPod    string // test pod where the log file ends up
-	}{
-		{
-			name:        "ClusterIP",
-			extraFlags:  "-s clusterip",
-			logFilePath: "/dest/rsync.log",
-			checkPod:    "dest",
-		},
-		{
-			name:        "Local",
-			extraFlags:  "-s local -R",
-			logFilePath: "/source/rsync.log",
-			checkPod:    "source",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			clearDestsOnCleanup(t)
-			t.Cleanup(func() {
-				cleanupCtx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-				defer cancel()
-
-				_, cleanupErr := execInPod(cleanupCtx, mainClusterCli, ns1, tc.checkPod, "rm -f /volume/rsync.log")
-				require.NoError(t, cleanupErr)
-			})
-			ctx := t.Context()
-
-			_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-			require.NoError(t, err)
-
-			cmd := fmt.Sprintf("%s -i -n %s -N %s --rsync-extra-args=--log-file=%s --source source --dest dest",
-				defaultHelmArgs(t), ns1, ns1, tc.logFilePath)
-			if tc.extraFlags != "" {
-				cmd += " " + tc.extraFlags
-			}
-
-			require.NoError(t, runCliApp(ctx, t, cmd))
-
-			stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-			require.NoError(t, err)
-
-			parts := strings.Split(stdout, "\n")
-			assert.Equal(t, len(parts), 3)
-
-			if len(parts) < 3 {
-				return
-			}
-
-			assert.Equal(t, dataFileUID, parts[0])
-			assert.Equal(t, dataFileGID, parts[1])
-			assert.Equal(t, generateDataContent, parts[2])
-
-			_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-			require.NoError(t, err)
-
-			logger := slogt.New(t)
-
-			// Verify rsync actually received the extra arg by checking the log file it wrote.
-			_, err = execInPod(ctx, mainClusterCli, ns1, tc.checkPod, "test -f /volume/rsync.log")
-			require.NoError(t, err)
-
-			logger.Info(
-				"Verified custom rsync extra args were passed through and log file was created",
-				"logFilePath",
-				"/volume/rsync.log",
-			)
-		})
-	}
-}
-
-func testSameNSLoadBalancer(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf(
-		"%s -s loadbalancer -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest",
-		defaultHelmArgs(t),
-		ns1,
-		ns1,
-	)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
-}
-
-func testNoChown(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("%s -i -o -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	assert.Equal(t, "0", parts[0])
-	assert.Equal(t, "0", parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
-}
-
-func testDeleteExtraneousFiles(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("%s --no-compress -d -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "No such file or directory")
-}
-
-func testMountedError(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("%s -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns1)
-	err = runCliApp(ctx, t, cmd)
-	assert.ErrorContains(t, err, "ignore-mounted is not requested")
-}
-
-func testDifferentNS(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns1, "source", generateRestrictedDataShellCommand)
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		_, err := execInPod(cleanupCtx, mainClusterCli, ns1, "source", clearRestrictedDataShellCommand)
-		require.NoError(t, err)
-	})
-
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	podWatchCancel := startPodWatches(t)
-
-	cmd := fmt.Sprintf(
-		"%s -i -n %s -N %s --source source --dest dest",
-		defaultHelmArgs(t),
-		ns1,
-		ns2,
-	)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	createdPods := podWatchCancel()
-	assertImages(t, createdPods)
-
-	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	// Verify restricted files were migrated (root can read everything)
-	stdout, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkRestrictedDataShellCommand)
-	require.NoError(t, err)
-	assert.Equal(t, "PRIVATESECRET", stdout)
-
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
-}
-
-func testNonRoot(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	cmd := fmt.Sprintf(
 		"%s --non-root -i -n %s -N %s --source source --dest dest",
 		defaultHelmArgs(t),
-		ns1,
-		ns2,
+		te.sourceNS,
+		te.destNS,
 	)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
-	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", "cat /volume/file.txt")
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", "cat /volume/file.txt")
 	require.NoError(t, err)
 	assert.Equal(t, generateDataContent, stdout)
 
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
 }
 
-func testNonRootFailOnRestrictedFiles(t *testing.T) {
-	clearDestsOnCleanup(t)
+//nolint:thelper
+func testNonRootFailOnRestrictedFiles(t *testing.T, te *testEnv) {
 	ctx := t.Context()
 
-	_, err := execInPod(ctx, mainClusterCli, ns1, "source", generateRestrictedDataShellCommand)
-	require.NoError(t, err)
+	// Restricted source data is already seeded via init container.
 
-	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-
-		_, err := execInPod(cleanupCtx, mainClusterCli, ns1, "source", clearRestrictedDataShellCommand)
-		require.NoError(t, err)
-	})
-
+	// Force a single strategy, zero retries, and a short helm timeout to fail fast -- we only
+	// need to confirm that non-root rsync fails on restricted files.
 	cmd := fmt.Sprintf(
-		"%s --non-root -i -n %s -N %s --source source --dest dest",
+		"%s --helm-set rsync.maxRetries=0 --helm-timeout 30s"+
+			" --non-root -s clusterip -i -n %s -N %s --source source --dest dest",
 		defaultHelmArgs(t),
-		ns1,
-		ns2,
+		te.sourceNS,
+		te.destNS,
 	)
 	require.Error(t, runCliApp(ctx, t, cmd))
 }
 
-func startPodWatches(t *testing.T) (cancelFunc func() []*corev1.Pod) {
-	factory := informers.NewSharedInformerFactoryWithOptions(
-		mainClusterCli.KubeClient,
-		0,
-		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
-			options.LabelSelector = "app.kubernetes.io/name=pv-migrate"
-		}),
-	)
-
-	podInformer := factory.Core().V1().Pods().Informer()
-
-	var (
-		mu          sync.Mutex
-		createdPods []*corev1.Pod
-	)
-
-	_, err := podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			pod, ok := obj.(*corev1.Pod)
-			if !ok {
-				return
-			}
-
-			// Skip pods that are being deleted — these are leftovers from previous tests
-			// that the informer picks up during its initial List.
-			if pod.DeletionTimestamp != nil {
-				return
-			}
-
-			mu.Lock()
-			createdPods = append(createdPods, pod)
-			mu.Unlock()
-		},
-	})
-	require.NoError(t, err)
-
-	stopCh := make(chan struct{})
-
-	factory.Start(stopCh)
-	factory.WaitForCacheSync(stopCh)
-
-	return func() []*corev1.Pod {
-		close(stopCh)
-		factory.Shutdown()
-
-		mu.Lock()
-		defer mu.Unlock()
-
-		return createdPods
-	}
-}
-
-// testFailWithoutNetworkPolicies tests that the migration fails if network policies are not enabled.
-//
-// For this test to work as expected, the cluster MUST use a CNI with NetworkPolicy support,
-// AND it must be configured to block traffic across namespaces by default
-// (unless an allowing NetworkPolicy is present).
-//
-// For example, Cilium with "policyEnforcementMode=always" (what we do in CI) meets these requirements:
-// See: https://docs.cilium.io/en/stable/security/network/policyenforcement/
-func testFailWithoutNetworkPolicies(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf(
-		"%s --log-level debug --log-format json -i -n %s -N %s --source source --dest dest",
-		imageHelmArgs(t),
-		ns1,
-		ns2,
-	)
-	require.Error(
-		t,
-		runCliApp(ctx, t, cmd),
-		"migration was expected to have failed without NetworkPolicies - "+
-			"does the cluster have a CNI that supports them and it is configured to enforce them?",
-	)
-}
-
-func testLoadBalancerDestHostOverride(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	// Create a service that will be used for the override
-	svcName := "alternative-svc"
-	_, err := mainClusterCli.KubeClient.CoreV1().Services(ns1).Create(ctx,
-		&corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   svcName,
-				Labels: resourceLabels,
-			},
-			Spec: corev1.ServiceSpec{
-				Selector: map[string]string{
-					"app.kubernetes.io/component": "sshd",
-					"app.kubernetes.io/name":      "pv-migrate",
-				},
-				Ports: []corev1.ServicePort{
-					{
-						Name:       "ssh",
-						Port:       22,
-						TargetPort: intstr.FromInt32(22),
-					},
-				},
-			},
-		}, metav1.CreateOptions{})
-	require.NoError(t, err)
-
-	// Prepare the destination with an extra file to test it remains after migration
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	// Set the destination host override to use our custom service
-	destHostOverride := svcName + "." + ns1
-	cmd := fmt.Sprintf(
-		"%s -i -n %s -N %s -H %s --source source --dest dest", defaultHelmArgs(t), ns1, ns2, destHostOverride)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	// Verify the data was migrated correctly
-	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	// Check that ownership and content were preserved
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	// Verify that the extra file still exists (no deletion)
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
-}
-
-func testRSA(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("%s -a rsa -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t), ns1, ns2)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
-}
-
-func testDifferentCluster(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("%s -K %s -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t),
-		extraClusterKubeconfig, ns1, ns3)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	stdout, err := execInPod(ctx, extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	_, err = execInPod(ctx, extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
-}
-
-func testLocal(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, extraClusterCli, ns3, "dest", generateExtraDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("%s -K %s -s local -i -n %s -N %s --source source --dest dest", defaultHelmArgs(t),
-		extraClusterKubeconfig, ns1, ns3)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	stdout, err := execInPod(ctx, extraClusterCli, ns3, "dest", printDataUIDGIDContentShellCommand)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-
-	_, err = execInPod(ctx, extraClusterCli, ns3, "dest", checkExtraDataShellCommand)
-	require.NoError(t, err)
-}
-
-func testLongPVCNames(t *testing.T) {
-	clearDestsOnCleanup(t)
-	ctx := t.Context()
-
-	_, err := execInPod(ctx, mainClusterCli, ns1, "long-dest", clearDataShellCommand)
-	require.NoError(t, err)
-
-	cmd := fmt.Sprintf("%s -i -n %s -N %s --source %s --dest %s",
-		defaultHelmArgs(t), ns1, ns1, longSourcePvcName, longDestPvcName)
-	require.NoError(t, runCliApp(ctx, t, cmd))
-
-	stdout, err := execInPod(
-		ctx,
-		mainClusterCli,
-		ns1,
-		"long-dest",
-		printDataUIDGIDContentShellCommand,
-	)
-	require.NoError(t, err)
-
-	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
-
-	if len(parts) < 3 {
-		return
-	}
-
-	assert.Equal(t, dataFileUID, parts[0])
-	assert.Equal(t, dataFileGID, parts[1])
-	assert.Equal(t, generateDataContent, parts[2])
-}
-
-func testDetachMode(t *testing.T) {
-	clearDestsOnCleanup(t)
-
+//nolint:thelper
+func testDetachMode(t *testing.T, te *testEnv) {
 	ctx := t.Context()
 	migrationID := "detach-test"
 
 	// Run the migration in detach mode with a custom ID
 	cmd := fmt.Sprintf("%s -i -n %s -N %s --source source --dest dest --detach --id %s",
-		defaultHelmArgs(t), ns1, ns1, migrationID)
+		defaultHelmArgs(t), te.sourceNS, te.destNS, migrationID)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Find the rsync job created by the detached migration
 	releasePrefix := "pv-migrate-" + migrationID + "-"
-	job, err := k8s.FindRsyncJob(ctx, mainClusterCli.KubeClient, ns1, releasePrefix)
+	job, err := k8s.FindRsyncJob(ctx, te.sourceCli.KubeClient, te.sourceNS, releasePrefix)
 	require.NoError(t, err)
 	assert.Contains(t, job.Name, migrationID)
 
 	// Wait for the job to complete
 	require.Eventually(t, func() bool {
-		j, err := mainClusterCli.KubeClient.BatchV1().Jobs(job.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
+		j, err := te.sourceCli.KubeClient.BatchV1().Jobs(job.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
 		if err != nil {
 			return false
 		}
@@ -904,10 +893,10 @@ func testDetachMode(t *testing.T) {
 	}, 2*time.Minute, 2*time.Second, "rsync job did not complete in time")
 
 	// Run status (without --follow) and verify it doesn't error
-	require.NoError(t, runCliAppWithArgs(ctx, t, "status", "-n", ns1, migrationID))
+	require.NoError(t, runCliAppWithArgs(ctx, t, "status", "-n", te.sourceNS, migrationID))
 
 	// Verify that the data was actually migrated
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
@@ -918,97 +907,197 @@ func testDetachMode(t *testing.T) {
 	assert.Equal(t, generateDataContent, parts[2])
 
 	// Clean up using the cleanup subcommand
-	require.NoError(t, runCliAppWithArgs(ctx, t, "cleanup", "-n", ns1, "--force", migrationID))
+	require.NoError(t, runCliAppWithArgs(ctx, t, "cleanup", "-n", te.sourceNS, "--force", migrationID))
 
 	// Verify the Helm releases are gone by running cleanup again (should error: no releases found)
-	err = runCliAppWithArgs(ctx, t, "cleanup", "-n", ns1, migrationID)
+	err = runCliAppWithArgs(ctx, t, "cleanup", "-n", te.sourceNS, migrationID)
 	require.ErrorContains(t, err, "no releases found")
 }
 
-func setup(t *testing.T, logger *slog.Logger) {
-	logger.Info("set up integration tests")
+// --- Setup helpers ---
+
+func setupShared(t *testing.T) *sharedInfra {
+	t.Helper()
+
+	logger := slogt.New(t)
+	slog.SetDefault(logger)
+	klog.SetSlogLogger(logger)
 
 	usr, err := user.Current()
 	require.NoError(t, err)
 
-	homeDir := usr.HomeDir
-
-	extraClusterKubeconfig = env.GetString("PVMIG_TEST_EXTRA_KUBECONFIG", homeDir+"/.kube/config")
+	extraKubeconfig := env.GetString("PVMIG_TEST_EXTRA_KUBECONFIG", usr.HomeDir+"/.kube/config")
 
 	mainCli, err := k8s.GetClusterClient("", "", logger)
 	require.NoError(t, err)
 
-	mainClusterCli = mainCli
-
-	extraCli, err := k8s.GetClusterClient(extraClusterKubeconfig, "", logger)
+	extraCli, err := k8s.GetClusterClient(extraKubeconfig, "", logger)
 	require.NoError(t, err)
-
-	extraClusterCli = extraCli
 
 	if mainCli.RestConfig.Host == extraCli.RestConfig.Host {
 		logger.Warn("WARNING: USING A SINGLE CLUSTER FOR INTEGRATION TESTS!")
 	}
 
-	ns1 = "pv-migrate-test-1-" + utilrand.String(5)
-	ns2 = "pv-migrate-test-2-" + utilrand.String(5)
-	ns3 = "pv-migrate-test-3-" + utilrand.String(5)
+	logger.Info("setting up shared source namespace")
 
-	createNS(t, mainClusterCli, ns1)
-	createNS(t, mainClusterCli, ns2)
-	createNS(t, extraClusterCli, ns3)
+	sourceNS := newTestNS(t, mainCli, "pvmig-src")
+	require.NoError(t, provisionPod(t.Context(), mainCli, sourceNS, "source", "source", generateDataShellCommand))
 
-	createPVC(t, mainClusterCli, ns1, longSourcePvcName)
-	createPVC(t, mainClusterCli, ns1, longDestPvcName)
-	createPVC(t, mainClusterCli, ns1, "source")
-	createPVC(t, mainClusterCli, ns1, "dest")
-	createPVC(t, mainClusterCli, ns2, "dest")
-	createPVC(t, extraClusterCli, ns3, "dest")
+	logger.Info("shared source namespace ready", "ns", sourceNS)
 
-	createPod(t, mainClusterCli, ns1, "long-source", longSourcePvcName)
-	createPod(t, mainClusterCli, ns1, "long-dest", longDestPvcName)
-	createPod(t, mainClusterCli, ns1, "source", "source")
-	createPod(t, mainClusterCli, ns1, "dest", "dest")
-	createPod(t, mainClusterCli, ns2, "dest", "dest")
-	createPod(t, extraClusterCli, ns3, "dest", "dest")
-
-	waitUntilPodIsRunning(t, mainClusterCli, ns1, "long-source")
-	waitUntilPodIsRunning(t, mainClusterCli, ns1, "long-dest")
-	waitUntilPodIsRunning(t, mainClusterCli, ns1, "source")
-	waitUntilPodIsRunning(t, mainClusterCli, ns1, "dest")
-	waitUntilPodIsRunning(t, mainClusterCli, ns2, "dest")
-	waitUntilPodIsRunning(t, extraClusterCli, ns3, "dest")
-
-	ctx := t.Context()
-
-	_, err = execInPod(ctx, mainClusterCli, ns1, "long-source", generateDataShellCommand)
-	require.NoError(t, err)
-
-	_, err = execInPod(ctx, mainClusterCli, ns1, "source", generateDataShellCommand)
-	require.NoError(t, err)
-
-	logger.Info("set up integration tests done")
+	return &sharedInfra{
+		mainCli:         mainCli,
+		extraCli:        extraCli,
+		extraKubeconfig: extraKubeconfig,
+		sourceNS:        sourceNS,
+	}
 }
 
-func teardownOnCleanup(t *testing.T, logger *slog.Logger) {
-	t.Cleanup(func() {
-		logger.Info("tear down integration tests")
+// setupSameNS creates a per-test namespace with both source and dest PVCs+pods.
+func setupSameNS(t *testing.T, si *sharedInfra) *testEnv {
+	t.Helper()
 
-		teardownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ns := newTestNS(t, si.mainCli, "pvmig-test")
+
+	eg, ctx := errgroup.WithContext(t.Context())
+	eg.Go(func() error {
+		return provisionPod(ctx, si.mainCli, ns, "source", "source", generateDataShellCommand)
+	})
+	eg.Go(func() error {
+		return provisionPod(ctx, si.mainCli, ns, "dest", "dest", "")
+	})
+	require.NoError(t, eg.Wait())
+
+	return &testEnv{shared: si, sourceNS: ns, destNS: ns, sourceCli: si.mainCli, destCli: si.mainCli}
+}
+
+// setupDiffNS uses the shared source and creates a per-test dest namespace.
+func setupDiffNS(t *testing.T, si *sharedInfra) *testEnv {
+	t.Helper()
+
+	destNS := newTestNS(t, si.mainCli, "pvmig-test")
+	require.NoError(t, provisionPod(t.Context(), si.mainCli, destNS, "dest", "dest", ""))
+
+	return &testEnv{shared: si, sourceNS: si.sourceNS, destNS: destNS, sourceCli: si.mainCli, destCli: si.mainCli}
+}
+
+// setupIsolatedDiffNS creates per-test source and dest namespaces.
+// The source pod is seeded with seedCmd via init container.
+func setupIsolatedDiffNS(t *testing.T, si *sharedInfra, seedCmd string) *testEnv {
+	t.Helper()
+
+	sourceNS := newTestNS(t, si.mainCli, "pvmig-test")
+	destNS := newTestNS(t, si.mainCli, "pvmig-test")
+
+	eg, ctx := errgroup.WithContext(t.Context())
+	eg.Go(func() error {
+		return provisionPod(ctx, si.mainCli, sourceNS, "source", "source", seedCmd)
+	})
+	eg.Go(func() error {
+		return provisionPod(ctx, si.mainCli, destNS, "dest", "dest", "")
+	})
+	require.NoError(t, eg.Wait())
+
+	return &testEnv{shared: si, sourceNS: sourceNS, destNS: destNS, sourceCli: si.mainCli, destCli: si.mainCli}
+}
+
+// setupExtraCluster uses shared source on main cluster and per-test dest on extra cluster.
+func setupExtraCluster(t *testing.T, si *sharedInfra) *testEnv {
+	t.Helper()
+
+	destNS := newTestNS(t, si.extraCli, "pvmig-test")
+	require.NoError(t, provisionPod(t.Context(), si.extraCli, destNS, "dest", "dest", ""))
+
+	return &testEnv{shared: si, sourceNS: si.sourceNS, destNS: destNS, sourceCli: si.mainCli, destCli: si.extraCli}
+}
+
+// setupLongPVCNames creates a per-test namespace with long-named PVCs.
+func setupLongPVCNames(t *testing.T, si *sharedInfra) *testEnv {
+	t.Helper()
+
+	ns := newTestNS(t, si.mainCli, "pvmig-test")
+
+	eg, ctx := errgroup.WithContext(t.Context())
+	eg.Go(func() error {
+		return provisionPod(ctx, si.mainCli, ns, longSourcePvcName, "long-source", generateDataShellCommand)
+	})
+	eg.Go(func() error {
+		return provisionPod(ctx, si.mainCli, ns, longDestPvcName, "long-dest", "")
+	})
+	require.NoError(t, eg.Wait())
+
+	return &testEnv{shared: si, sourceNS: ns, destNS: ns, sourceCli: si.mainCli, destCli: si.mainCli}
+}
+
+// --- Infrastructure helpers ---
+
+// newTestNS creates a namespace with a random suffix and registers fire-and-forget cleanup.
+func newTestNS(t *testing.T, cli *k8s.ClusterClient, prefix string) string {
+	t.Helper()
+
+	name := prefix + "-" + utilrand.String(5)
+
+	_, err := cli.KubeClient.CoreV1().Namespaces().Create(t.Context(), &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: resourceLabels,
+		},
+	}, metav1.CreateOptions{})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
-		deleteNS(teardownCtx, t, mainClusterCli, ns1)
-		deleteNS(teardownCtx, t, mainClusterCli, ns2)
-		deleteNS(teardownCtx, t, extraClusterCli, ns3)
-
-		logger.Info("tear down integration tests done")
+		if err := cli.KubeClient.CoreV1().Namespaces().Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+			t.Logf("failed to delete test namespace %q: %v", name, err)
+		}
 	})
+
+	return name
 }
 
-func createPod(t *testing.T, cli *k8s.ClusterClient, ns, name, pvc string) {
+// provisionPod creates a PVC, a pod mounting it, and waits for the pod to be running.
+// If seedCmd is non-empty, an init container seeds data before the main container starts.
+// This function returns an error (instead of calling require) so it can be used in errgroup goroutines.
+//
+//nolint:funlen
+func provisionPod(ctx context.Context, cli *k8s.ClusterClient, ns, pvcName, podName, seedCmd string) error {
+	// Create PVC
+	var storageClassRef *string
+	if sc := os.Getenv("PVMIG_TEST_STORAGE_CLASS"); sc != "" {
+		storageClassRef = &sc
+	}
+
+	pvc := corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      pvcName,
+			Namespace: ns,
+			Labels:    resourceLabels,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			StorageClassName: storageClassRef,
+			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: map[corev1.ResourceName]resource.Quantity{
+					"storage": resource.MustParse("64Mi"),
+				},
+			},
+		},
+	}
+
+	if _, err := cli.KubeClient.CoreV1().
+		PersistentVolumeClaims(ns).
+		Create(ctx, &pvc, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("create PVC %s/%s: %w", ns, pvcName, err)
+	}
+
+	// Create pod
 	terminationGracePeriodSeconds := int64(0)
+
 	pod := corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
+			Name:      podName,
 			Namespace: ns,
 			Labels:    resourceLabels,
 		},
@@ -1019,7 +1108,7 @@ func createPod(t *testing.T, cli *k8s.ClusterClient, ns, name, pvc string) {
 					Name: "volume",
 					VolumeSource: corev1.VolumeSource{
 						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: pvc,
+							ClaimName: pvcName,
 						},
 					},
 				},
@@ -1040,47 +1129,33 @@ func createPod(t *testing.T, cli *k8s.ClusterClient, ns, name, pvc string) {
 		},
 	}
 
-	ctx := t.Context()
-
-	_, err := cli.KubeClient.CoreV1().Pods(ns).Create(ctx, &pod, metav1.CreateOptions{})
-	require.NoError(t, err)
-}
-
-func createPVC(t *testing.T, cli *k8s.ClusterClient, ns, name string) {
-	var storageClassRef *string
-
-	storageClass := os.Getenv("PVMIG_TEST_STORAGE_CLASS")
-	if storageClass != "" {
-		storageClassRef = &storageClass
-	}
-
-	pvc := corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: ns,
-			Labels:    resourceLabels,
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			StorageClassName: storageClassRef,
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
-			},
-			Resources: corev1.VolumeResourceRequirements{
-				Requests: map[corev1.ResourceName]resource.Quantity{
-					"storage": resource.MustParse("64Mi"),
+	if seedCmd != "" {
+		pod.Spec.InitContainers = []corev1.Container{
+			{
+				Name:    "seed",
+				Image:   "docker.io/busybox:stable",
+				Command: []string{"sh", "-c", seedCmd},
+				VolumeMounts: []corev1.VolumeMount{
+					{
+						Name:      "volume",
+						MountPath: "/volume",
+					},
 				},
 			},
-		},
+		}
 	}
 
-	_, err := cli.KubeClient.CoreV1().
-		PersistentVolumeClaims(ns).
-		Create(t.Context(), &pvc, metav1.CreateOptions{})
-	require.NoError(t, err)
+	if _, err := cli.KubeClient.CoreV1().Pods(ns).Create(ctx, &pod, metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("create pod %s/%s: %w", ns, podName, err)
+	}
+
+	// Wait for pod to be running
+	return waitPodRunning(ctx, cli, ns, podName)
 }
 
-//nolint:dupl
-func waitUntilPodIsRunning(t *testing.T, cli *k8s.ClusterClient, ns, name string) {
+// waitPodRunning waits until a pod reaches the Running phase.
+// Returns an error (instead of calling require) so it can be used in errgroup goroutines.
+func waitPodRunning(ctx context.Context, cli *k8s.ClusterClient, ns, name string) error {
 	resCli := cli.KubeClient.CoreV1().Pods(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 
@@ -1107,18 +1182,112 @@ func waitUntilPodIsRunning(t *testing.T, cli *k8s.ClusterClient, ns, name string
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(t.Context(), 1*time.Minute)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
 	_, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
 		func(event watch.Event) (bool, error) {
 			res, ok := event.Object.(*corev1.Pod)
-			require.Truef(t, ok, "unexpected type while watching pod %T: %s/%s", event.Object, ns, name)
+			if !ok {
+				return false, fmt.Errorf("unexpected type %T watching pod %s/%s", event.Object, ns, name)
+			}
 
 			return res.Status.Phase == corev1.PodRunning, nil
 		})
-	require.NoError(t, err)
+	if err != nil {
+		return fmt.Errorf("wait for pod %s/%s running: %w", ns, name, err)
+	}
+
+	return nil
 }
+
+// --- Pod watches (used by testDifferentNS) ---
+
+//nolint:nonamedreturns
+func startPodWatches(t *testing.T, cli *k8s.ClusterClient, namespaces ...string) (cancelFunc func() []*corev1.Pod) {
+	t.Helper()
+
+	nsSet := make(map[string]struct{}, len(namespaces))
+	for _, ns := range namespaces {
+		nsSet[ns] = struct{}{}
+	}
+
+	factory := informers.NewSharedInformerFactoryWithOptions(
+		cli.KubeClient,
+		0,
+		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+			options.LabelSelector = "app.kubernetes.io/name=pv-migrate"
+		}),
+	)
+
+	podInformer := factory.Core().V1().Pods().Informer()
+
+	var (
+		mu          sync.Mutex
+		createdPods []*corev1.Pod
+	)
+
+	_, err := podInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj any) {
+			pod, ok := obj.(*corev1.Pod)
+			if !ok {
+				return
+			}
+
+			// Skip pods that are being deleted -- these are leftovers from previous tests
+			// that the informer picks up during its initial List.
+			if pod.DeletionTimestamp != nil {
+				return
+			}
+
+			// Only track pods in this test's namespaces
+			if _, inScope := nsSet[pod.Namespace]; !inScope {
+				return
+			}
+
+			mu.Lock()
+
+			createdPods = append(createdPods, pod)
+			mu.Unlock()
+		},
+	})
+	require.NoError(t, err)
+
+	stopCh := make(chan struct{})
+
+	factory.Start(stopCh)
+	factory.WaitForCacheSync(stopCh)
+
+	return func() []*corev1.Pod {
+		close(stopCh)
+		factory.Shutdown()
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		return createdPods
+	}
+}
+
+func assertImages(t *testing.T, pods []*corev1.Pod) {
+	t.Helper()
+
+	require.Len(t, pods, 2)
+
+	expectedRsyncImage, expectedSshdImage := getImages(t)
+
+	actualImages := make([]string, 0, len(pods))
+
+	for _, pod := range pods {
+		require.Len(t, pod.Spec.Containers, 1)
+
+		actualImages = append(actualImages, pod.Spec.Containers[0].Image)
+	}
+
+	require.ElementsMatch(t, []string{expectedRsyncImage, expectedSshdImage}, actualImages)
+}
+
+// --- CLI and exec helpers ---
 
 func execInPod(ctx context.Context, cli *k8s.ClusterClient, ns string, name string, cmd string) (string, error) {
 	stdoutBuffer := new(bytes.Buffer)
@@ -1167,43 +1336,15 @@ func execInPod(ctx context.Context, cli *k8s.ClusterClient, ns string, name stri
 	return stdout, nil
 }
 
-func clearDestsOnCleanup(t *testing.T) {
-	t.Cleanup(func() {
-		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-		defer cancel()
-
-		_, err := execInPod(cleanupCtx, mainClusterCli, ns1, "dest", clearDataShellCommand)
-		require.NoError(t, err)
-
-		_, err = execInPod(cleanupCtx, mainClusterCli, ns2, "dest", clearDataShellCommand)
-		require.NoError(t, err)
-
-		_, err = execInPod(cleanupCtx, extraClusterCli, ns3, "dest", clearDataShellCommand)
-		require.NoError(t, err)
-	})
-}
-
-func createNS(t *testing.T, cli *k8s.ClusterClient, name string) {
-	_, err := cli.KubeClient.CoreV1().
-		Namespaces().Create(t.Context(), &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: resourceLabels,
-		},
-	}, metav1.CreateOptions{})
-	require.NoError(t, err)
-}
-
-func deleteNS(ctx context.Context, t *testing.T, cli *k8s.ClusterClient, name string) {
-	namespaces := cli.KubeClient.CoreV1().Namespaces()
-	require.NoError(t, namespaces.Delete(ctx, name, metav1.DeleteOptions{}))
-}
-
 func runCliApp(ctx context.Context, t *testing.T, cmd string) error {
+	t.Helper()
+
 	return runCliAppWithArgs(ctx, t, strings.Fields(cmd)...)
 }
 
 func runCliAppWithArgs(ctx context.Context, t *testing.T, args ...string) error {
+	t.Helper()
+
 	t.Logf("running command: %s", strings.Join(args, " "))
 
 	cliApp, err := app.BuildMigrateCmd(ctx, "", "", "", slogt.New(t))
@@ -1220,23 +1361,9 @@ func runCliAppWithArgs(ctx context.Context, t *testing.T, args ...string) error 
 	return nil
 }
 
-func assertImages(t *testing.T, pods []*corev1.Pod) {
-	require.Len(t, pods, 2)
-
-	expectedRsyncImage, expectedSshdImage := getImages(t)
-
-	var actualImages []string
-
-	for _, pod := range pods {
-		require.Len(t, pod.Spec.Containers, 1)
-
-		actualImages = append(actualImages, pod.Spec.Containers[0].Image)
-	}
-
-	require.ElementsMatch(t, []string{expectedRsyncImage, expectedSshdImage}, actualImages)
-}
-
 func imageHelmArgs(t *testing.T) string {
+	t.Helper()
+
 	rsyncImage, sshdImage := getImages(t)
 
 	rsyncImageParts := strings.SplitN(rsyncImage, ":", 2)
@@ -1252,12 +1379,17 @@ func imageHelmArgs(t *testing.T) string {
 }
 
 func defaultHelmArgs(t *testing.T) string {
+	t.Helper()
+
 	return "--helm-set rsync.networkPolicy.enabled=true " +
 		"--helm-set sshd.networkPolicy.enabled=true " +
 		imageHelmArgs(t)
 }
 
+//nolint:nonamedreturns
 func getImages(t *testing.T) (rsyncImage, sshdImage string) {
+	t.Helper()
+
 	rsyncImage = os.Getenv("RSYNC_IMAGE")
 	require.NotEmpty(t, rsyncImage, "RSYNC_IMAGE env var must be set")
 
