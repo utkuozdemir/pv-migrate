@@ -1,6 +1,5 @@
 //go:build integration
 
-//nolint:paralleltest
 package integration
 
 import (
@@ -12,26 +11,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func testClusterIPPush(t *testing.T) {
-	clearDestsOnCleanup(t)
+//nolint:dupl,thelper
+func testClusterIPPush(t *testing.T, te *testEnv) {
 	ctx := t.Context()
 
-	_, err := execInPod(ctx, mainClusterCli, ns2, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	cmd := fmt.Sprintf(
 		"%s -s clusterip --rsync-push -i -n %s -N %s --source source --dest dest",
 		defaultHelmArgs(t),
-		ns1,
-		ns2,
+		te.sourceNS,
+		te.destNS,
 	)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
-	stdout, err := execInPod(ctx, mainClusterCli, ns2, "dest", printDataUIDGIDContentShellCommand)
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
+	assert.Len(t, parts, 3)
 
 	if len(parts) < 3 {
 		return
@@ -41,30 +40,31 @@ func testClusterIPPush(t *testing.T) {
 	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ctx, mainClusterCli, ns2, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
 }
 
-func testLoadBalancerPush(t *testing.T) {
-	clearDestsOnCleanup(t)
+//nolint:dupl,thelper
+func testLoadBalancerPush(t *testing.T, te *testEnv) {
 	ctx := t.Context()
 
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	cmd := fmt.Sprintf(
-		"%s -s loadbalancer --rsync-push -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest",
+		"%s -K %s -s loadbalancer --rsync-push -i -n %s -N %s --loadbalancer-timeout 5m --source source --dest dest",
 		defaultHelmArgs(t),
-		ns1,
-		ns1,
+		te.shared.extraKubeconfig,
+		te.sourceNS,
+		te.destNS,
 	)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
+	assert.Len(t, parts, 3)
 
 	if len(parts) < 3 {
 		return
@@ -74,30 +74,31 @@ func testLoadBalancerPush(t *testing.T) {
 	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
 }
 
-func testNodePortPush(t *testing.T) {
-	clearDestsOnCleanup(t)
+//nolint:dupl,thelper
+func testNodePortPush(t *testing.T, te *testEnv) {
 	ctx := t.Context()
 
-	_, err := execInPod(ctx, mainClusterCli, ns1, "dest", generateExtraDataShellCommand)
+	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
 	cmd := fmt.Sprintf(
-		"%s -s nodeport --rsync-push -i -n %s -N %s --source source --dest dest",
+		"%s -K %s -s nodeport --rsync-push -i -n %s -N %s --source source --dest dest",
 		defaultHelmArgs(t),
-		ns1,
-		ns1,
+		te.shared.extraKubeconfig,
+		te.sourceNS,
+		te.destNS,
 	)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
-	stdout, err := execInPod(ctx, mainClusterCli, ns1, "dest", printDataUIDGIDContentShellCommand)
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
 	require.NoError(t, err)
 
 	parts := strings.Split(stdout, "\n")
-	assert.Equal(t, len(parts), 3)
+	assert.Len(t, parts, 3)
 
 	if len(parts) < 3 {
 		return
@@ -107,6 +108,6 @@ func testNodePortPush(t *testing.T) {
 	assert.Equal(t, dataFileGID, parts[1])
 	assert.Equal(t, generateDataContent, parts[2])
 
-	_, err = execInPod(ctx, mainClusterCli, ns1, "dest", checkExtraDataShellCommand)
+	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
 }
