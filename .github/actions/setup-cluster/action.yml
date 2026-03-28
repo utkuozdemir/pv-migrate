@@ -1,0 +1,105 @@
+name: "Setup Kind Cluster"
+description: "Creates a kind cluster and installs Cilium, MetalLB, and loads images"
+inputs:
+  cluster_name:
+    description: "Name of the kind cluster"
+    required: true
+  kubeconfig:
+    description: "Kubeconfig path"
+    required: false
+    default: "/home/runner/.kube/config"
+  image_tag:
+    description: "Tag of the loaded docker images"
+    required: true
+  metallb_ip_range_start:
+    description: "Start of IP range (e.g. 240)"
+    required: true
+  metallb_ip_range_end:
+    description: "End of IP range (e.g. 255)"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Create cluster
+      uses: helm/kind-action@v1.14.0
+      env:
+        KUBECONFIG: ${{ inputs.kubeconfig }}
+      with:
+        cluster_name: ${{ inputs.cluster_name }}
+        # renovate: depName=kubernetes-sigs/kind datasource=github-releases
+        version: v0.31.0
+        config: test/kind-config.yaml
+
+    - name: Load local images
+      env:
+        KUBECONFIG: ${{ inputs.kubeconfig }}
+      shell: bash --noprofile --norc -euox pipefail {0}
+      run: |
+        kind load docker-image integration-test-rsync:${{ inputs.image_tag }} --name ${{ inputs.cluster_name }}
+        kind load docker-image integration-test-sshd:${{ inputs.image_tag }} --name ${{ inputs.cluster_name }}
+
+    - name: Create metallb-system namespace
+      env:
+        KUBECONFIG: ${{ inputs.kubeconfig }}
+      shell: bash --noprofile --norc -euox pipefail {0}
+      run: |
+        kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
+        kubectl label namespace metallb-system \
+          pod-security.kubernetes.io/enforce=privileged \
+          pod-security.kubernetes.io/audit=privileged \
+          pod-security.kubernetes.io/warn=privileged \
+          --overwrite
+
+    - name: Install allow-all network policies on system namespaces
+      env:
+        KUBECONFIG: ${{ inputs.kubeconfig }}
+      shell: bash --noprofile --norc -euox pipefail {0}
+      run: |
+        kubectl -n kube-system apply -f test/netpol-allow-all.yaml
+        kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
+        kubectl -n metallb-system apply -f test/netpol-allow-all.yaml
+
+    - name: Install Cilium with default-deny policy
+      env:
+        KUBECONFIG: ${{ inputs.kubeconfig }}
+      shell: bash --noprofile --norc -euox pipefail {0}
+      run: cilium install --set policyEnforcementMode=always
+
+    - name: Install MetalLB
+      env:
+        KUBECONFIG: ${{ inputs.kubeconfig }}
+        METALLB_CHART_VERSION: 6.4.22
+      shell: bash --noprofile --norc -euox pipefail {0}
+      run: |
+        MANIFESTS_PATH=/tmp/metallb-manifests-${{ inputs.cluster_name }}.yaml
+        ADDRESS_RANGE_PREFIX=$(docker network inspect -f json kind | jq -r '.[0].IPAM.Config | map(select(.Subnet | test("^[0-9]+\\."))) | .[0].Subnet | split("/")[0] | split(".")[:3] | join(".")')
+        export ADDRESS_RANGE=${ADDRESS_RANGE_PREFIX}.${{ inputs.metallb_ip_range_start }}-${ADDRESS_RANGE_PREFIX}.${{ inputs.metallb_ip_range_end }}
+        envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
+        METALLB_CONTROLLER_VERSION=v0.15.3
+        METALLB_SPEAKER_VERSION=v0.15.3
+        helm upgrade metallb \
+          --install oci://registry-1.docker.io/bitnamicharts/metallb \
+          --namespace metallb-system \
+          --version ${METALLB_CHART_VERSION} \
+          --atomic \
+          --set global.security.allowInsecureImages=true \
+          --set networkPolicy.enabled=true \
+          --set controller.image.registry=quay.io \
+          --set controller.image.repository=metallb/controller \
+          --set controller.image.tag=$METALLB_CONTROLLER_VERSION \
+          --set speaker.image.registry=quay.io \
+          --set speaker.image.repository=metallb/speaker \
+          --set speaker.image.tag=$METALLB_SPEAKER_VERSION
+        kubectl apply -f $MANIFESTS_PATH
+
+    - name: Wait for all pods in the cluster to be ready
+      env:
+        KUBECONFIG: ${{ inputs.kubeconfig }}
+      shell: bash --noprofile --norc -euox pipefail {0}
+      run: |
+        for i in $(seq 1 10); do
+          echo "Attempt: $i"
+          kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
+          sleep 5;
+        done

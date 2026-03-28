@@ -100,113 +100,23 @@ jobs:
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'pull_request' && github.actor == github.repository_owner }}
-        timeout-minutes: 60
-        with:
-          limit-access-to-actor: true
-          detached: true
-
-      - name: kind-1 - Create cluster
-        uses: helm/kind-action@v1.14.0
+      - name: kind-1 - Setup
+        uses: ./.github/actions/setup-cluster
         with:
           cluster_name: kind-1
-          # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.31.0
-          config: test/kind-config.yaml
+          kubeconfig: /home/runner/.kube/config
+          image_tag: ${{ steps.vars.outputs.sha }}
+          metallb_ip_range_start: 240
+          metallb_ip_range_end: 255
 
-      - name: kind-1 - Load local images
-        run: |
-          TAG="${{ steps.vars.outputs.sha }}"
-          kind load docker-image integration-test-rsync:$TAG --name kind-1
-          kind load docker-image integration-test-sshd:$TAG --name kind-1
-
-      - name: kind-1 - Create metallb-system namespace
-        run: |
-          kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
-          kubectl label namespace metallb-system \
-            pod-security.kubernetes.io/enforce=privileged \
-            pod-security.kubernetes.io/audit=privileged \
-            pod-security.kubernetes.io/warn=privileged \
-            --overwrite
-      - name: kind-1 - Install allow-all network policies on system namespaces
-        run: |
-          kubectl -n kube-system apply -f test/netpol-allow-all.yaml
-          kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
-          kubectl -n metallb-system apply -f test/netpol-allow-all.yaml
-      - name: kind-1 - Install Cilium with default-deny policy
-        run: cilium install --set policyEnforcementMode=always
-      - name: kind-1 - Install MetalLB
-        env:
-          METALLB_CHART_VERSION: 6.4.22
-        run: |
-          MANIFESTS_PATH=/tmp/metallb-manifests.yaml
-          ADDRESS_RANGE_PREFIX=$(docker network inspect -f json kind | jq -r '.[0].IPAM.Config | map(select(.Subnet | test("^[0-9]+\\."))) | .[0].Subnet | split("/")[0] | split(".")[:3] | join(".")')
-          export ADDRESS_RANGE=${ADDRESS_RANGE_PREFIX}.240-${ADDRESS_RANGE_PREFIX}.255
-          envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
-          METALLB_CONTROLLER_VERSION=v0.15.3
-          METALLB_SPEAKER_VERSION=v0.15.3
-          helm upgrade metallb \
-            --install oci://registry-1.docker.io/bitnamicharts/metallb \
-            --namespace metallb-system \
-            --version ${METALLB_CHART_VERSION} \
-            --atomic \
-            --set global.security.allowInsecureImages=true \
-            --set networkPolicy.enabled=true \
-            --set controller.image.registry=quay.io \
-            --set controller.image.repository=metallb/controller \
-            --set controller.image.tag=$METALLB_CONTROLLER_VERSION \
-            --set speaker.image.registry=quay.io \
-            --set speaker.image.repository=metallb/speaker \
-            --set speaker.image.tag=$METALLB_SPEAKER_VERSION
-          kubectl apply -f $MANIFESTS_PATH
-
-      - name: kind-1 - Wait for all pods in the cluster to be ready
-        run: |
-          for i in $(seq 1 10); do
-            echo "Attempt: $i"
-            kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
-            sleep 5;
-          done
-
-      - name: kind-2 - Create cluster
-        uses: helm/kind-action@v1.14.0
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
+      - name: kind-2 - Setup
+        uses: ./.github/actions/setup-cluster
         with:
           cluster_name: kind-2
-          # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.31.0
-          config: test/kind-config.yaml
-
-      - name: kind-2 - Load local images
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: |
-          TAG="${{ steps.vars.outputs.sha }}"
-          kind load docker-image integration-test-rsync:$TAG --name kind-2
-          kind load docker-image integration-test-sshd:$TAG --name kind-2
-
-      - name: kind-2 - Install allow-all network policies on system namespaces
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: |
-          kubectl -n kube-system apply -f test/netpol-allow-all.yaml
-          kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
-      - name: kind-2 - Install Cilium with default-deny policy
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: cilium install --set policyEnforcementMode=always
-      - name: kind-2 - Wait for all pods in the cluster to be ready
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: |
-          for i in $(seq 1 10); do
-            echo "Attempt: $i"
-            kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
-            sleep 5;
-          done
+          kubeconfig: /home/runner/.kube/kind-2.yaml
+          image_tag: ${{ steps.vars.outputs.sha }}
+          metallb_ip_range_start: 220
+          metallb_ip_range_end: 235
 
       # 5. Run Tests
       - name: Run tests
@@ -221,13 +131,3 @@ jobs:
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Teardown tmate session
-        if: ${{ always() }}
-        run: |
-          if [ "${{ job.status }}" = "failure" ]; then
-            echo "Job failed - keeping tmate session open for debugging"
-            echo "Waiting up to 30 minutes..."
-            sleep 1800
-          fi
-          sudo touch /continue
