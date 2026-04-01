@@ -29,6 +29,7 @@ type Request struct {
 	Detach                bool
 	Push                  bool
 	NoCleanup             bool
+	NoCleanupOnFailure    bool
 	ShowProgressBar       bool
 	SourceMountReadWrite  bool
 	KeyAlgorithm          string
@@ -59,4 +60,6 @@ type Attempt struct {
 	HelmReleaseNamePrefix string
 	Migration             *Migration
 	Detached              bool
+
+	ReleaseNames []string
 }

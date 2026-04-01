@@ -18,15 +18,12 @@ func (r *ClusterIP) Run(ctx context.Context, attempt *migration.Attempt, logger 
 
 	topo := resolveTopology(mig)
 	releaseName := attempt.HelmReleaseNamePrefix
-	releaseNames := []string{releaseName}
+	attempt.ReleaseNames = []string{releaseName}
 
 	helmVals, err := buildClusterIPHelmVals(mig, topo, releaseName, logger)
 	if err != nil {
 		return fmt.Errorf("failed to build helm values: %w", err)
 	}
-
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
 
 	if err = installHelmChart(attempt, mig.DestInfo, releaseName, helmVals, logger); err != nil {
 		return fmt.Errorf("failed to install helm chart: %w", err)
