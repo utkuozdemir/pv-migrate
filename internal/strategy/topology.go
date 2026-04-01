@@ -97,10 +97,7 @@ func runTwoReleaseStrategy(
 
 	releases := topo.releaseNames(attempt.HelmReleaseNamePrefix)
 	sshdRelease, rsyncRelease := releases[0], releases[1]
-	releaseNames := releases[:]
-
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
+	attempt.ReleaseNames = releases[:]
 
 	if err = installSshd(attempt, topo, sshdRelease, publicKey, serviceType, logger); err != nil {
 		return fmt.Errorf("failed to install sshd: %w", err)

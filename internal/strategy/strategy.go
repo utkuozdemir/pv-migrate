@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -59,7 +57,7 @@ type Strategy interface {
 	// Run runs the migration for the given task execution.
 	//
 	// This is the actual implementation of the migration.
-	Run(ctx context.Context, a *migration.Attempt, logger *slog.Logger) error
+	Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error
 }
 
 func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
@@ -77,51 +75,7 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func registerCleanupHook(
-	attempt *migration.Attempt,
-	releaseNames []string,
-	logger *slog.Logger,
-) chan<- bool {
-	doneCh := make(chan bool)
-	signalCh := make(chan os.Signal, 1)
-
-	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		select {
-		case <-signalCh:
-			logger.Warn("🔶 Received termination signal")
-
-			cleanup(attempt, releaseNames, logger)
-
-			os.Exit(1)
-		case <-doneCh:
-			return
-		}
-	}()
-
-	return doneCh
-}
-
-func cleanupAndReleaseHook(ctx context.Context, a *migration.Attempt,
-	releaseNames []string, doneCh chan<- bool, logger *slog.Logger,
-) {
-	cleanup(a, releaseNames, logger)
-
-	select {
-	case <-ctx.Done():
-		logger.Warn("🔶 Context cancelled")
-	case doneCh <- true:
-	}
-}
-
-func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Logger) {
-	if attempt.Migration.Request.NoCleanup || attempt.Detached {
-		logger.Info("🧹 Cleanup skipped")
-
-		return
-	}
-
+func Cleanup(attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	req := mig.Request
 
@@ -130,7 +84,7 @@ func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Log
 	var errs error
 
 	for _, info := range []*pvc.Info{mig.SourceInfo, mig.DestInfo} {
-		for _, name := range releaseNames {
+		for _, name := range attempt.ReleaseNames {
 			err := cleanupForPVC(name, req.HelmTimeout, info)
 			if err != nil {
 				errs = multierror.Append(errs, err)
@@ -138,13 +92,7 @@ func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Log
 		}
 	}
 
-	if errs != nil {
-		logger.Warn("🔶 Cleanup failed, you might want to clean up manually", "error", errs)
-
-		return
-	}
-
-	logger.Info("✨ Cleanup done")
+	return errs
 }
 
 func cleanupForPVC(helmReleaseName string, helmUninstallTimeout time.Duration, pvcInfo *pvc.Info) error {

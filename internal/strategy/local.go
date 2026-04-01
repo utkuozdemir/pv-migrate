@@ -45,12 +45,7 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 
 	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
-	releaseNames := []string{srcReleaseName, destReleaseName}
-
-	// Register cleanup hook before installing any charts so that if only the source
-	// install succeeds, it is still cleaned up on failure or exit.
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
+	attempt.ReleaseNames = []string{srcReleaseName, destReleaseName}
 
 	if err = installLocalOnSource(
 		attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, logger,

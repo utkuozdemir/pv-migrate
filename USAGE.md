@@ -37,6 +37,7 @@ Flags:
       --log-level string                Log level, one of DEBUG, INFO, WARN, ERROR or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText (default "INFO")
   -o, --no-chown                        Omit chown during rsync
   -x, --no-cleanup                      Do not clean up after migration
+      --no-cleanup-on-failure           Skip cleanup if the migration fails, leaving pods and resources on the cluster for inspection
       --no-compress                     Do not compress data during migration (disables rsync -z)
       --non-root                        Run containers as non-root (removes SYS_CHROOT; required for restricted PodSecurity clusters). Skips ownership and directory timestamp preservation (--no-o --no-g --omit-dir-times). Migration will fail if the source PVC contains files not readable by the non-root user
       --rsync-extra-args string         Extra rsync flags appended to the rsync command (use at your own risk)

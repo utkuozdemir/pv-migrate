@@ -88,6 +88,7 @@ type Migration struct {
 	Detach                bool
 	Push                  bool
 	NoCleanup             bool
+	NoCleanupOnFailure    bool
 	ShowProgressBar       bool
 	SourceMountReadWrite  bool
 	NoCompress            bool
@@ -224,6 +225,7 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		Detach:                mig.Detach,
 		Push:                  mig.Push,
 		NoCleanup:             mig.NoCleanup,
+		NoCleanupOnFailure:    mig.NoCleanupOnFailure,
 		ShowProgressBar:       mig.ShowProgressBar,
 		SourceMountReadWrite:  mig.SourceMountReadWrite,
 		NoCompress:            mig.NoCompress,
