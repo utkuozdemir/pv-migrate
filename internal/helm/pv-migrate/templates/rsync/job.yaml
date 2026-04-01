@@ -16,6 +16,9 @@ metadata:
   {{- end }}
 spec:
   backoffLimit: {{ .Values.rsync.backoffLimit }}
+  {{- with .Values.rsync.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ . }}
+  {{- end }}
   template:
     metadata:
       {{- with .Values.rsync.podAnnotations }}

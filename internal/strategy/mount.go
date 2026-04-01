@@ -50,10 +50,7 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	}
 
 	releaseName := attempt.HelmReleaseNamePrefix
-	releaseNames := []string{releaseName}
-
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
+	attempt.ReleaseNames = []string{releaseName}
 
 	err = installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
 	if err != nil {

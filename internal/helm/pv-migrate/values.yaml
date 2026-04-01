@@ -150,6 +150,8 @@ rsync:
   restartPolicy: Never
   # Rsync job backoff limit
   backoffLimit: 0
+  # -- Seconds to keep the Job and its pod after completion/failure. Unset by default (Kubernetes decides).
+  ttlSecondsAfterFinished:
   networkPolicy:
     # -- Enable Rsync network policy
     enabled: false

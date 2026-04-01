@@ -74,6 +74,7 @@ const (
 	FlagNoChown                   = "no-chown"
 	FlagDetach                    = "detach"
 	FlagNoCleanup                 = "no-cleanup"
+	FlagNoCleanupOnFailure        = "no-cleanup-on-failure"
 	FlagShowProgressBar           = "show-progress-bar"
 	FlagSourceMountReadWrite      = "source-mount-read-write"
 	FlagStrategies                = "strategies"
@@ -291,6 +292,8 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 			"The CLI will exit and the migration will continue in the background. "+
 			"Use 'pv-migrate cleanup' to remove resources after completion")
 	flags.BoolVarP(&migration.NoCleanup, FlagNoCleanup, "x", migration.NoCleanup, "Do not clean up after migration")
+	flags.BoolVar(&migration.NoCleanupOnFailure, FlagNoCleanupOnFailure, migration.NoCleanupOnFailure,
+		"Skip cleanup if the migration fails, leaving pods and resources on the cluster for inspection")
 	flags.BoolVarP(&migration.ShowProgressBar, FlagShowProgressBar,
 		"b", migration.ShowProgressBar, "Show a progress bar during migration")
 	flags.Lookup(FlagShowProgressBar).DefValue = "true if stderr is a TTY"

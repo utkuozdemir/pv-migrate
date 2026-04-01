@@ -126,6 +126,48 @@ jobs:
           RSYNC_IMAGE: integration-test-rsync:${{ steps.vars.outputs.sha }}
           SSHD_IMAGE: integration-test-sshd:${{ steps.vars.outputs.sha }}
         run: go test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
+      - name: Gather cluster diagnostics
+        if: failure()
+        run: |
+          DIAG_DIR=/tmp/cluster-diagnostics
+          mkdir -p "${DIAG_DIR}/kind-1/logs" "${DIAG_DIR}/kind-2/logs"
+
+          gather() {
+            local kubeconfig="$1"
+            local dir="$2"
+            export KUBECONFIG="${kubeconfig}"
+
+            kubectl cluster-info dump >"${dir}/cluster-info-dump.txt" 2>&1 || true
+            kubectl get nodes -o wide >"${dir}/nodes.txt" 2>&1 || true
+            kubectl get all --all-namespaces -o wide >"${dir}/all-resources.txt" 2>&1 || true
+            kubectl get events --all-namespaces --sort-by='.lastTimestamp' >"${dir}/events.txt" 2>&1 || true
+            kubectl describe nodes >"${dir}/node-describe.txt" 2>&1 || true
+            kubectl describe pods --all-namespaces >"${dir}/pod-describe.txt" 2>&1 || true
+            kubectl get jobs --all-namespaces -o wide >"${dir}/jobs.txt" 2>&1 || true
+            kubectl describe jobs --all-namespaces >"${dir}/job-describe.txt" 2>&1 || true
+            kubectl top nodes >"${dir}/top-nodes.txt" 2>&1 || true
+            kubectl top pods --all-namespaces >"${dir}/top-pods.txt" 2>&1 || true
+            helm list --all-namespaces >"${dir}/helm-releases.txt" 2>&1 || true
+
+            kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}' 2>/dev/null \
+              | while IFS='/' read -r ns pod; do
+                [ -z "${ns}" ] && continue
+                kubectl logs -n "${ns}" "${pod}" --all-containers --timestamps >"${dir}/logs/${ns}_${pod}.log" 2>&1 || true
+                kubectl logs -n "${ns}" "${pod}" --all-containers --timestamps --previous >"${dir}/logs/${ns}_${pod}-previous.log" 2>/dev/null || true
+              done || true
+          }
+
+          gather /home/runner/.kube/config "${DIAG_DIR}/kind-1"
+          gather /home/runner/.kube/kind-2.yaml "${DIAG_DIR}/kind-2"
+
+      - name: Upload cluster diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cluster-diagnostics
+          path: /tmp/cluster-diagnostics
+          retention-days: 7
+
       - name: Send coverage
         uses: codecov/codecov-action@v6.0.0
         with:

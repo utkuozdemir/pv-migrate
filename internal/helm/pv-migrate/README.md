@@ -53,6 +53,7 @@ The helm chart of pv-migrate
 | rsync.serviceAccount.create | bool | `true` | Create a service account for Rsync |
 | rsync.serviceAccount.name | string | `""` | Rsync service account name to use |
 | rsync.tolerations | list | see [values.yaml](values.yaml) | Rsync pod tolerations |
+| rsync.ttlSecondsAfterFinished | string | `nil` | Seconds to keep the Job and its pod after completion/failure. Unset by default (Kubernetes decides). |
 | sshd.affinity | object | `{}` | SSHD pod affinity |
 | sshd.containerPort | int | `22` | SSHD container port (the port sshd listens on inside the container) |
 | sshd.deploymentAnnotations | object | `{}` | SSHD deployment annotations |

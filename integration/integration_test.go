@@ -492,7 +492,8 @@ func testFailWithoutNetworkPolicies(t *testing.T, te *testEnv) {
 	// Force a single strategy, zero retries, and a short helm timeout to fail fast -- we only
 	// need to confirm that the migration fails without NetworkPolicies.
 	cmd := fmt.Sprintf(
-		"%s --helm-set rsync.maxRetries=0 --helm-timeout 30s --log-level debug --log-format json"+
+		"%s --no-cleanup-on-failure --helm-set rsync.ttlSecondsAfterFinished=3600"+
+			" --helm-set rsync.maxRetries=0 --helm-timeout 30s --log-level debug --log-format json"+
 			" -s clusterip -i -n %s -N %s --source source --dest dest",
 		imageHelmArgs(t),
 		te.sourceNS,
@@ -1046,6 +1047,12 @@ func newTestNS(t *testing.T, cli *k8s.ClusterClient, prefix string) string {
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("test failed, skipping cleanup of namespace %q for post-mortem inspection", name)
+
+			return
+		}
+
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
@@ -1381,8 +1388,10 @@ func imageHelmArgs(t *testing.T) string {
 func defaultHelmArgs(t *testing.T) string {
 	t.Helper()
 
-	return "--helm-set rsync.networkPolicy.enabled=true " +
+	return "--no-cleanup-on-failure " +
+		"--helm-set rsync.networkPolicy.enabled=true " +
 		"--helm-set sshd.networkPolicy.enabled=true " +
+		"--helm-set rsync.ttlSecondsAfterFinished=3600 " +
 		imageHelmArgs(t)
 }
 

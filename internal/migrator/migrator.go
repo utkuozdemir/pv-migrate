@@ -60,32 +60,29 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 	logger.Info("🔄 Attempting migration", "strategies", strings.Join(strategies, ","))
 
 	for _, name := range strategies {
+		str := nameToStrategyMap[name]
 		releasePrefix := "pv-migrate-" + migrationID + "-" + name
-
 		attemptLogger := logger.With("strategy", name)
-
-		attemptLogger.Info("🚁 Attempt using strategy")
-
-		attempt := migration.Attempt{
+		attempt := &migration.Attempt{
 			ID:                    migrationID,
 			HelmReleaseNamePrefix: releasePrefix,
 			Migration:             mig,
 		}
 
-		s := nameToStrategyMap[name]
+		attemptLogger.Info("🚁 Attempt using strategy")
 
-		if runErr := s.Run(ctx, &attempt, attemptLogger); runErr != nil {
-			if errors.Is(runErr, strategy.ErrUnaccepted) {
+		if attemptErr := runAttempt(ctx, str, attempt, attemptLogger); attemptErr != nil {
+			if errors.Is(attemptErr, strategy.ErrUnaccepted) {
 				attemptLogger.Info(
 					"🦊 This strategy cannot handle this migration, will try the next one",
-					"reason", runErr.Error(),
+					"reason", attemptErr.Error(),
 				)
 
 				continue
 			}
 
 			attemptLogger.Warn("🔶 Migration failed with this strategy, "+
-				"will try with the remaining strategies", "error", runErr)
+				"will try with the remaining strategies", "error", attemptErr)
 
 			continue
 		}
@@ -102,6 +99,35 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 	}
 
 	return errors.New("all strategies failed for this migration")
+}
+
+func runAttempt(
+	ctx context.Context,
+	str strategy.Strategy,
+	attempt *migration.Attempt,
+	logger *slog.Logger,
+) (runErr error) {
+	defer func() {
+		if attempt.Migration.Request.NoCleanup || attempt.Detached {
+			logger.Info("🧹 Cleanup skipped")
+
+			return
+		}
+
+		if attempt.Migration.Request.NoCleanupOnFailure && runErr != nil {
+			logger.Info("🧹 Cleanup skipped (migration failed, resources left for inspection)")
+
+			return
+		}
+
+		if cleanupErr := strategy.Cleanup(attempt, logger); cleanupErr != nil {
+			logger.Warn("🔶 Cleanup failed, you might want to clean up manually", "error", cleanupErr)
+		} else {
+			logger.Info("✨ Cleanup done")
+		}
+	}()
+
+	return str.Run(ctx, attempt, logger)
 }
 
 func printDetachMessage(request *migration.Request, migrationID, strategyName string, logger *slog.Logger) {
