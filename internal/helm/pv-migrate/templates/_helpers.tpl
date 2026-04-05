@@ -48,3 +48,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "default" .Values.rsync.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{- define "pv-migrate.rclone.serviceAccountName" -}}
+{{- if .Values.rclone.serviceAccount.create }}
+{{- default (printf "%s-%s" (include "pv-migrate.fullname" .) "rclone") .Values.rclone.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.rclone.serviceAccount.name }}
+{{- end }}
+{{- end }}

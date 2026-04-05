@@ -63,7 +63,7 @@ func runStatus(
 
 	releasePrefix := helmReleasePrefix + migrationID + "-"
 
-	job, err := k8s.FindRsyncJob(ctx, client.KubeClient, ns, releasePrefix)
+	job, err := k8s.FindDataMoverJob(ctx, client.KubeClient, ns, releasePrefix)
 	if err != nil {
 		return err
 	}

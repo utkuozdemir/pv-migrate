@@ -57,6 +57,8 @@ jobs:
             context: ./docker/rsync/
           - name: pv-migrate-sshd
             context: ./docker/sshd/
+          - name: pv-migrate-rclone
+            context: ./docker/rclone/
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
