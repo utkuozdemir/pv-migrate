@@ -184,6 +184,19 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string, logger *
 	cmd.AddCommand(buildCleanupCmd(&logger)) //nolint:contextcheck
 	cmd.AddCommand(buildStatusCmd(&logger))  //nolint:contextcheck
 
+	backupCmd, err := buildBackupCmd(&logger) //nolint:contextcheck
+	if err != nil {
+		return nil, fmt.Errorf("failed to build backup command: %w", err)
+	}
+
+	restoreCmd, err := buildRestoreCmd(&logger) //nolint:contextcheck
+	if err != nil {
+		return nil, fmt.Errorf("failed to build restore command: %w", err)
+	}
+
+	cmd.AddCommand(backupCmd)
+	cmd.AddCommand(restoreCmd)
+
 	cmd.InitDefaultVersionFlag()
 	versionFlag := cmd.Flags().Lookup("version")
 	versionFlag.Usage = strings.ToUpper(versionFlag.Usage[:1]) + versionFlag.Usage[1:]

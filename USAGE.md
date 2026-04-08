@@ -10,9 +10,11 @@ Usage:
   pv-migrate [command]
 
 Available Commands:
+  backup      Back up a PVC to bucket storage
   cleanup     Clean up resources from a detached migration
   completion  Generate completion script
   help        Help about any command
+  restore     Restore a PVC from bucket storage
   status      Show the status of a detached migration
 
 Flags:

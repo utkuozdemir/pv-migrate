@@ -185,3 +185,91 @@ rsync:
     #- name: pvc-2
     #  readOnly: true
     #  mountPath: /dest
+
+rclone:
+  # -- Enable creation of Rclone job
+  enabled: false
+  image:
+    # -- Rclone image repository
+    repository: docker.io/utkuozdemir/pv-migrate-rclone
+    # -- Rclone image pull policy
+    pullPolicy: IfNotPresent
+    # -- Rclone image tag (overridden at runtime by pv-migrate to match the CLI version)
+    tag: latest
+  # -- Rclone image pull secrets
+  imagePullSecrets: []
+  serviceAccount:
+    # -- Create a service account for Rclone
+    create: true
+    # -- Rclone service account annotations
+    annotations: {}
+    # -- Rclone service account name to use
+    name: ""
+  # -- Rclone pod annotations
+  podAnnotations: {}
+  # -- Rclone pod labels
+  podLabels: {}
+  # -- Rclone pod security context
+  podSecurityContext: {}
+  # -- Rclone deployment security context
+  securityContext: {}
+  # -- Rclone pod resources
+  resources: {}
+  # -- The node name to schedule Rclone pod on
+  nodeName: ""
+  # -- Rclone node selector
+  nodeSelector: {}
+  # -- Rclone pod tolerations
+  # @default -- see [values.yaml](values.yaml)
+  tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+  # -- Rclone pod affinity
+  affinity: {}
+  # Rclone job restart policy
+  restartPolicy: Never
+  # Rclone job backoff limit
+  backoffLimit: 0
+  # -- Seconds to keep the Job and its pod after completion/failure. Unset by default (Kubernetes decides).
+  ttlSecondsAfterFinished:
+  networkPolicy:
+    # -- Enable Rclone network policy
+    enabled: false
+  # -- Rclone job labels
+  jobLabels: {}
+  # -- Rclone job annotations
+  jobAnnotations: {}
+
+  # -- Mount rclone config into the Rclone pod
+  configMount: false
+  # -- The path to mount the rclone config
+  configMountPath: /etc/rclone/rclone.conf
+  # -- The rclone config content
+  config: ""
+  # -- Full Rclone command
+  command: ""
+  # -- Extra args to be appended to the rclone command. Setting this might cause the tool to not function properly.
+  extraArgs: ""
+  # -- Number of retries to run rclone command
+  maxRetries: 3
+  # -- Waiting time between retries
+  retryPeriodSeconds: 5
+
+  # -- Namespace to run Rclone pod in
+  namespace: ""
+  # -- PVC mounts into the Rclone pod. For examples, see [values.yaml](values.yaml)
+  pvcMounts: []
+    #- name: pvc-1
+    #  readOnly: false
+    #  mountPath: /data
+
+  # -- Base64-encoded metadata YAML to upload after successful sync (set by pv-migrate)
+  metadataBase64: ""
+  # -- Remote path for the metadata file (set by pv-migrate)
+  metadataRemotePath: ""

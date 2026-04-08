@@ -113,7 +113,7 @@ func TestFindJobPod(t *testing.T) {
 }
 
 //nolint:funlen
-func TestFindRsyncJob(t *testing.T) {
+func TestFindDataMoverJob(t *testing.T) {
 	t.Parallel()
 
 	helmLabels := map[string]string{"app.kubernetes.io/managed-by": "Helm"}
@@ -131,7 +131,7 @@ func TestFindRsyncJob(t *testing.T) {
 			name:       "no jobs",
 			ns:         "default",
 			prefix:     "pv-migrate-abc12",
-			wantErrMsg: "no rsync job found for migration pv-migrate-abc12",
+			wantErrMsg: "no job found for migration pv-migrate-abc12",
 		},
 		{
 			name: "single-release rsync job",
@@ -194,7 +194,7 @@ func TestFindRsyncJob(t *testing.T) {
 			},
 			ns:         "default",
 			prefix:     "pv-migrate-foo-",
-			wantErrMsg: "no rsync job found",
+			wantErrMsg: "no job found",
 		},
 		{
 			name: "falls back to all namespaces",
@@ -225,7 +225,7 @@ func TestFindRsyncJob(t *testing.T) {
 			},
 			ns:         "",
 			prefix:     "pv-migrate-abc12",
-			wantErrMsg: "no rsync job found for migration pv-migrate-abc12",
+			wantErrMsg: "no job found for migration pv-migrate-abc12",
 		},
 	}
 
@@ -241,7 +241,7 @@ func TestFindRsyncJob(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			job, err := k8s.FindRsyncJob(ctx, cli, tt.ns, tt.prefix)
+			job, err := k8s.FindDataMoverJob(ctx, cli, tt.ns, tt.prefix)
 			if tt.wantErrMsg != "" {
 				require.ErrorContains(t, err, tt.wantErrMsg)
 

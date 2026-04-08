@@ -39,12 +39,13 @@ func FindJobPod(ctx context.Context, cli kubernetes.Interface, job *batchv1.Job)
 	return nil, fmt.Errorf("no pods found for job %s", job.Name)
 }
 
-// FindRsyncJob finds the rsync job for a migration by listing all Helm-managed
-// jobs and matching by the release name prefix plus the "-rsync" suffix. Release
-// names include the migration ID and strategy (e.g. "pv-migrate-fuzzy-panda-clusterip-rsync"),
-// so this function works across all naming variants.
+// jobSuffixes are the suffixes used by pv-migrate Helm chart job names.
+var jobSuffixes = []string{"-rsync", "-rclone"}
+
+// FindDataMoverJob finds the data-mover job (rsync or rclone) for a migration by listing
+// all Helm-managed jobs and matching by the release name prefix plus a known suffix.
 // If nothing is found in the given namespace, it retries across all namespaces.
-func FindRsyncJob(ctx context.Context, cli kubernetes.Interface, ns, releasePrefix string) (*batchv1.Job, error) {
+func FindDataMoverJob(ctx context.Context, cli kubernetes.Interface, ns, releasePrefix string) (*batchv1.Job, error) {
 	jobs, err := cli.BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{
 		LabelSelector: "app.kubernetes.io/managed-by=Helm",
 	})
@@ -58,16 +59,18 @@ func FindRsyncJob(ctx context.Context, cli kubernetes.Interface, ns, releasePref
 			continue
 		}
 
-		if strings.HasSuffix(job.Name, "-rsync") {
-			return job, nil
+		for _, suffix := range jobSuffixes {
+			if strings.HasSuffix(job.Name, suffix) {
+				return job, nil
+			}
 		}
 	}
 
 	if ns != "" {
-		return FindRsyncJob(ctx, cli, "", releasePrefix)
+		return FindDataMoverJob(ctx, cli, "", releasePrefix)
 	}
 
-	return nil, fmt.Errorf("no rsync job found for migration %s", releasePrefix)
+	return nil, fmt.Errorf("no job found for migration %s", releasePrefix)
 }
 
 // WaitForJobStart waits until the job's pod transitions out of the Pending phase.
