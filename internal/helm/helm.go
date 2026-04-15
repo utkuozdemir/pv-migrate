@@ -22,8 +22,9 @@ var chartFS embed.FS
 
 const rootDir = "pv-migrate"
 
-// LoadChart loads the embedded Helm chart.
-func LoadChart() (*chart.Chart, error) {
+// LoadChart loads the embedded Helm chart, overriding the chart metadata version
+// with the provided version string if non-empty.
+func LoadChart(version string) (*chart.Chart, error) {
 	files, err := chartAsBufferedFiles()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chart files: %w", err)
@@ -32,6 +33,11 @@ func LoadChart() (*chart.Chart, error) {
 	helmChart, err := loader.LoadFiles(files)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load chart: %w", err)
+	}
+
+	if version != "" {
+		helmChart.Metadata.Version = version
+		helmChart.Metadata.AppVersion = version
 	}
 
 	return helmChart, nil

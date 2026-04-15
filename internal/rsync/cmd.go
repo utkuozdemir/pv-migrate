@@ -10,6 +10,7 @@ import (
 type Cmd struct {
 	Port        int
 	NoChown     bool
+	NonRoot     bool
 	Delete      bool
 	SrcUseSSH   bool
 	DestUseSSH  bool
@@ -21,8 +22,10 @@ type Cmd struct {
 	DestSSHHost string
 	DestPath    string
 	Compress    bool
+	ExtraArgs   string
 }
 
+//nolint:cyclop
 func (c *Cmd) Build() (string, error) {
 	if c.SrcUseSSH && c.DestUseSSH {
 		return "", errors.New("cannot use ssh on both source and destination")
@@ -34,8 +37,14 @@ func (c *Cmd) Build() (string, error) {
 	}
 
 	sshArgs := []string{
-		"ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
+		"ssh",
+		"-o", "StrictHostKeyChecking=no",
+		"-o", "UserKnownHostsFile=/dev/null",
 		"-o", "ConnectTimeout=5",
+		// ServerAliveInterval/CountMax prevent intermediate load balancers and proxies
+		// from dropping idle SSH connections during long file-list-building phases.
+		"-o", "ServerAliveInterval=10",
+		"-o", "ServerAliveCountMax=3",
 	}
 	if c.Port != 0 {
 		sshArgs = append(sshArgs, "-p", strconv.Itoa(c.Port))
@@ -52,12 +61,20 @@ func (c *Cmd) Build() (string, error) {
 		rsyncArgs = append(rsyncArgs, "-z")
 	}
 
-	if c.NoChown {
+	if c.NoChown || c.NonRoot {
 		rsyncArgs = append(rsyncArgs, "--no-o", "--no-g")
+	}
+
+	if c.NonRoot {
+		rsyncArgs = append(rsyncArgs, "--omit-dir-times")
 	}
 
 	if c.Delete {
 		rsyncArgs = append(rsyncArgs, "--delete")
+	}
+
+	if c.ExtraArgs != "" {
+		rsyncArgs = append(rsyncArgs, c.ExtraArgs)
 	}
 
 	rsyncArgsStr := strings.Join(rsyncArgs, " ")

@@ -5,18 +5,16 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 )
 
 type Mount struct{}
 
-//nolint:funlen
 func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
-	if !r.canDo(mig) {
-		return ErrUnaccepted
+	if reason := r.cannotDoReason(mig); reason != "" {
+		return fmt.Errorf("%s: %w", reason, ErrUnaccepted)
 	}
 
 	sourceInfo := attempt.Migration.SourceInfo
@@ -52,54 +50,39 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	}
 
 	releaseName := attempt.HelmReleaseNamePrefix
-	releaseNames := []string{releaseName}
+	attempt.ReleaseNames = []string{releaseName}
 
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
-
-	err = installHelmChart(attempt, sourceInfo, releaseName, vals)
+	err = installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
 	if err != nil {
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
-	showProgressBar := mig.Request.ShowProgressBar
-	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
-	jobName := attempt.HelmReleaseNamePrefix + "-rsync"
-
-	if err = k8s.WaitForJobCompletion(
-		ctx,
-		kubeClient,
-		namespace,
-		jobName,
-		showProgressBar,
-		mig.Request.Writer,
-		logger,
-	); err != nil {
-		return fmt.Errorf("failed to wait for job completion: %w", err)
-	}
-
-	return nil
+	return waitForRsyncJob(ctx, attempt, sourceInfo, releaseName, logger)
 }
 
-func (r *Mount) canDo(t *migration.Migration) bool {
+func (r *Mount) cannotDoReason(t *migration.Migration) string {
 	sourceInfo := t.SourceInfo
 	destInfo := t.DestInfo
 
 	sameCluster := sourceInfo.ClusterClient.RestConfig.Host == destInfo.ClusterClient.RestConfig.Host
 	if !sameCluster {
-		return false
+		return "source and destination are on different clusters"
 	}
 
 	sameNamespace := sourceInfo.Claim.Namespace == destInfo.Claim.Namespace
 	if !sameNamespace {
-		return false
+		return "source and destination are in different namespaces"
 	}
 
 	sameNode := sourceInfo.MountedNode == destInfo.MountedNode
 	oneUnmounted := sourceInfo.MountedNode == "" || destInfo.MountedNode == ""
 
-	return sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX ||
-		destInfo.SupportsRWX
+	if sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX ||
+		destInfo.SupportsRWX {
+		return ""
+	}
+
+	return "PVCs are mounted on different nodes and do not support multi-access modes"
 }
 
 func buildRsyncCmdMount(mig *migration.Migration) (string, error) {
@@ -107,11 +90,13 @@ func buildRsyncCmdMount(mig *migration.Migration) (string, error) {
 	destPath := DestMountPath + "/" + mig.Request.Dest.Path
 
 	rsyncCmd := rsync.Cmd{
-		NoChown:  mig.Request.NoChown,
-		Delete:   mig.Request.DeleteExtraneousFiles,
-		SrcPath:  srcPath,
-		DestPath: destPath,
-		Compress: !mig.Request.NoCompress,
+		NoChown:   mig.Request.NoChown,
+		NonRoot:   mig.Request.NonRoot,
+		Delete:    mig.Request.DeleteExtraneousFiles,
+		SrcPath:   srcPath,
+		DestPath:  destPath,
+		Compress:  !mig.Request.NoCompress,
+		ExtraArgs: mig.Request.RsyncExtraArgs,
 	}
 
 	cmd, err := rsyncCmd.Build()

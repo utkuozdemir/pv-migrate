@@ -5,94 +5,62 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
-	"github.com/utkuozdemir/pv-migrate/internal/rsync"
-	"github.com/utkuozdemir/pv-migrate/internal/ssh"
 )
 
 type ClusterIP struct{}
 
 func (r *ClusterIP) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
-	if !r.canDo(mig) {
-		return ErrUnaccepted
+	if reason := r.cannotDoReason(mig); reason != "" {
+		return fmt.Errorf("%s: %w", reason, ErrUnaccepted)
 	}
 
+	topo := resolveTopology(mig)
 	releaseName := attempt.HelmReleaseNamePrefix
-	releaseNames := []string{releaseName}
+	attempt.ReleaseNames = []string{releaseName}
 
-	helmVals, err := buildHelmVals(mig, releaseName, logger)
+	helmVals, err := buildClusterIPHelmVals(mig, topo, releaseName, logger)
 	if err != nil {
 		return fmt.Errorf("failed to build helm values: %w", err)
 	}
 
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
-
-	err = installHelmChart(attempt, mig.DestInfo, releaseName, helmVals)
-	if err != nil {
+	if err = installHelmChart(attempt, mig.DestInfo, releaseName, helmVals, logger); err != nil {
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
-	showProgressBar := mig.Request.ShowProgressBar
-	kubeClient := mig.SourceInfo.ClusterClient.KubeClient
-	jobName := releaseName + "-rsync"
-
-	if err = k8s.WaitForJobCompletion(ctx, kubeClient,
-		mig.DestInfo.Claim.Namespace, jobName, showProgressBar, mig.Request.Writer, logger); err != nil {
-		return fmt.Errorf("failed to wait for job completion: %w", err)
-	}
-
-	return nil
+	return waitForRsyncJob(ctx, attempt, topo.rsync.info, releaseName, logger)
 }
 
-func (r *ClusterIP) canDo(t *migration.Migration) bool {
+func (r *ClusterIP) cannotDoReason(t *migration.Migration) string {
 	s := t.SourceInfo
 	d := t.DestInfo
 	sameCluster := s.ClusterClient.RestConfig.Host == d.ClusterClient.RestConfig.Host
 
-	return sameCluster
+	if !sameCluster {
+		return "source and destination are on different clusters"
+	}
+
+	return ""
 }
 
-//
-//nolint:funlen
-func buildHelmVals(
+func buildClusterIPHelmVals(
 	mig *migration.Migration,
+	topo topology,
 	helmReleaseName string,
 	logger *slog.Logger,
 ) (map[string]any, error) {
-	sourceInfo := mig.SourceInfo
-	destInfo := mig.DestInfo
-	sourceNs := sourceInfo.Claim.Namespace
-	destNs := destInfo.Claim.Namespace
-	keyAlgorithm := mig.Request.KeyAlgorithm
-
-	logger.Info("🔑 Generating SSH key pair", "algorithm", keyAlgorithm)
-
-	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
+	publicKey, privateKey, privateKeyMountPath, err := generateSSHKeys(mig.Request.KeyAlgorithm, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ssh key pair: %w", err)
+		return nil, err
 	}
 
-	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
-
-	sshTargetHost := helmReleaseName + "-sshd." + sourceNs
+	sshTargetHost := helmReleaseName + "-sshd." + topo.sshd.info.Claim.Namespace
 	if mig.Request.DestHostOverride != "" {
 		sshTargetHost = mig.Request.DestHostOverride
 	}
 
-	srcPath := SrcMountPath + "/" + mig.Request.Source.Path
-	destPath := DestMountPath + "/" + mig.Request.Dest.Path
-	rsyncCmd := rsync.Cmd{
-		NoChown:    mig.Request.NoChown,
-		Delete:     mig.Request.DeleteExtraneousFiles,
-		SrcPath:    srcPath,
-		DestPath:   destPath,
-		SrcUseSSH:  true,
-		SrcSSHHost: sshTargetHost,
-		Compress:   !mig.Request.NoCompress,
-	}
+	rsyncCmd := buildRsyncCmd(mig.Request, topo.push, sshTargetHost, 0)
 
 	rsyncCmdStr, err := rsyncCmd.Build()
 	if err != nil {
@@ -100,33 +68,7 @@ func buildHelmVals(
 	}
 
 	return map[string]any{
-		"rsync": map[string]any{
-			"enabled":             true,
-			"namespace":           destNs,
-			"privateKeyMount":     true,
-			"privateKey":          privateKey,
-			"privateKeyMountPath": privateKeyMountPath,
-			"pvcMounts": []map[string]any{
-				{
-					"name":      destInfo.Claim.Name,
-					"mountPath": DestMountPath,
-				},
-			},
-			"command":  rsyncCmdStr,
-			"affinity": destInfo.AffinityHelmValues,
-		},
-		"sshd": map[string]any{
-			"enabled":   true,
-			"namespace": sourceNs,
-			"publicKey": publicKey,
-			"pvcMounts": []map[string]any{
-				{
-					"name":      sourceInfo.Claim.Name,
-					"mountPath": SrcMountPath,
-					"readOnly":  !mig.Request.SourceMountReadWrite,
-				},
-			},
-			"affinity": sourceInfo.AffinityHelmValues,
-		},
+		"rsync": buildRsyncHelmValues(topo.rsync, rsyncCmdStr, privateKey, privateKeyMountPath),
+		"sshd":  buildSshdHelmValues(topo.sshd, publicKey),
 	}, nil
 }

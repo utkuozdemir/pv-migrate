@@ -36,7 +36,8 @@
     {
       "customType": "regex",
       "fileMatch": [
-        "\\.github\\/workflows\\/.*"
+        "\\.github\\/workflows\\/.*",
+        "Taskfile\\.yml"
       ],
       "matchStrings": [
         "# renovate: depName=(?<depName>[^\\s]+)( datasource=(?<datasource>[^\\s]+))?( registryUrl=(?<registryUrl>\\S+))?\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+\\.\\d+(-[\\S]+)?)"

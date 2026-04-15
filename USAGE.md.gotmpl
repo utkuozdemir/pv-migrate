@@ -18,11 +18,11 @@ resources, serviceacccounts, additional annotations etc.
 
 | Name       | Description |
 |------------|-------------|
-| `mnt2`     | **Mount both** - Mounts both PVCs in a single pod and runs a regular rsync, without using SSH or the network. Only applicable if source and destination PVCs are in the same namespace and both can be mounted from a single pod. |
-| `svc`      | **Service** - Runs rsync+ssh over a Kubernetes Service (`ClusterIP`). Only applicable when source and destination PVCs are in the same Kubernetes cluster. |
-| `lbsvc`    | **Load Balancer Service** - Runs rsync+ssh over a Kubernetes Service of type `LoadBalancer`. Always applicable (will fail if `LoadBalancer` IP is not assigned for a long period). |
+| `mount`        | **Mount both** - Mounts both PVCs in a single pod and runs a regular rsync, without using SSH or the network. Only applicable if source and destination PVCs are in the same namespace and both can be mounted from a single pod. |
+| `clusterip`    | **Service** - Runs rsync+ssh over a Kubernetes Service (`ClusterIP`). Only applicable when source and destination PVCs are in the same Kubernetes cluster. |
+| `loadbalancer` | **Load Balancer Service** - Runs rsync+ssh over a Kubernetes Service of type `LoadBalancer`. Always applicable (will fail if `LoadBalancer` IP is not assigned for a long period). |
 | `nodeport` | **NodePort Service** - Runs rsync+ssh over a Kubernetes Service of type `NodePort`. Not enabled by default. A custom NodePort can be specified via `--helm-set sshd.service.nodePort=<port>`. |
-| `local`    | **Local Transfer** - Runs sshd on both source and destination, then uses a combination of `kubectl port-forward` logic and an SSH reverse proxy to tunnel all the traffic over the client device (the device which runs pv-migrate, e.g. your laptop). Requires `ssh` command to be available on the client device. <br/><br/>Note that this strategy is **experimental** (and not enabled by default), potentially can put heavy load on both apiservers and is not as resilient as others. It is recommended for small amounts of data and/or when the only access to both clusters seems to be through `kubectl` (e.g. for air-gapped clusters, on jump hosts etc.). |
+| `local`    | **Local Transfer** - Runs sshd on both source and destination, then uses a combination of `kubectl port-forward` logic and an SSH reverse proxy to tunnel all the traffic over the client device (the device which runs pv-migrate, e.g. your laptop) via the Kubernetes API servers. <br/><br/>Note that this strategy is not enabled by default, potentially can put heavy load on both API servers and is not as resilient as others. It is recommended for small amounts of data and/or when the only access to both clusters seems to be through `kubectl` (e.g. for air-gapped clusters, on jump hosts etc.). |
 
 ## Examples
 
@@ -95,6 +95,47 @@ $ pv-migrate \
   --helm-set sshd.service.nodePort=30555 \
   --source old-pvc \
   --dest new-pvc
+```
+
+### Example 8: Detached mode for large transfers
+
+For large migrations that take a long time, use `--detach` to let the migration
+run in the cluster without keeping the CLI connected:
+
+```bash
+$ pv-migrate --source old-pvc --dest new-pvc --detach
+# CLI prints a migration ID (e.g. "fuzzy-panda") and exits
+
+# Or use a custom ID for easier reference:
+$ pv-migrate --source old-pvc --dest new-pvc --detach --id my-db-migration
+
+# Check progress:
+$ pv-migrate status fuzzy-panda
+
+# Follow progress with a live progress bar:
+$ pv-migrate status fuzzy-panda --follow
+
+# Clean up after completion:
+$ pv-migrate cleanup fuzzy-panda
+
+# Clean up all pv-migrate releases:
+$ pv-migrate cleanup --all
+```
+
+### Example 9: Push mode (source cluster behind NAT)
+
+By default, sshd runs on the source side and rsync pulls data from it.
+When the source side cannot expose a service, e.g., behind a firewall or NAT,
+use `--rsync-push` to reverse the direction:
+sshd runs on the destination side and rsync pushes data to it.
+
+```bash
+$ pv-migrate \
+  --source-kubeconfig /path/to/source/kubeconfig \
+  --source old-pvc \
+  --dest-kubeconfig /path/to/dest/kubeconfig \
+  --dest new-pvc \
+  --rsync-push
 ```
 
 **For further customization on the rendered manifests**

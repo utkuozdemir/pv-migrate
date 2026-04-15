@@ -18,15 +18,22 @@ type PVCInfo struct {
 }
 
 type Request struct {
+	ID                    string
+	ImageTag              string
+	ChartVersion          string
 	Source                PVCInfo
 	Dest                  PVCInfo
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
 	NoChown               bool
+	Detach                bool
+	Push                  bool
 	NoCleanup             bool
+	NoCleanupOnFailure    bool
 	ShowProgressBar       bool
 	SourceMountReadWrite  bool
 	KeyAlgorithm          string
+	SSHReverseTunnelPort  int
 	HelmTimeout           time.Duration
 	HelmValuesFiles       []string
 	HelmValues            []string
@@ -36,6 +43,8 @@ type Request struct {
 	DestHostOverride      string
 	LoadBalancerTimeout   time.Duration
 	NoCompress            bool
+	NonRoot               bool
+	RsyncExtraArgs        string
 	Writer                io.Writer
 }
 
@@ -65,6 +74,10 @@ type Attempt struct {
 	ID                    string
 	HelmReleaseNamePrefix string
 	Migration             *Migration
+	Detached              bool
+
+	ReleaseNames []string
+
 	// SourceEndpoint, if set, indicates a shared source endpoint to reuse.
 	// When set, the LoadBalancer strategy skips installing a source endpoint
 	// and uses this pre-existing one instead.

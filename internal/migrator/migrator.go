@@ -7,16 +7,13 @@ import (
 	"log/slog"
 	"strings"
 
+	petname "github.com/dustinkirkland/golang-petname"
+
 	"github.com/utkuozdemir/pv-migrate/internal/helm"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
-	"github.com/utkuozdemir/pv-migrate/internal/util"
-)
-
-const (
-	attemptIDLength = 5
 )
 
 type resolvedTransfer struct {
@@ -42,6 +39,7 @@ func New() *Migrator {
 	}
 }
 
+//nolint:funlen
 func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *slog.Logger) error {
 	nameToStrategyMap, err := m.getStrategyMap(request.Strategies)
 	if err != nil {
@@ -56,36 +54,48 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 		return err
 	}
 
-	logger.Info("💭 Attempting migration", "strategies", strings.Join(request.Strategies, ","))
+	migrationID := request.ID
+	if migrationID == "" {
+		migrationID = petname.Generate(2, "-")
+	}
 
-	for _, name := range request.Strategies {
-		attemptID := util.RandomString(attemptIDLength)
+	strategies := dedup(request.Strategies)
 
-		attemptLogger := logger.With("attempt_id", attemptID, "strategy", name)
+	logger = logger.With("migration_id", migrationID)
+	logger.Info("🔄 Attempting migration", "strategies", strings.Join(strategies, ","))
 
-		attemptLogger.Info("🚁 Attempt using strategy")
-
-		attempt := migration.Attempt{
-			ID:                    attemptID,
-			HelmReleaseNamePrefix: "pv-migrate-" + attemptID,
+	for _, name := range strategies {
+		str := nameToStrategyMap[name]
+		releasePrefix := "pv-migrate-" + migrationID + "-" + name
+		attemptLogger := logger.With("strategy", name)
+		attempt := &migration.Attempt{
+			ID:                    migrationID,
+			HelmReleaseNamePrefix: releasePrefix,
 			Migration:             mig,
 		}
 
-		s := nameToStrategyMap[name]
+		attemptLogger.Info("🚁 Attempt using strategy")
 
-		if runErr := s.Run(ctx, &attempt, attemptLogger); runErr != nil {
-			if errors.Is(runErr, strategy.ErrUnaccepted) {
+		if attemptErr := runAttempt(ctx, str, attempt, attemptLogger); attemptErr != nil {
+			if errors.Is(attemptErr, strategy.ErrUnaccepted) {
 				attemptLogger.Info(
 					"🦊 This strategy cannot handle this migration, will try the next one",
+					"reason", attemptErr.Error(),
 				)
 
 				continue
 			}
 
 			attemptLogger.Warn("🔶 Migration failed with this strategy, "+
-				"will try with the remaining strategies", "error", runErr)
+				"will try with the remaining strategies", "error", attemptErr)
 
 			continue
+		}
+
+		if request.Detach {
+			printDetachMessage(request, migrationID, name, logger)
+
+			return nil
 		}
 
 		attemptLogger.Info("✅ Migration succeeded")
@@ -96,10 +106,56 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 	return errors.New("all strategies failed for this migration")
 }
 
+func runAttempt(
+	ctx context.Context,
+	str strategy.Strategy,
+	attempt *migration.Attempt,
+	logger *slog.Logger,
+) (runErr error) {
+	defer func() {
+		if attempt.Migration.Request.NoCleanup || attempt.Detached {
+			logger.Info("🧹 Cleanup skipped")
+
+			return
+		}
+
+		if attempt.Migration.Request.NoCleanupOnFailure && runErr != nil {
+			logger.Info("🧹 Cleanup skipped (migration failed, resources left for inspection)")
+
+			return
+		}
+
+		if cleanupErr := strategy.Cleanup(attempt, logger); cleanupErr != nil {
+			logger.Warn("🔶 Cleanup failed, you might want to clean up manually", "error", cleanupErr)
+		} else {
+			logger.Info("✨ Cleanup done")
+		}
+	}()
+
+	return str.Run(ctx, attempt, logger)
+}
+
+func printDetachMessage(request *migration.Request, migrationID, strategyName string, logger *slog.Logger) {
+	logger.Info("🚀 Migration detached",
+		"migration_id", migrationID,
+		"strategy", strategyName,
+	)
+
+	fmt.Fprintln(request.Writer)
+	fmt.Fprintf(request.Writer, "Migration %s detached. The rsync job is running in the cluster.\n", migrationID)
+	fmt.Fprintln(request.Writer)
+	fmt.Fprintln(request.Writer, "To check status:")
+	fmt.Fprintf(request.Writer, "  pv-migrate status %s\n", migrationID)
+	fmt.Fprintln(request.Writer)
+	fmt.Fprintln(request.Writer, "To clean up after completion:")
+	fmt.Fprintf(request.Writer, "  pv-migrate cleanup %s\n", migrationID)
+	fmt.Fprintln(request.Writer)
+}
+
 func (m *Migrator) buildMigration(ctx context.Context, request *migration.Request,
 	logger *slog.Logger,
 ) (*migration.Migration, error) {
-	chart, err := helm.LoadChart()
+	chart, err := helm.LoadChart(request.ChartVersion)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load helm chart: %w", err)
 	}
@@ -209,6 +265,22 @@ func handleMounted(info *pvc.Info, ignoreMounted bool, logger *slog.Logger) erro
 		"node: %s claim %s", info.MountedNode, info.Claim.Name)
 }
 
+func dedup(s []string) []string {
+	seen := make(map[string]struct{}, len(s))
+	result := make([]string, 0, len(s))
+
+	for _, val := range s {
+		if _, ok := seen[val]; ok {
+			continue
+		}
+
+		seen[val] = struct{}{}
+		result = append(result, val)
+	}
+
+	return result
+}
+
 // RunBatch executes a batch of migrations. When the loadbalancer strategy is available,
 // transfers sharing a source namespace are optimised to use a single shared sshd +
 // LoadBalancer service instead of one per transfer.
@@ -313,7 +385,7 @@ func (m *Migrator) runBatchLB(
 	transfers []resolvedTransfer,
 	logger *slog.Logger,
 ) error {
-	sessionID := util.RandomString(attemptIDLength)
+	sessionID := petname.Generate(2, "-")
 
 	// Collect all unique source PVC infos.
 	allSourceInfos := make([]*pvc.Info, 0, len(transfers))

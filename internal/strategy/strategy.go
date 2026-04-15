@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
-	"gopkg.in/yaml.v3"
 	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart/v2/loader"
 	"helm.sh/helm/v4/pkg/cli"
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
@@ -31,10 +29,14 @@ const (
 	localStrategy        = "local"
 	nodePortStrategy     = "nodeport"
 
-	helmValuesYAMLIndent = 2
-
 	SrcMountPath  = "/source"
 	DestMountPath = "/dest"
+
+	rootSSHUser    = "root"
+	rootSSHPort    = 22
+	nonRootSSHUser = "pvmigrate"
+	nonRootSSHPort = 2222
+	nonRootUID     = 10000
 )
 
 var (
@@ -56,7 +58,7 @@ type Strategy interface {
 	// Run runs the migration for the given task execution.
 	//
 	// This is the actual implementation of the migration.
-	Run(ctx context.Context, a *migration.Attempt, logger *slog.Logger) error
+	Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error
 }
 
 func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
@@ -74,51 +76,7 @@ func GetStrategiesMapForNames(names []string) (map[string]Strategy, error) {
 	return sts, nil
 }
 
-func registerCleanupHook(
-	attempt *migration.Attempt,
-	releaseNames []string,
-	logger *slog.Logger,
-) chan<- bool {
-	doneCh := make(chan bool)
-	signalCh := make(chan os.Signal, 1)
-
-	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
-
-	go func() {
-		select {
-		case <-signalCh:
-			logger.Warn("🔶 Received termination signal")
-
-			cleanup(attempt, releaseNames, logger)
-
-			os.Exit(1)
-		case <-doneCh:
-			return
-		}
-	}()
-
-	return doneCh
-}
-
-func cleanupAndReleaseHook(ctx context.Context, a *migration.Attempt,
-	releaseNames []string, doneCh chan<- bool, logger *slog.Logger,
-) {
-	cleanup(a, releaseNames, logger)
-
-	select {
-	case <-ctx.Done():
-		logger.Warn("🔶 Context cancelled")
-	case doneCh <- true:
-	}
-}
-
-func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Logger) {
-	if attempt.Migration.Request.NoCleanup {
-		logger.Info("🧹 Cleanup skipped")
-
-		return
-	}
-
+func Cleanup(attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	req := mig.Request
 
@@ -127,7 +85,7 @@ func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Log
 	var errs error
 
 	for _, info := range []*pvc.Info{mig.SourceInfo, mig.DestInfo} {
-		for _, name := range releaseNames {
+		for _, name := range attempt.ReleaseNames {
 			err := cleanupForPVC(name, req.HelmTimeout, info)
 			if err != nil {
 				errs = multierror.Append(errs, err)
@@ -135,13 +93,7 @@ func cleanup(attempt *migration.Attempt, releaseNames []string, logger *slog.Log
 		}
 	}
 
-	if errs != nil {
-		logger.Warn("🔶 Cleanup failed, you might want to clean up manually", "error", errs)
-
-		return
-	}
-
-	logger.Info("✨ Cleanup done")
+	return errs
 }
 
 func cleanupForPVC(helmReleaseName string, helmUninstallTimeout time.Duration, pvcInfo *pvc.Info) error {
@@ -174,36 +126,102 @@ func initHelmActionConfig(pvcInfo *pvc.Info) (*action.Configuration, error) {
 	return actionConfig, nil
 }
 
+func sshUser(req *migration.Request) string {
+	if req.NonRoot {
+		return nonRootSSHUser
+	}
+
+	return rootSSHUser
+}
+
+func sshPort(req *migration.Request) int {
+	if req.NonRoot {
+		return nonRootSSHPort
+	}
+
+	return rootSSHPort
+}
+
+func applyNonRootValues(vals map[string]any, req *migration.Request) {
+	if !req.NonRoot {
+		return
+	}
+
+	nonRootSecCtx := map[string]any{
+		"runAsNonRoot":             true,
+		"runAsUser":                nonRootUID,
+		"runAsGroup":               nonRootUID,
+		"allowPrivilegeEscalation": false,
+	}
+	nonRootPodSecCtx := map[string]any{
+		"fsGroup": nonRootUID,
+	}
+
+	for _, component := range []string{"sshd", "rsync"} {
+		section, ok := vals[component].(map[string]any)
+		if !ok {
+			continue
+		}
+
+		section["securityContext"] = nonRootSecCtx
+		section["podSecurityContext"] = nonRootPodSecCtx
+	}
+
+	if sshd, ok := vals["sshd"].(map[string]any); ok {
+		sshd["containerPort"] = nonRootSSHPort
+		sshd["publicKeyMountPath"] = "/home/pvmigrate/.ssh/authorized_keys"
+	}
+}
+
 func getMergedHelmValues(
-	helmValuesFile string,
+	baseValues map[string]any,
 	request *migration.Request,
+	logger *slog.Logger,
 ) (map[string]any, error) {
-	allValuesFiles := append([]string{helmValuesFile}, request.HelmValuesFiles...)
+	// If an image tag is set, inject it as the lowest-priority --set values
+	// so user overrides via --helm-set take precedence.
+	helmValues := request.HelmValues
+	if tag := request.ImageTag; tag != "" {
+		imageTagValues := []string{
+			"rsync.image.tag=" + tag,
+			"sshd.image.tag=" + tag,
+		}
+		merged := make([]string, 0, len(imageTagValues)+len(helmValues))
+		merged = append(merged, imageTagValues...)
+		helmValues = append(merged, helmValues...)
+	}
+
 	valsOptions := values.Options{
-		Values:       request.HelmValues,
-		ValueFiles:   allValuesFiles,
+		ValueFiles:   request.HelmValuesFiles,
+		Values:       helmValues,
 		StringValues: request.HelmStringValues,
 		FileValues:   request.HelmFileValues,
 	}
 
-	mergedValues, err := valsOptions.MergeValues(helmProviders)
+	userValues, err := valsOptions.MergeValues(helmProviders)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge helm values: %w", err)
 	}
 
-	return mergedValues, nil
-}
+	// Merge using Helm's own MergeMaps: user values override base values.
+	merged := loader.MergeMaps(baseValues, userValues)
 
-func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string, values map[string]any) error {
-	helmValuesFile, err := writeHelmValuesToTempFile(attempt.ID, values)
-	if err != nil {
-		return fmt.Errorf("failed to write helm values to temp file: %w", err)
+	if request.ImageTag != "" {
+		logger.Info("🏷️ Using image tag", "tag", request.ImageTag)
+	} else {
+		logger.Info("🏷️ Using chart default image tags")
 	}
 
-	defer func() {
-		os.Remove(helmValuesFile)
-	}()
+	return merged, nil
+}
 
+func installHelmChart(
+	attempt *migration.Attempt,
+	pvcInfo *pvc.Info,
+	name string,
+	values map[string]any,
+	logger *slog.Logger,
+) error {
 	helmActionConfig, err := initHelmActionConfig(pvcInfo)
 	if err != nil {
 		return fmt.Errorf("failed to init helm action config: %w", err)
@@ -222,7 +240,9 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 		install.Timeout = req.HelmTimeout
 	}
 
-	vals, err := getMergedHelmValues(helmValuesFile, mig.Request)
+	applyNonRootValues(values, mig.Request)
+
+	vals, err := getMergedHelmValues(values, mig.Request, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get merged helm values: %w", err)
 	}
@@ -232,23 +252,4 @@ func installHelmChart(attempt *migration.Attempt, pvcInfo *pvc.Info, name string
 	}
 
 	return nil
-}
-
-func writeHelmValuesToTempFile(id string, vals map[string]any) (string, error) {
-	file, err := os.CreateTemp("", fmt.Sprintf("pv-migrate-vals-%s-*.yaml", id))
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file for helm values: %w", err)
-	}
-
-	defer func() { _ = file.Close() }()
-
-	encoder := yaml.NewEncoder(file)
-	encoder.SetIndent(helmValuesYAMLIndent)
-
-	err = encoder.Encode(vals)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode helm values: %w", err)
-	}
-
-	return file.Name(), nil
 }

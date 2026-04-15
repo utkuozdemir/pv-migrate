@@ -43,6 +43,6 @@ func TestClusterIPCanDoSameCluster(t *testing.T) {
 	}
 
 	s := ClusterIP{}
-	canDo := s.canDo(&mig)
+	canDo := s.cannotDoReason(&mig) == ""
 	assert.True(t, canDo)
 }

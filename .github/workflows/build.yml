@@ -1,4 +1,3 @@
----
 name: build
 
 on:
@@ -12,7 +11,6 @@ on:
       - "img/**"
       - "test/**"
       - ".gitignore"
-      - "docker/**"
       - "renovate.json"
       - ".krew.yaml"
   pull_request:
@@ -23,7 +21,6 @@ on:
       - "img/**"
       - "test/**"
       - ".gitignore"
-      - "docker/**"
       - "renovate.json"
       - ".krew.yaml"
 
@@ -42,21 +39,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.2
       - name: Install go
-        uses: actions/setup-go@v6.3.0
+        uses: actions/setup-go@v6.4.0
         with:
           go-version-file: go.mod
       - name: Install Task
         uses: arduino/setup-task@v2.0.0
         with:
           # renovate: depName=go-task/task datasource=github-releases
-          version: 3.48.0
+          version: 3.49.1
       - name: Tidy go.mod
         run: go mod tidy
       - name: Run linters
         uses: golangci/golangci-lint-action@v9.2.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v2.10.1
+          version: v2.11.4
           args: --timeout=10m0s
           install-mode: goinstall
       - name: Build with Goreleaser
@@ -64,10 +61,12 @@ jobs:
         uses: goreleaser/goreleaser-action@v7.0.0
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.14.1
+          version: v2.15.2
           args: build --snapshot --clean --single-target
       - name: Update usage
         run: task update-usage
+      - name: Update helm chart docs
+        run: task update-helm-chart-docs
       - name: Check for dirty files
         run: git diff --exit-code
   test:
@@ -75,8 +74,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.2
+
+      - name: Get short SHA
+        id: vars
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build images
+        run: |
+          TAG="${{ steps.vars.outputs.sha }}"
+          docker build -t integration-test-rsync:$TAG ./docker/rsync/
+          docker build -t integration-test-sshd:$TAG ./docker/sshd/
+
       - name: Install go
-        uses: actions/setup-go@v6.3.0
+        uses: actions/setup-go@v6.4.0
         with:
           go-version-file: go.mod
       - name: Install helm
@@ -90,120 +100,76 @@ jobs:
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
-        if: ${{ github.event_name == 'pull_request' && github.actor == github.repository_owner }}
-        timeout-minutes: 60
-        with:
-          limit-access-to-actor: true
-          detached: true
-
-      - name: kind-1 - Create cluster
-        uses: helm/kind-action@v1.14.0
+      - name: kind-1 - Setup
+        uses: ./.github/actions/setup-cluster
         with:
           cluster_name: kind-1
-          # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.31.0
-          config: test/kind-config.yaml
-      - name: kind-1 - Create metallb-system namespace
-        run: |
-          kubectl create namespace metallb-system --dry-run=client -oyaml | kubectl apply -f -
-          kubectl label namespace metallb-system \
-            pod-security.kubernetes.io/enforce=privileged \
-            pod-security.kubernetes.io/audit=privileged \
-            pod-security.kubernetes.io/warn=privileged \
-            --overwrite
-      - name: kind-1 - Install allow-all network policies on system namespaces
-        run: |
-          kubectl -n kube-system apply -f test/netpol-allow-all.yaml
-          kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
-          kubectl -n metallb-system apply -f test/netpol-allow-all.yaml
-      - name: kind-1 - Install Cilium with default-deny policy
-        run: cilium install --set policyEnforcementMode=always
-      - name: kind-1 - Install MetalLB
-        env:
-          METALLB_CHART_VERSION: 6.4.22
-        run: |
-          MANIFESTS_PATH=/tmp/metallb-manifests.yaml
-          
-          # Find the first IPv4 subnet of kind, e.g., 172.18.0.0/16, then trim it to remove last octet, e.g., 172.18.0
-          ADDRESS_RANGE_PREFIX=$(docker network inspect -f json kind | jq -r '.[0].IPAM.Config | map(select(.Subnet | test("^[0-9]+\\."))) | .[0].Subnet | split("/")[0] | split(".")[:3] | join(".")')
-          export ADDRESS_RANGE=${ADDRESS_RANGE_PREFIX}.240-${ADDRESS_RANGE_PREFIX}.255
-          
-          envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
-          
-          # TODO: switch to the official MetalLB chart and do not specify image versions
-          METALLB_CONTROLLER_VERSION=v0.15.3
-          METALLB_SPEAKER_VERSION=v0.15.3
-          
-          helm upgrade metallb \
-            --install oci://registry-1.docker.io/bitnamicharts/metallb \
-            --namespace metallb-system \
-            --version ${METALLB_CHART_VERSION} \
-            --atomic \
-            --set global.security.allowInsecureImages=true \
-            --set networkPolicy.enabled=true \
-            --set controller.image.registry=quay.io \
-            --set controller.image.repository=metallb/controller \
-            --set controller.image.tag=$METALLB_CONTROLLER_VERSION \
-            --set speaker.image.registry=quay.io \
-            --set speaker.image.repository=metallb/speaker \
-            --set speaker.image.tag=$METALLB_SPEAKER_VERSION
-          
-          helm -n metallb-system get values metallb
-          
-          echo "MetalLB rendered manifests:"
-          cat $MANIFESTS_PATH
-          
-          kubectl apply -f $MANIFESTS_PATH
+          kubeconfig: /home/runner/.kube/config
+          image_tag: ${{ steps.vars.outputs.sha }}
+          metallb_ip_range_start: 240
+          metallb_ip_range_end: 255
 
-      - name: kind-1 - Wait for all pods in the cluster to be ready
-        run: |
-          for i in $(seq 1 10); do
-            echo "Attempt: $i"
-            kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
-            sleep 5;
-          done
-
-      - name: kind-2 - Create cluster
-        uses: helm/kind-action@v1.14.0
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
+      - name: kind-2 - Setup
+        uses: ./.github/actions/setup-cluster
         with:
           cluster_name: kind-2
-          # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.31.0
-          config: test/kind-config.yaml
-      - name: kind-2 - Install allow-all network policies on system namespaces
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: |
-          kubectl -n kube-system apply -f test/netpol-allow-all.yaml
-          kubectl -n local-path-storage apply -f test/netpol-allow-all.yaml
-      - name: kind-2 - Install Cilium with default-deny policy
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: cilium install --set policyEnforcementMode=always
-      - name: kind-2 - Wait for all pods in the cluster to be ready
-        env:
-          KUBECONFIG: /home/runner/.kube/kind-2.yaml
-        run: |
-          for i in $(seq 1 10); do
-            echo "Attempt: $i"
-            kubectl wait pod --for=condition=Ready --all --all-namespaces && break;
-            sleep 5;
-          done
+          kubeconfig: /home/runner/.kube/kind-2.yaml
+          image_tag: ${{ steps.vars.outputs.sha }}
+          metallb_ip_range_start: 220
+          metallb_ip_range_end: 235
 
+      # 5. Run Tests
       - name: Run tests
         env:
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
+          # Pass only the image name:tag. Kind will find it locally.
+          RSYNC_IMAGE: integration-test-rsync:${{ steps.vars.outputs.sha }}
+          SSHD_IMAGE: integration-test-sshd:${{ steps.vars.outputs.sha }}
         run: go test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
+      - name: Gather cluster diagnostics
+        if: failure()
+        run: |
+          DIAG_DIR=/tmp/cluster-diagnostics
+          mkdir -p "${DIAG_DIR}/kind-1/logs" "${DIAG_DIR}/kind-2/logs"
+
+          gather() {
+            local kubeconfig="$1"
+            local dir="$2"
+            export KUBECONFIG="${kubeconfig}"
+
+            kubectl cluster-info dump >"${dir}/cluster-info-dump.txt" 2>&1 || true
+            kubectl get nodes -o wide >"${dir}/nodes.txt" 2>&1 || true
+            kubectl get all --all-namespaces -o wide >"${dir}/all-resources.txt" 2>&1 || true
+            kubectl get events --all-namespaces --sort-by='.lastTimestamp' >"${dir}/events.txt" 2>&1 || true
+            kubectl describe nodes >"${dir}/node-describe.txt" 2>&1 || true
+            kubectl describe pods --all-namespaces >"${dir}/pod-describe.txt" 2>&1 || true
+            kubectl get jobs --all-namespaces -o wide >"${dir}/jobs.txt" 2>&1 || true
+            kubectl describe jobs --all-namespaces >"${dir}/job-describe.txt" 2>&1 || true
+            kubectl top nodes >"${dir}/top-nodes.txt" 2>&1 || true
+            kubectl top pods --all-namespaces >"${dir}/top-pods.txt" 2>&1 || true
+            helm list --all-namespaces >"${dir}/helm-releases.txt" 2>&1 || true
+
+            kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}' 2>/dev/null \
+              | while IFS='/' read -r ns pod; do
+                [ -z "${ns}" ] && continue
+                kubectl logs -n "${ns}" "${pod}" --all-containers --timestamps >"${dir}/logs/${ns}_${pod}.log" 2>&1 || true
+                kubectl logs -n "${ns}" "${pod}" --all-containers --timestamps --previous >"${dir}/logs/${ns}_${pod}-previous.log" 2>/dev/null || true
+              done || true
+          }
+
+          gather /home/runner/.kube/config "${DIAG_DIR}/kind-1"
+          gather /home/runner/.kube/kind-2.yaml "${DIAG_DIR}/kind-2"
+
+      - name: Upload cluster diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cluster-diagnostics
+          path: /tmp/cluster-diagnostics
+          retention-days: 7
+
       - name: Send coverage
-        uses: codecov/codecov-action@v5.5.2
+        uses: codecov/codecov-action@v6.0.0
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
-
-      - name: Teardown tmate session
-        if: ${{ success() }}
-        run: sudo touch /continue

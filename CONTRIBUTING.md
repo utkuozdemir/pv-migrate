@@ -15,23 +15,14 @@ That's it.
 
 ## Creating Releases
 
-- To make a release of `pv-migrate` itself, run the following command:
-  ```bash
-  task release
-  ```
+To make a release, run:
+```bash
+task release
+```
 
-- To make a release of docker images, use their special tag prefixes, followed by the version. Example:
-  ```bash
-  git tag -a "docker-sshd-1.0.0" -m "Docker Sshd Image Release 1.0.0"
-  git tag -a "docker-rsync-1.0.0" -m "Docker Rsync Image Release 1.0.0"
-  git push
-  git push --tags
-  ```
-  These will result in the Docker images with the following tags being pushed:
-  ```
-  docker.io/utkuozdemir/pv-migrate-sshd:1.0.0
-  docker.io/utkuozdemir/pv-migrate-rsync:1.0.0
-  ```
+This will create and push a new version tag, which triggers the release workflow.
+The workflow builds and publishes the `pv-migrate` CLI binary, Docker image,
+and the `pv-migrate-rsync` and `pv-migrate-sshd` images — all with the same version tag.
 
 ## Editing the helm chart
 

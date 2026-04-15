@@ -11,10 +11,40 @@ import (
 	"github.com/lmittmann/tint"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
+	"k8s.io/klog/v2"
 
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"github.com/utkuozdemir/pv-migrate/pvmigrate"
 )
+
+// isReleaseVersion reports whether version looks like a real GoReleaser release
+// (e.g. "2.3.0", "2.3.0-rc.1") as opposed to a dev or snapshot build.
+func isReleaseVersion(version string) bool {
+	return version != "" && !strings.Contains(version, "SNAPSHOT") && !strings.Contains(version, "dev")
+}
+
+// releaseImageTag returns the version as an image tag suitable for Docker images.
+// GoReleaser sets version without the "v" prefix (e.g. "2.3.0", "2.3.0-rc.1",
+// "2.2.1-SNAPSHOT-43a0f03"), while local builds default to "dev".
+// Returns empty string for dev and snapshot builds.
+func releaseImageTag(version string) string {
+	if !isReleaseVersion(version) {
+		return ""
+	}
+
+	return "v" + version
+}
+
+// releaseChartVersion returns the version for the embedded Helm chart metadata.
+// Returns empty string for dev and snapshot builds, letting the chart's built-in
+// version (0.0.0) remain unchanged.
+func releaseChartVersion(version string) string {
+	if !isReleaseVersion(version) {
+		return ""
+	}
+
+	return version
+}
 
 const (
 	FlagLogLevel  = "log-level"
@@ -37,15 +67,23 @@ const (
 	FlagDestHostOverride    = "dest-host-override"
 	FlagLoadBalancerTimeout = "loadbalancer-timeout"
 
+	FlagID = "id"
+
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
 	FlagNoChown                   = "no-chown"
+	FlagDetach                    = "detach"
 	FlagNoCleanup                 = "no-cleanup"
+	FlagNoCleanupOnFailure        = "no-cleanup-on-failure"
 	FlagShowProgressBar           = "show-progress-bar"
 	FlagSourceMountReadWrite      = "source-mount-read-write"
 	FlagStrategies                = "strategies"
 	FlagSSHKeyAlgorithm           = "ssh-key-algorithm"
+	FlagSSHReverseTunnelPort      = "ssh-reverse-tunnel-port"
 	FlagNoCompress                = "no-compress"
+	FlagNonRoot                   = "non-root"
+	FlagRsyncExtraArgs            = "rsync-extra-args"
+	FlagRsyncPush                 = "rsync-push"
 
 	FlagHelmTimeout   = "helm-timeout"
 	FlagHelmValues    = "helm-values"
@@ -71,7 +109,8 @@ type Options struct {
 	keyAlgorithm string
 }
 
-func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.Command, error) {
+//nolint:funlen
+func BuildMigrateCmd(ctx context.Context, version, commit, date string, logger *slog.Logger) (*cobra.Command, error) {
 	versionStr := fmt.Sprintf("%s (commit: %s) (build date: %s)", version, commit, date)
 	use := fmt.Sprintf(
 		"%s [--%s=<source-ns>] --%s=<source-pvc> [--%s=<dest-ns>] --%s=<dest-pvc>",
@@ -82,6 +121,9 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.
 	isATTY := isatty.IsTerminal(writer.Fd())
 
 	var migration pvmigrate.Migration
+
+	migration.ImageTag = releaseImageTag(version)
+	migration.ChartVersion = releaseChartVersion(version)
 	migration.ApplyDefaults()
 	migration.ShowProgressBar = isATTY
 
@@ -94,12 +136,28 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.
 	}
 
 	cmd := cobra.Command{
-		Use:     use,
-		Short:   "Migrate data from one Kubernetes PersistentVolumeClaim to another",
-		Args:    cobra.NoArgs,
-		Version: versionStr,
+		Use:           use,
+		Short:         "Migrate data from one Kubernetes PersistentVolumeClaim to another",
+		Args:          cobra.NoArgs,
+		Version:       versionStr,
+		SilenceErrors: true, // we log the error with our own logger with custom format and wrapping
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			cmd.SilenceUsage = true // usage should only be printed when there is a usage error (e.g., invalid flags)
+
+			if logger != nil { // external logger provided (e.g. tests)
+				return nil
+			}
+
+			var err error
+
+			if logger, err = buildLogger(options.LogLevel, options.LogFormat, writer, isATTY); err != nil {
+				return fmt.Errorf("failed to build logger: %w", err)
+			}
+
+			return nil
+		},
 		RunE: func(cmd *cobra.Command, _ []string) error { //nolint:contextcheck
-			return runMigration(cmd, &options, writer, isATTY)
+			return runMigration(cmd, &options, writer, logger)
 		},
 	}
 
@@ -123,6 +181,8 @@ func BuildMigrateCmd(ctx context.Context, version, commit, date string) (*cobra.
 	}
 
 	cmd.AddCommand(buildCompletionCmd())
+	cmd.AddCommand(buildCleanupCmd(&logger)) //nolint:contextcheck
+	cmd.AddCommand(buildStatusCmd(&logger))  //nolint:contextcheck
 
 	cmd.InitDefaultVersionFlag()
 	versionFlag := cmd.Flags().Lookup("version")
@@ -150,6 +210,7 @@ func setMigrateCmdCompletion(
 		{FlagDestPath, completionFuncNoFileComplete},
 		{FlagStrategies, buildSliceCompletionFunc(util.ConvertStrings[string](pvmigrate.AllStrategies))},
 		{FlagSSHKeyAlgorithm, buildStaticSliceCompletionFunc(util.ConvertStrings[string](pvmigrate.KeyAlgorithms))},
+		{FlagID, completionFuncNoFileComplete},
 		{FlagHelmSet, completionFuncNoFileComplete},
 		{FlagHelmSetString, completionFuncNoFileComplete},
 		{FlagHelmSetFile, completionFuncNoFileComplete},
@@ -223,7 +284,16 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	flags.BoolVarP(&migration.IgnoreMounted, FlagIgnoreMounted, "i", migration.IgnoreMounted,
 		"Do not fail if the source or destination PVC is mounted")
 	flags.BoolVarP(&migration.NoChown, FlagNoChown, "o", migration.NoChown, "Omit chown during rsync")
+	flags.StringVar(&migration.ID, FlagID, migration.ID,
+		"Custom migration ID (lowercase alphanumeric with optional hyphens, max 28 chars). "+
+			"If not set, a random ID is generated. Used to identify the migration in 'status' and 'cleanup' commands")
+	flags.BoolVar(&migration.Detach, FlagDetach, migration.Detach,
+		"Detach after the migration job starts running in the cluster. "+
+			"The CLI will exit and the migration will continue in the background. "+
+			"Use 'pv-migrate cleanup' to remove resources after completion")
 	flags.BoolVarP(&migration.NoCleanup, FlagNoCleanup, "x", migration.NoCleanup, "Do not clean up after migration")
+	flags.BoolVar(&migration.NoCleanupOnFailure, FlagNoCleanupOnFailure, migration.NoCleanupOnFailure,
+		"Skip cleanup if the migration fails, leaving pods and resources on the cluster for inspection")
 	flags.BoolVarP(&migration.ShowProgressBar, FlagShowProgressBar,
 		"b", migration.ShowProgressBar, "Show a progress bar during migration")
 	flags.Lookup(FlagShowProgressBar).DefValue = "true if stderr is a TTY"
@@ -235,6 +305,11 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	)
 	flags.StringVarP(&options.keyAlgorithm, FlagSSHKeyAlgorithm, "a", options.keyAlgorithm,
 		"SSH key algorithm, one of "+strings.Join(util.ConvertStrings[string](pvmigrate.KeyAlgorithms), ", "))
+	flags.IntVar(&migration.SSHReverseTunnelPort, FlagSSHReverseTunnelPort, migration.SSHReverseTunnelPort,
+		fmt.Sprintf(
+			"Port opened on the source pod's loopback for the SSH reverse tunnel. Only used by the %s strategy",
+			pvmigrate.Local,
+		))
 	flags.StringVarP(&migration.DestHostOverride, FlagDestHostOverride, "H", migration.DestHostOverride,
 		"Override for the rsync destination host over SSH. "+
 			"By default, determined by the strategy. "+
@@ -250,6 +325,17 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	)
 	flags.BoolVar(&migration.NoCompress, FlagNoCompress, migration.NoCompress,
 		"Do not compress data during migration (disables rsync -z)")
+	flags.BoolVar(&migration.NonRoot, FlagNonRoot, migration.NonRoot,
+		"Run containers as non-root (removes SYS_CHROOT; required for restricted PodSecurity clusters). "+
+			"Skips ownership and directory timestamp preservation (--no-o --no-g --omit-dir-times). "+
+			"Migration will fail if the source PVC contains files not readable by the non-root user")
+
+	flags.StringVar(&migration.RsyncExtraArgs, FlagRsyncExtraArgs, migration.RsyncExtraArgs,
+		"Extra rsync flags appended to the rsync command (use at your own risk)")
+	flags.BoolVar(&migration.Push, FlagRsyncPush, migration.Push,
+		"Push mode: run rsync on the source side and sshd on the destination side. "+
+			"Use when the source side cannot expose a service, e.g., behind a firewall or NAT. "+
+			"Has no effect on the mount and local strategies")
 
 	flags.DurationVarP(&migration.HelmTimeout, FlagHelmTimeout, "t", migration.HelmTimeout,
 		"Helm install/uninstall timeout")
@@ -265,13 +351,8 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	return nil
 }
 
-func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY bool) error {
+func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, logger *slog.Logger) error {
 	ctx := cmd.Context()
-
-	logger, err := buildLogger(options.LogLevel, options.LogFormat, writer, isATTY)
-	if err != nil {
-		return fmt.Errorf("failed to build logger: %w", err)
-	}
 
 	options.Migration.Strategies = util.ConvertStrings[pvmigrate.Strategy](options.strategies)
 	options.Migration.KeyAlgorithm = pvmigrate.KeyAlgorithm(options.keyAlgorithm)
@@ -313,7 +394,7 @@ func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY
 			migrations = append(migrations, m)
 		}
 
-		if err = pvmigrate.RunBatch(ctx, migrations); err != nil {
+		if err := pvmigrate.RunBatch(ctx, migrations); err != nil {
 			return fmt.Errorf("batch migration failed: %w", err)
 		}
 
@@ -321,7 +402,7 @@ func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, isATTY
 	}
 
 	// Single PVC mode (original flow).
-	if err = pvmigrate.Run(ctx, options.Migration); err != nil {
+	if err := pvmigrate.Run(ctx, options.Migration); err != nil {
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
@@ -354,6 +435,7 @@ func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*sl
 
 	slog.SetLogLoggerLevel(level)
 	slog.SetDefault(logger)
+	klog.SetSlogLogger(logger)
 
 	return logger, nil
 }

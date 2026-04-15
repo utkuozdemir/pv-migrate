@@ -85,7 +85,7 @@ func (r *LoadBalancer) SetupSharedSource(
 	logger.Info("📦 Installing shared source sshd with all PVCs",
 		"release", releaseName, "pvc_count", len(allSourceInfos))
 
-	if err := installHelmChart(attempt, firstInfo, releaseName, vals); err != nil {
+	if err := installHelmChart(attempt, firstInfo, releaseName, vals, logger); err != nil {
 		return nil, fmt.Errorf("failed to install shared source: %w", err)
 	}
 
@@ -130,85 +130,36 @@ func (r *LoadBalancer) CleanupSharedSource(
 	}
 }
 
-//nolint:funlen
 func (r *LoadBalancer) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	// If a shared source endpoint is provided (batch mode), skip source install.
 	if ep := attempt.SourceEndpoint; ep != nil {
 		return r.runWithSharedSource(ctx, attempt, ep, logger)
 	}
 
-	// Original single-transfer flow.
-	mig := attempt.Migration
+	return runTwoReleaseStrategy(ctx, attempt, "LoadBalancer", resolveLBTarget, logger)
+}
 
-	sourceInfo := mig.SourceInfo
-	destInfo := mig.DestInfo
-	sourceNs := sourceInfo.Claim.Namespace
-	destNs := destInfo.Claim.Namespace
-	keyAlgorithm := mig.Request.KeyAlgorithm
-
-	logger.Info("🔑 Generating SSH key pair", "algorithm", keyAlgorithm)
-
-	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
-	if err != nil {
-		return fmt.Errorf("failed to create ssh key pair: %w", err)
-	}
-
-	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
-
-	srcReleaseName := attempt.HelmReleaseNamePrefix + "-src"
-	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
-	releaseNames := []string{srcReleaseName, destReleaseName}
-
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
-
-	err = installOnSource(attempt, srcReleaseName, publicKey, SrcMountPath)
-	if err != nil {
-		return fmt.Errorf("failed to install on source: %w", err)
-	}
-
-	sourceKubeClient := attempt.Migration.SourceInfo.ClusterClient.KubeClient
-	svcName := srcReleaseName + "-sshd"
+func resolveLBTarget(
+	ctx context.Context,
+	attempt *migration.Attempt,
+	topo topology,
+	sshdRelease string,
+	_ *slog.Logger,
+) (sshTarget, error) {
+	svcName := sshdRelease + "-sshd"
 
 	lbAddress, err := k8s.GetServiceAddress(
 		ctx,
-		sourceKubeClient,
-		sourceNs,
+		topo.sshd.info.ClusterClient.KubeClient,
+		topo.sshd.info.Claim.Namespace,
 		svcName,
-		mig.Request.LoadBalancerTimeout,
+		attempt.Migration.Request.LoadBalancerTimeout,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to get service address: %w", err)
+		return sshTarget{}, fmt.Errorf("failed to get service address: %w", err)
 	}
 
-	sshTargetHost := formatSSHTargetHost(lbAddress)
-	if mig.Request.DestHostOverride != "" {
-		sshTargetHost = mig.Request.DestHostOverride
-	}
-
-	err = installOnDest(attempt, destReleaseName, privateKey, privateKeyMountPath,
-		sshTargetHost, SrcMountPath, DestMountPath)
-	if err != nil {
-		return fmt.Errorf("failed to install on dest: %w", err)
-	}
-
-	showProgressBar := attempt.Migration.Request.ShowProgressBar
-	kubeClient := destInfo.ClusterClient.KubeClient
-	jobName := destReleaseName + "-rsync"
-
-	if err = k8s.WaitForJobCompletion(
-		ctx,
-		kubeClient,
-		destNs,
-		jobName,
-		showProgressBar,
-		mig.Request.Writer,
-		logger,
-	); err != nil {
-		return fmt.Errorf("failed to wait for job completion: %w", err)
-	}
-
-	return nil
+	return sshTarget{host: formatSSHTargetHost(lbAddress)}, nil
 }
 
 // runWithSharedSource runs a single transfer using a pre-existing shared source endpoint.
@@ -221,91 +172,30 @@ func (r *LoadBalancer) runWithSharedSource(
 ) error {
 	mig := attempt.Migration
 	destInfo := mig.DestInfo
-	destNs := destInfo.Claim.Namespace
 
 	privateKeyMountPath := "/tmp/id_" + ep.KeyAlgorithm
 
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-dest"
-	releaseNames := []string{destReleaseName}
-
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
+	attempt.ReleaseNames = []string{destReleaseName}
 
 	sshTargetHost := ep.Address
 	if mig.Request.DestHostOverride != "" {
 		sshTargetHost = mig.Request.DestHostOverride
 	}
 
-	err := installOnDest(attempt, destReleaseName, ep.PrivateKey, privateKeyMountPath,
-		sshTargetHost, ep.SrcMountPath, DestMountPath)
-	if err != nil {
-		return fmt.Errorf("failed to install on dest: %w", err)
-	}
-
-	showProgressBar := mig.Request.ShowProgressBar
-	kubeClient := destInfo.ClusterClient.KubeClient
-	jobName := destReleaseName + "-rsync"
-
-	if err = k8s.WaitForJobCompletion(
-		ctx,
-		kubeClient,
-		destNs,
-		jobName,
-		showProgressBar,
-		mig.Request.Writer,
-		logger,
-	); err != nil {
-		return fmt.Errorf("failed to wait for job completion: %w", err)
-	}
-
-	return nil
-}
-
-func installOnSource(attempt *migration.Attempt, releaseName, publicKey, srcMountPath string) error {
-	mig := attempt.Migration
-	sourceInfo := mig.SourceInfo
-	namespace := sourceInfo.Claim.Namespace
-
-	vals := map[string]any{
-		"sshd": map[string]any{
-			"enabled":   true,
-			"namespace": namespace,
-			"publicKey": publicKey,
-			"service": map[string]any{
-				"type": "LoadBalancer",
-			},
-			"pvcMounts": []map[string]any{
-				{
-					"name":      sourceInfo.Claim.Name,
-					"readOnly":  !mig.Request.SourceMountReadWrite,
-					"mountPath": srcMountPath,
-				},
-			},
-			"affinity": sourceInfo.AffinityHelmValues,
-		},
-	}
-
-	return installHelmChart(attempt, sourceInfo, releaseName, vals)
-}
-
-func installOnDest(
-	attempt *migration.Attempt,
-	releaseName, privateKey, privateKeyMountPath, sshHost, srcMountPath, destMountPath string,
-) error {
-	mig := attempt.Migration
-	destInfo := mig.DestInfo
-	namespace := destInfo.Claim.Namespace
-
-	srcPath := srcMountPath + "/" + mig.Request.Source.Path
-	destPath := destMountPath + "/" + mig.Request.Dest.Path
+	srcPath := ep.SrcMountPath + "/" + mig.Request.Source.Path
+	destPath := DestMountPath + "/" + mig.Request.Dest.Path
 	rsyncCmd := rsync.Cmd{
 		NoChown:    mig.Request.NoChown,
+		NonRoot:    mig.Request.NonRoot,
 		Delete:     mig.Request.DeleteExtraneousFiles,
 		SrcPath:    srcPath,
 		DestPath:   destPath,
 		SrcUseSSH:  true,
-		SrcSSHHost: sshHost,
+		SrcSSHHost: sshTargetHost,
+		SrcSSHUser: sshUser(mig.Request),
 		Compress:   !mig.Request.NoCompress,
+		ExtraArgs:  mig.Request.RsyncExtraArgs,
 	}
 
 	rsyncCmdStr, err := rsyncCmd.Build()
@@ -313,26 +203,15 @@ func installOnDest(
 		return fmt.Errorf("failed to build rsync command: %w", err)
 	}
 
-	vals := map[string]any{
-		"rsync": map[string]any{
-			"enabled":             true,
-			"namespace":           namespace,
-			"privateKeyMount":     true,
-			"privateKey":          privateKey,
-			"privateKeyMountPath": privateKeyMountPath,
-			"sshRemoteHost":       sshHost,
-			"pvcMounts": []map[string]any{
-				{
-					"name":      destInfo.Claim.Name,
-					"mountPath": destMountPath,
-				},
-			},
-			"command":  rsyncCmdStr,
-			"affinity": destInfo.AffinityHelmValues,
-		},
+	rsyncSide := componentSide{info: destInfo, mountPath: DestMountPath}
+	rsyncVals := buildRsyncHelmValues(rsyncSide, rsyncCmdStr, ep.PrivateKey, privateKeyMountPath)
+	rsyncVals["sshRemoteHost"] = sshTargetHost
+
+	if err = installHelmChart(attempt, destInfo, destReleaseName, map[string]any{"rsync": rsyncVals}, logger); err != nil {
+		return fmt.Errorf("failed to install on dest: %w", err)
 	}
 
-	return installHelmChart(attempt, destInfo, releaseName, vals)
+	return waitForRsyncJob(ctx, attempt, destInfo, destReleaseName, logger)
 }
 
 func formatSSHTargetHost(host string) string {
@@ -374,10 +253,7 @@ func (r *LoadBalancer) RunBatchTransfer(
 	privateKeyMountPath := "/tmp/id_" + keyAlgorithm
 
 	destReleaseName := attempt.HelmReleaseNamePrefix + "-batch-dest"
-	releaseNames := []string{destReleaseName}
-
-	doneCh := registerCleanupHook(attempt, releaseNames, logger)
-	defer cleanupAndReleaseHook(ctx, attempt, releaseNames, doneCh, logger)
+	attempt.ReleaseNames = []string{destReleaseName}
 
 	// Use the first transfer's request as representative for common settings.
 	firstReq := transfers[0].Request
@@ -436,7 +312,7 @@ func (r *LoadBalancer) RunBatchTransfer(
 	logger.Info("📦 Installing batch rsync job with all dest PVCs",
 		"release", destReleaseName, "pvc_count", len(transfers))
 
-	if err := installHelmChart(attempt, firstDestInfo, destReleaseName, vals); err != nil {
+	if err := installHelmChart(attempt, firstDestInfo, destReleaseName, vals, logger); err != nil {
 		return fmt.Errorf("failed to install batch rsync: %w", err)
 	}
 

@@ -2,6 +2,7 @@ package progress
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -68,7 +69,7 @@ func (l *Logger) startSingle(ctx context.Context, logger *slog.Logger) error {
 
 	defer func() {
 		if closeErr := logStream.Close(); closeErr != nil {
-			logger.Error("failed to close log stream", "error", closeErr)
+			logger.Warn("🔶 Failed to close log stream", "error", closeErr)
 		}
 	}()
 
@@ -91,8 +92,32 @@ func (l *Logger) startSingle(ctx context.Context, logger *slog.Logger) error {
 	return nil
 }
 
+// scanCRLF is a bufio.SplitFunc that splits on \r or \n,
+// since rsync uses \r to overwrite progress output in-place.
+func scanCRLF(data []byte, atEOF bool) (int, []byte, error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+
+	if idx := bytes.IndexAny(data, "\r\n"); idx >= 0 {
+		// Treat CRLF as a single delimiter to avoid emitting an empty token.
+		if data[idx] == '\r' && idx+1 < len(data) && data[idx+1] == '\n' {
+			return idx + 2, data[:idx], nil
+		}
+
+		return idx + 1, data[:idx], nil
+	}
+
+	if atEOF {
+		return len(data), data, nil
+	}
+
+	return 0, nil, nil
+}
+
 func tailLogs(ctx context.Context, stream io.Reader, logCh chan<- string) error {
 	scanner := bufio.NewScanner(stream)
+	scanner.Split(scanCRLF)
 
 	for {
 		select {
@@ -165,12 +190,8 @@ func (l *Logger) handleLogs(ctx context.Context, logCh <-chan string, logger *sl
 				)
 			} else {
 				if err = updateProgressBar(progressBar, progress.Transferred, progress.Total); err != nil {
-					logger.Warn("failed to update progress bar", "error", err, "progress", progress)
+					logger.Warn("🔶 Failed to update progress bar", "error", err, "progress", progress)
 				}
-			}
-
-			if progress.Percentage >= 100 { //nolint:mnd
-				return nil
 			}
 		}
 	}
