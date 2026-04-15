@@ -23,3 +23,5 @@ annotations:
       image: docker.io/utkuozdemir/pv-migrate-sshd:latest
     - name: utkuozdemir/pv-migrate-rsync
       image: docker.io/utkuozdemir/pv-migrate-rsync:latest
+    - name: utkuozdemir/pv-migrate-rclone
+      image: docker.io/utkuozdemir/pv-migrate-rclone:latest

@@ -22,6 +22,40 @@ The helm chart of pv-migrate
 |-----|------|---------|-------------|
 | fullnameOverride | string | `""` | String to fully override the fullname template with a string |
 | nameOverride | string | `""` | String to partially override the fullname template with a string (will prepend the release name) |
+| rclone.affinity | object | `{}` | Rclone pod affinity |
+| rclone.backoffLimit | int | `0` |  |
+| rclone.command | string | `""` | Full Rclone command |
+| rclone.config | string | `""` | The rclone config content |
+| rclone.configMount | bool | `false` | Mount rclone config into the Rclone pod |
+| rclone.configMountPath | string | `"/etc/rclone/rclone.conf"` | The path to mount the rclone config |
+| rclone.enabled | bool | `false` | Enable creation of Rclone job |
+| rclone.extraArgs | string | `""` | Extra args to be appended to the rclone command. Setting this might cause the tool to not function properly. |
+| rclone.image.pullPolicy | string | `"IfNotPresent"` | Rclone image pull policy |
+| rclone.image.repository | string | `"docker.io/utkuozdemir/pv-migrate-rclone"` | Rclone image repository |
+| rclone.image.tag | string | `"latest"` | Rclone image tag (overridden at runtime by pv-migrate to match the CLI version) |
+| rclone.imagePullSecrets | list | `[]` | Rclone image pull secrets |
+| rclone.jobAnnotations | object | `{}` | Rclone job annotations |
+| rclone.jobLabels | object | `{}` | Rclone job labels |
+| rclone.maxRetries | int | `3` | Number of retries to run rclone command |
+| rclone.metadataBase64 | string | `""` | Base64-encoded metadata YAML to upload after successful sync (set by pv-migrate) |
+| rclone.metadataRemotePath | string | `""` | Remote path for the metadata file (set by pv-migrate) |
+| rclone.namespace | string | `""` | Namespace to run Rclone pod in |
+| rclone.networkPolicy.enabled | bool | `false` | Enable Rclone network policy |
+| rclone.nodeName | string | `""` | The node name to schedule Rclone pod on |
+| rclone.nodeSelector | object | `{}` | Rclone node selector |
+| rclone.podAnnotations | object | `{}` | Rclone pod annotations |
+| rclone.podLabels | object | `{}` | Rclone pod labels |
+| rclone.podSecurityContext | object | `{}` | Rclone pod security context |
+| rclone.pvcMounts | list | `[]` | PVC mounts into the Rclone pod. For examples, see [values.yaml](values.yaml) |
+| rclone.resources | object | `{}` | Rclone pod resources |
+| rclone.restartPolicy | string | `"Never"` |  |
+| rclone.retryPeriodSeconds | int | `5` | Waiting time between retries |
+| rclone.securityContext | object | `{}` | Rclone deployment security context |
+| rclone.serviceAccount.annotations | object | `{}` | Rclone service account annotations |
+| rclone.serviceAccount.create | bool | `true` | Create a service account for Rclone |
+| rclone.serviceAccount.name | string | `""` | Rclone service account name to use |
+| rclone.tolerations | list | see [values.yaml](values.yaml) | Rclone pod tolerations |
+| rclone.ttlSecondsAfterFinished | string | `nil` | Seconds to keep the Job and its pod after completion/failure. Unset by default (Kubernetes decides). |
 | rsync.affinity | object | `{}` | Rsync pod affinity |
 | rsync.backoffLimit | int | `0` |  |
 | rsync.command | string | `""` | Full Rsync command and flags |

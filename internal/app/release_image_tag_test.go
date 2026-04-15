@@ -1,9 +1,11 @@
-package app
+package app_test
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/utkuozdemir/pv-migrate/internal/app"
 )
 
 func TestReleaseImageTag(t *testing.T) {
@@ -36,7 +38,7 @@ func TestReleaseImageTag(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.version, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.expected, releaseImageTag(tt.version))
+			assert.Equal(t, tt.expected, app.ReleaseImageTag(tt.version))
 		})
 	}
 }
@@ -58,7 +60,7 @@ func TestReleaseChartVersion(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.version, func(t *testing.T) {
 			t.Parallel()
-			assert.Equal(t, tt.expected, releaseChartVersion(tt.version))
+			assert.Equal(t, tt.expected, app.ReleaseChartVersion(tt.version))
 		})
 	}
 }

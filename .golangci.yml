@@ -2,6 +2,7 @@ version: "2"
 run:
   build-tags:
     - integration
+    - integration_cloud
 linters:
   default: all
   disable:

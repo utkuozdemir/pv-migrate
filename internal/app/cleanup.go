@@ -32,14 +32,14 @@ func buildCleanupCmd(logger **slog.Logger) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "cleanup [migration-id]",
-		Short: "Clean up resources from a detached migration",
-		Long: "Remove Helm releases created by a detached migration. " +
-			"Provide the migration ID printed by --detach, or use --all to remove all pv-migrate releases.",
+		Use:   "cleanup [operation-id]",
+		Short: "Clean up resources from a detached operation",
+		Long: "Remove Helm releases created by a detached operation. " +
+			"Provide the operation ID printed by --detach, or use --all to remove all pv-migrate releases.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !all && len(args) == 0 {
-				return errors.New("provide a migration ID or use --all")
+				return errors.New("provide an operation ID or use --all")
 			}
 
 			var filterPrefix string
@@ -47,7 +47,7 @@ func buildCleanupCmd(logger **slog.Logger) *cobra.Command {
 				filterPrefix = helmReleasePrefix
 			} else {
 				if args[0] == "" {
-					return errors.New("migration ID must not be empty")
+					return errors.New("operation ID must not be empty")
 				}
 
 				filterPrefix = helmReleasePrefix + args[0] + "-"
@@ -71,7 +71,7 @@ func buildCleanupCmd(logger **slog.Logger) *cobra.Command {
 	flags.StringVar(&kubeContext, "context", "", "Kubernetes context to use")
 	flags.StringVarP(&namespace, "namespace", "n", "", "Namespace to search for releases (default: all namespaces)")
 	flags.BoolVar(&all, "all", false, "Remove all pv-migrate releases")
-	flags.BoolVar(&force, "force", false, "Clean up even if the migration is still running")
+	flags.BoolVar(&force, "force", false, "Clean up even if the operation is still running")
 
 	return cmd
 }
@@ -144,7 +144,7 @@ func checkNoActiveJobs(
 
 		for i := range jobs.Items {
 			if jobs.Items[i].Status.Active > 0 {
-				return fmt.Errorf("migration job %s/%s is still running; use --force to clean up anyway",
+				return fmt.Errorf("operation job %s/%s is still running; use --force to clean up anyway",
 					jobs.Items[i].Namespace, jobs.Items[i].Name)
 			}
 		}
