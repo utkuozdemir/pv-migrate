@@ -218,3 +218,4 @@ terraform.rc
 /profile.cov
 /.task
 /completions
+_work/

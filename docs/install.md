@@ -3,7 +3,9 @@
 There are various installation methods for different use cases.
 
 ## Using Homebrew (macOS/Linux)
+
 If you have homebrew, the installation is as simple as:
+
 ```bash
 brew tap utkuozdemir/pv-migrate
 brew install pv-migrate
@@ -12,6 +14,7 @@ brew install pv-migrate
 ## Using Scoop (Windows)
 If you use [Scoop package manager](https://scoop.sh) on Windows,
 run the following commands in a command prompt (CMD/Powershell):
+
 ```powershell
 scoop bucket add pv-migrate https://github.com/utkuozdemir/scoop-pv-migrate.git
 scoop install pv-migrate/pv-migrate
@@ -21,8 +24,9 @@ scoop install pv-migrate/pv-migrate
 
 1. Install [krew](https://krew.sigs.k8s.io/).
 2. Install pv-migrate plugin:
+
 ```bash
-$ kubectl krew update 
+$ kubectl krew update
 $ kubectl krew install pv-migrate
 ```
 
@@ -34,6 +38,7 @@ $ kubectl krew install pv-migrate
 3. Move the binary to somewhere in your `PATH`.
 
 Sample steps for macOS:
+
 ```bash
 $ VERSION=<VERSION_TAG>
 $ wget https://github.com/utkuozdemir/pv-migrate/releases/download/${VERSION}/pv-migrate_${VERSION}_darwin_x86_64.tar.gz
@@ -47,18 +52,19 @@ $ pv-migrate --help
 Alternatively, you can use the
 [official Docker images](https://hub.docker.com/repository/docker/utkuozdemir/pv-migrate)
 that come with the `pv-migrate` binary pre-installed:
+
 ```bash
 docker run --rm -it utkuozdemir/pv-migrate:<IMAGE_TAG> --source <source-pvc> --dest <dest-pvc> ...
 ```
 
 ## Installing Shell Completion
 
-If you install `pv-migrate` using Homebrew, completions for bash, 
+If you install `pv-migrate` using Homebrew, completions for bash,
 zsh and fish will be installed for you - you don't need to do anything further.
 
 Completions are not supported when `pv-migrate` is installed using krew - see [here](https://github.com/kubernetes-sigs/krew/issues/543).
 
-If you have installed `pv-migrate` by directly downloading the binaries, 
+If you have installed `pv-migrate` by directly downloading the binaries,
 run `pv-migrate completion --help` and follow the instructions.  
 Here's the sample output of instructions:
 

@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
 )
 
 var (
@@ -22,12 +24,7 @@ const (
 	bytesTransferredInt64Bits = 64
 )
 
-type Progress struct {
-	Line        string
-	Percentage  int
-	Transferred int64
-	Total       int64
-}
+type Progress = progresslog.Update
 
 // FindLast returns the last progress entry found anywhere in text.
 // Rsync uses \r to overwrite progress in-place, so a single log line

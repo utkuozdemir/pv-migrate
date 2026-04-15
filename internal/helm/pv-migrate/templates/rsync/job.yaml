@@ -89,7 +89,9 @@ spec:
               name: private-key
               subPath: privateKey
             {{- end }}
-      nodeName: {{ .Values.rsync.nodeName }}
+      {{- with .Values.rsync.nodeName }}
+      nodeName: {{ . }}
+      {{- end }}
       {{- with .Values.rsync.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

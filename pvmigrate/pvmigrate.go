@@ -38,6 +38,8 @@ const (
 	defaultHelmTimeout         = 1 * time.Minute
 	defaultLoadBalancerTimeout = 2 * time.Minute
 	defaultPath                = "/"
+	// DefaultPrefix is the default global prefix for backup/restore operations in the bucket.
+	DefaultPrefix = "pv-migrate"
 	// DefaultSSHReverseTunnelPort is the default port opened on the source pod's loopback
 	// interface for the SSH reverse tunnel. Chosen below the IANA ephemeral range (49152–65535)
 	// and below the typical Linux ephemeral range (32768–60999) to minimise collision risk.
@@ -110,27 +112,27 @@ type Migration struct {
 	Logger *slog.Logger
 }
 
-// maxIDLength limits the migration ID so that the longest possible Kubernetes
+// maxIDLength limits the operation ID so that the longest possible Kubernetes
 // resource name stays within the 63-character DNS label limit.
 // Worst case: "pv-migrate-" (11) + <id> + "-loadbalancer" (13) + "-dest" (5) + "-rsync" (6) = 35 overhead.
 const maxIDLength = 63 - 35
 
 var validIDRegex = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 
-// validateID checks that the given migration ID is valid for use in Kubernetes
+// validateID checks that the given operation ID is valid for use in Kubernetes
 // resource names. It must be lowercase alphanumeric with optional hyphens,
 // must not start or end with a hyphen, and be at most maxIDLength characters.
 func validateID(id string) error {
 	if len(id) == 0 {
-		return errors.New("migration ID must not be empty")
+		return errors.New("operation ID must not be empty")
 	}
 
 	if len(id) > maxIDLength {
-		return fmt.Errorf("migration ID %q is too long (%d chars), maximum is %d", id, len(id), maxIDLength)
+		return fmt.Errorf("operation ID %q is too long (%d chars), maximum is %d", id, len(id), maxIDLength)
 	}
 
 	if !validIDRegex.MatchString(id) {
-		return fmt.Errorf("migration ID %q is invalid: must be lowercase alphanumeric with optional hyphens, "+
+		return fmt.Errorf("operation ID %q is invalid: must be lowercase alphanumeric with optional hyphens, "+
 			"and must not start or end with a hyphen", id)
 	}
 
