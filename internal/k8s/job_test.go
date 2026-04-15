@@ -1,6 +1,8 @@
 package k8s_test
 
 import (
+	"bytes"
+	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -8,6 +10,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
@@ -112,8 +115,56 @@ func TestFindJobPod(t *testing.T) {
 	}
 }
 
+func TestWaitForJobCompletion_PodAlreadySucceededDoesNotWatchTermination(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	cli := fake.NewClientset()
+
+	createPod(t, cli, &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rclone-abc",
+			Namespace: "default",
+			Labels:    map[string]string{"job-name": "test-rclone"},
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodSucceeded},
+	})
+
+	err := k8s.WaitForJobCompletion(ctx, cli, "default", "test-rclone", false,
+		&bytes.Buffer{}, slog.New(slog.DiscardHandler))
+	require.NoError(t, err)
+
+	for _, action := range cli.Actions() {
+		assert.NotEqual(t, "watch", action.GetVerb(), "already-succeeded pod should not start a watch")
+	}
+}
+
+func TestWaitForJobCompletion_PodAlreadyFailedReturnsError(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	cli := fake.NewClientset()
+
+	createPod(t, cli, &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-rclone-abc",
+			Namespace: "default",
+			Labels:    map[string]string{"job-name": "test-rclone"},
+		},
+		Status: corev1.PodStatus{Phase: corev1.PodFailed},
+	})
+
+	err := k8s.WaitForJobCompletion(ctx, cli, "default", "test-rclone", false,
+		&bytes.Buffer{}, slog.New(slog.DiscardHandler))
+	require.ErrorContains(t, err, "job default/test-rclone-abc failed")
+
+	for _, action := range cli.Actions() {
+		assert.NotEqual(t, "watch", action.GetVerb(), "already-failed pod should not start a watch")
+	}
+}
+
 //nolint:funlen
-func TestFindRsyncJob(t *testing.T) {
+func TestFindDataMoverJob(t *testing.T) {
 	t.Parallel()
 
 	helmLabels := map[string]string{"app.kubernetes.io/managed-by": "Helm"}
@@ -131,7 +182,7 @@ func TestFindRsyncJob(t *testing.T) {
 			name:       "no jobs",
 			ns:         "default",
 			prefix:     "pv-migrate-abc12",
-			wantErrMsg: "no rsync job found for migration pv-migrate-abc12",
+			wantErrMsg: "no job found for migration pv-migrate-abc12",
 		},
 		{
 			name: "single-release rsync job",
@@ -194,7 +245,7 @@ func TestFindRsyncJob(t *testing.T) {
 			},
 			ns:         "default",
 			prefix:     "pv-migrate-foo-",
-			wantErrMsg: "no rsync job found",
+			wantErrMsg: "no job found",
 		},
 		{
 			name: "falls back to all namespaces",
@@ -225,7 +276,7 @@ func TestFindRsyncJob(t *testing.T) {
 			},
 			ns:         "",
 			prefix:     "pv-migrate-abc12",
-			wantErrMsg: "no rsync job found for migration pv-migrate-abc12",
+			wantErrMsg: "no job found for migration pv-migrate-abc12",
 		},
 	}
 
@@ -241,7 +292,7 @@ func TestFindRsyncJob(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			job, err := k8s.FindRsyncJob(ctx, cli, tt.ns, tt.prefix)
+			job, err := k8s.FindDataMoverJob(ctx, cli, tt.ns, tt.prefix)
 			if tt.wantErrMsg != "" {
 				require.ErrorContains(t, err, tt.wantErrMsg)
 
@@ -253,4 +304,11 @@ func TestFindRsyncJob(t *testing.T) {
 			assert.Equal(t, tt.wantNs, job.Namespace)
 		})
 	}
+}
+
+func createPod(t *testing.T, cli kubernetes.Interface, pod *corev1.Pod) {
+	t.Helper()
+
+	_, err := cli.CoreV1().Pods(pod.Namespace).Create(t.Context(), pod, metav1.CreateOptions{})
+	require.NoError(t, err)
 }

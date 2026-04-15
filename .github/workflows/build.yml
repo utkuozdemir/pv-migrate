@@ -49,6 +49,8 @@ jobs:
           version: 3.50.0
       - name: Tidy go.mod
         run: go mod tidy
+      - name: Run unit tests
+        run: go test ./...
       - name: Run linters
         uses: golangci/golangci-lint-action@v9.2.0
         with:
@@ -63,13 +65,12 @@ jobs:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
           version: v2.15.3
           args: build --snapshot --clean --single-target
-      - name: Update usage
-        run: task update-usage
-      - name: Update helm chart docs
-        run: task update-helm-chart-docs
+      - name: Update docs
+        run: task update-docs
       - name: Check for dirty files
         run: git diff --exit-code
-  test:
+
+  test-migrate:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -118,14 +119,12 @@ jobs:
           metallb_ip_range_start: 220
           metallb_ip_range_end: 235
 
-      # 5. Run Tests
-      - name: Run tests
+      - name: Run migration tests
         env:
           PVMIG_TEST_EXTRA_KUBECONFIG: /home/runner/.kube/kind-2.yaml
-          # Pass only the image name:tag. Kind will find it locally.
           RSYNC_IMAGE: integration-test-rsync:${{ steps.vars.outputs.sha }}
           SSHD_IMAGE: integration-test-sshd:${{ steps.vars.outputs.sha }}
-        run: go test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./...
+        run: go test -tags integration -race -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 20m -v ./... -run TestMigrate
       - name: Gather cluster diagnostics
         if: failure()
         run: |
@@ -164,7 +163,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: cluster-diagnostics
+          name: migrate-cluster-diagnostics
           path: /tmp/cluster-diagnostics
           retention-days: 7
 
@@ -173,3 +172,94 @@ jobs:
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-backup:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.2
+
+      - name: Get short SHA
+        id: vars
+        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build rclone image
+        run: docker build -t integration-test-rclone:${{ steps.vars.outputs.sha }} ./docker/rclone/
+
+      - name: Install go
+        uses: actions/setup-go@v6.4.0
+        with:
+          go-version-file: go.mod
+
+      - name: Install helm
+        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1.14.0
+        with:
+          cluster_name: backup-test
+          # renovate: depName=kubernetes-sigs/kind datasource=github-releases
+          version: v0.31.0
+
+      - name: Load rclone image
+        run: kind load docker-image integration-test-rclone:${{ steps.vars.outputs.sha }} --name backup-test
+
+      - name: Deploy MinIO
+        env:
+          # renovate: depName=quay.io/minio/minio datasource=docker
+          MINIO_VERSION: RELEASE.2025-09-07T16-13-09Z
+          # renovate: depName=quay.io/minio/mc datasource=docker
+          MC_VERSION: RELEASE.2025-08-13T08-35-41Z
+        run: |
+          kubectl create namespace pv-migrate-test --dry-run=client -oyaml | kubectl apply -f -
+          kubectl -n pv-migrate-test run minio \
+            --image=quay.io/minio/minio:${MINIO_VERSION} \
+            --port=9000 \
+            --command -- minio server /data
+          kubectl -n pv-migrate-test expose pod minio --port=9000
+          kubectl -n pv-migrate-test wait --for=condition=Ready pod/minio --timeout=60s
+          kubectl -n pv-migrate-test run mc --rm -i --restart=Never \
+            --image=quay.io/minio/mc:${MC_VERSION} \
+            --command -- sh -c "mc alias set test http://minio:9000 minioadmin minioadmin && mc mb test/pv-migrate-test"
+
+      - name: Run backup and cloud tests
+        env:
+          RCLONE_IMAGE: integration-test-rclone:${{ steps.vars.outputs.sha }}
+          # Fail (not skip) cloud tests when secrets are available; allow skip on fork PRs without secrets
+          CLOUD_TESTS_MUST_RUN: ${{ secrets.CLOUD_TEST_S3_ACCESS_KEY != '' && 'true' || '' }}
+          CLOUD_TEST_S3_ACCESS_KEY: ${{ secrets.CLOUD_TEST_S3_ACCESS_KEY }}
+          CLOUD_TEST_S3_SECRET_KEY: ${{ secrets.CLOUD_TEST_S3_SECRET_KEY }}
+          CLOUD_TEST_GCS_SERVICE_ACCOUNT_JSON: ${{ secrets.CLOUD_TEST_GCS_SERVICE_ACCOUNT_JSON }}
+          CLOUD_TEST_AZURE_STORAGE_KEY: ${{ secrets.CLOUD_TEST_AZURE_STORAGE_KEY }}
+        run: go test -tags integration,integration_cloud -count=1 -timeout 15m -v ./integration/ -run 'TestBackup|TestCloud'
+
+      - name: Gather cluster diagnostics
+        if: failure()
+        run: |
+          DIAG_DIR=/tmp/cluster-diagnostics
+          mkdir -p "${DIAG_DIR}/logs"
+
+          kubectl cluster-info dump >"${DIAG_DIR}/cluster-info-dump.txt" 2>&1 || true
+          kubectl get nodes -o wide >"${DIAG_DIR}/nodes.txt" 2>&1 || true
+          kubectl get all --all-namespaces -o wide >"${DIAG_DIR}/all-resources.txt" 2>&1 || true
+          kubectl get events --all-namespaces --sort-by='.lastTimestamp' >"${DIAG_DIR}/events.txt" 2>&1 || true
+          kubectl describe nodes >"${DIAG_DIR}/node-describe.txt" 2>&1 || true
+          kubectl describe pods --all-namespaces >"${DIAG_DIR}/pod-describe.txt" 2>&1 || true
+          kubectl get jobs --all-namespaces -o wide >"${DIAG_DIR}/jobs.txt" 2>&1 || true
+          kubectl describe jobs --all-namespaces >"${DIAG_DIR}/job-describe.txt" 2>&1 || true
+          helm list --all-namespaces >"${DIAG_DIR}/helm-releases.txt" 2>&1 || true
+
+          kubectl get pods --all-namespaces -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}' 2>/dev/null \
+            | while IFS='/' read -r ns pod; do
+              [ -z "${ns}" ] && continue
+              kubectl logs -n "${ns}" "${pod}" --all-containers --timestamps >"${DIAG_DIR}/logs/${ns}_${pod}.log" 2>&1 || true
+              kubectl logs -n "${ns}" "${pod}" --all-containers --timestamps --previous >"${DIAG_DIR}/logs/${ns}_${pod}-previous.log" 2>/dev/null || true
+            done || true
+
+      - name: Upload cluster diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: backup-cluster-diagnostics
+          path: /tmp/cluster-diagnostics
+          retention-days: 7

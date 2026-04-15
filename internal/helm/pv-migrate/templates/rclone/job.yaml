@@ -1,0 +1,129 @@
+{{- if .Values.rclone.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "pv-migrate.fullname" . }}-rclone
+  namespace: {{ .Values.rclone.namespace }}
+  labels:
+    app.kubernetes.io/component: rclone
+    {{- include "pv-migrate.labels" . | nindent 4 }}
+    {{- with .Values.rclone.jobLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.rclone.jobAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  backoffLimit: {{ .Values.rclone.backoffLimit }}
+  {{- with .Values.rclone.ttlSecondsAfterFinished }}
+  ttlSecondsAfterFinished: {{ . }}
+  {{- end }}
+  template:
+    metadata:
+      {{- with .Values.rclone.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        app.kubernetes.io/component: rclone
+        {{- include "pv-migrate.selectorLabels" . | nindent 8 }}
+        {{- with .Values.rclone.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.rclone.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "pv-migrate.rclone.serviceAccountName" . }}
+      restartPolicy: {{ .Values.rclone.restartPolicy }}
+      securityContext:
+        {{- toYaml .Values.rclone.podSecurityContext | nindent 8 }}
+      containers:
+        - name: rclone
+          command:
+            - sh
+            - -c
+            - |
+              set -x
+              n=0
+              rc=1
+              retries={{ .Values.rclone.maxRetries }}
+              attempts=$((retries+1))
+              period={{ .Values.rclone.retryPeriodSeconds }}
+              failure="rclone job"
+              while [ "$n" -le "$retries" ]
+              do
+                {{ required ".Values.rclone.command is required!" .Values.rclone.command }} {{ .Values.rclone.extraArgs }} && rc=0 && break
+                n=$((n+1))
+                echo "rclone attempt $n/$attempts failed, waiting $period seconds before trying again"
+                sleep $period
+              done
+              {{- if .Values.rclone.metadataBase64 }}
+
+              if [ $rc -eq 0 ]; then
+                echo '{{ .Values.rclone.metadataBase64 }}' | base64 -d > /tmp/metadata.yaml
+                failure="metadata upload"
+                n=0
+                rc=1
+                while [ "$n" -le "$retries" ]
+                do
+                  rclone --config {{ .Values.rclone.configMountPath | quote }} copyto /tmp/metadata.yaml {{ .Values.rclone.metadataRemotePath | quote }} && rc=0 && break
+                  n=$((n+1))
+                  echo "metadata upload attempt $n/$attempts failed, waiting $period seconds before trying again"
+                  sleep $period
+                done
+              fi
+              {{- end }}
+
+              if [ $rc -ne 0 ]; then
+                echo "$failure failed after $retries retries"
+              fi
+              exit $rc
+          securityContext:
+            {{- toYaml .Values.rclone.securityContext | nindent 12 }}
+          image: "{{ .Values.rclone.image.repository }}:{{ .Values.rclone.image.tag }}"
+          imagePullPolicy: {{ .Values.rclone.image.pullPolicy }}
+          resources:
+            {{- toYaml .Values.rclone.resources | nindent 12 }}
+          volumeMounts:
+            {{- range $index, $mount := .Values.rclone.pvcMounts }}
+            - mountPath: {{ $mount.mountPath }}
+              name: vol-{{ $index }}
+              readOnly: {{ default false $mount.readOnly }}
+            {{- end }}
+            {{- if .Values.rclone.configMount }}
+            - mountPath: {{ .Values.rclone.configMountPath }}
+              name: rclone-config
+              subPath: rclone.conf
+            {{- end }}
+      {{- with .Values.rclone.nodeName }}
+      nodeName: {{ . }}
+      {{- end }}
+      {{- with .Values.rclone.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rclone.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.rclone.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        {{- range $index, $mount := .Values.rclone.pvcMounts }}
+        - name: vol-{{ $index }}
+          persistentVolumeClaim:
+            claimName: {{ required ".Values.rclone.pvcMounts[*].name is required!" $mount.name }}
+            readOnly: {{ default false $mount.readOnly }}
+        {{- end }}
+        {{- if .Values.rclone.configMount }}
+        - name: rclone-config
+          secret:
+            secretName: {{ include "pv-migrate.fullname" . }}-rclone
+            defaultMode: 0400
+        {{- end }}
+{{- end }}

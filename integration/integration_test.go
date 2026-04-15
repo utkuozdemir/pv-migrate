@@ -105,7 +105,7 @@ type testEnv struct {
 }
 
 //nolint:funlen
-func TestIntegration(t *testing.T) {
+func TestMigrate(t *testing.T) {
 	t.Parallel()
 
 	si := setupShared(t)
@@ -877,9 +877,9 @@ func testDetachMode(t *testing.T, te *testEnv) {
 		defaultHelmArgs(t), te.sourceNS, te.destNS, migrationID)
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
-	// Find the rsync job created by the detached migration
+	// Find the data-mover job created by the detached migration
 	releasePrefix := "pv-migrate-" + migrationID + "-"
-	job, err := k8s.FindRsyncJob(ctx, te.sourceCli.KubeClient, te.sourceNS, releasePrefix)
+	job, err := k8s.FindDataMoverJob(ctx, te.sourceCli.KubeClient, te.sourceNS, releasePrefix)
 	require.NoError(t, err)
 	assert.Contains(t, job.Name, migrationID)
 

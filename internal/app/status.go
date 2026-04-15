@@ -14,8 +14,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/utkuozdemir/pv-migrate/internal/jobprogress"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
-	"github.com/utkuozdemir/pv-migrate/internal/rsync/progress"
+	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
 )
 
 func buildStatusCmd(logger **slog.Logger) *cobra.Command {
@@ -27,12 +28,12 @@ func buildStatusCmd(logger **slog.Logger) *cobra.Command {
 	)
 
 	cmd := &cobra.Command{
-		Use:   "status <migration-id>",
-		Short: "Show the status of a detached migration",
+		Use:   "status <operation-id>",
+		Short: "Show the status of a detached operation",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if args[0] == "" {
-				return errors.New("migration ID must not be empty")
+				return errors.New("operation ID must not be empty")
 			}
 
 			return runStatus(cmd.Context(), *logger, kubeconfig, kubeContext, namespace, args[0], follow)
@@ -43,7 +44,7 @@ func buildStatusCmd(logger **slog.Logger) *cobra.Command {
 	flags.StringVar(&kubeconfig, "kubeconfig", "", "Path to the kubeconfig file")
 	flags.StringVar(&kubeContext, "context", "", "Kubernetes context to use")
 	flags.StringVarP(&namespace, "namespace", "n", "", "Namespace to search (default: all namespaces)")
-	flags.BoolVarP(&follow, "follow", "f", false, "Follow rsync progress")
+	flags.BoolVarP(&follow, "follow", "f", false, "Follow operation progress")
 
 	return cmd
 }
@@ -63,7 +64,7 @@ func runStatus(
 
 	releasePrefix := helmReleasePrefix + migrationID + "-"
 
-	job, err := k8s.FindRsyncJob(ctx, client.KubeClient, ns, releasePrefix)
+	job, err := k8s.FindDataMoverJob(ctx, client.KubeClient, ns, releasePrefix)
 	if err != nil {
 		return err
 	}
@@ -87,14 +88,16 @@ func followJobProgress(ctx context.Context, cli kubernetes.Interface, job *batch
 		return fmt.Errorf("find job pod: %w", err)
 	}
 
-	logger.Info("Following rsync progress", "pod", pod.Name)
+	logger.Info("Following job progress", "pod", pod.Name, "type", jobprogress.Description(job.Name))
 
-	progressLogger := progress.NewLogger(progress.LoggerOptions{
+	progressLogger := jobprogress.NewLogger(job.Name, progresslog.LoggerOptions{
 		Writer:          os.Stderr,
 		ShowProgressBar: true,
 		LogStreamFunc: func(ctx context.Context) (io.ReadCloser, error) {
+			tailLines := int64(5) //nolint:mnd
+
 			return cli.CoreV1().Pods(job.Namespace).GetLogs(pod.Name,
-				&corev1.PodLogOptions{Follow: true}).Stream(ctx)
+				&corev1.PodLogOptions{Follow: true, TailLines: &tailLines}).Stream(ctx)
 		},
 	})
 
@@ -126,8 +129,12 @@ func printJobProgress(ctx context.Context, cli kubernetes.Interface, job *batchv
 		return
 	}
 
-	latest := progress.FindLast(string(data))
-	logger.Info("Migration progress",
+	latest, ok := jobprogress.FindLast(job.Name, string(data))
+	if !ok {
+		return
+	}
+
+	logger.Info("Operation progress",
 		"percentage", fmt.Sprintf("%d%%", latest.Percentage),
 		"transferred", formatBytes(latest.Transferred),
 		"total", formatBytes(latest.Total),
@@ -159,7 +166,7 @@ func printJobStatus(job *batchv1.Job, logger *slog.Logger) {
 		elapsed = end.Sub(job.Status.StartTime.Time).Truncate(time.Second).String()
 	}
 
-	logger.Info("Migration status",
+	logger.Info("Operation status",
 		"job", job.Name,
 		"namespace", job.Namespace,
 		"status", status,
