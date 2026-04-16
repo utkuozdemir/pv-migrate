@@ -15,9 +15,10 @@ import (
 
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
+	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
-	"github.com/utkuozdemir/pv-migrate/internal/rsync/progress"
+	rsyncprogress "github.com/utkuozdemir/pv-migrate/internal/rsync/progress"
 )
 
 const portForwardTimeout = 30 * time.Second
@@ -226,12 +227,14 @@ func runRsyncSession(
 	session.Stdout = writer
 	session.Stderr = writer
 
-	progressLogger := progress.NewLogger(progress.LoggerOptions{
+	progressLogger := progresslog.NewLogger(progresslog.LoggerOptions{
 		Writer:          req.Writer,
 		ShowProgressBar: req.ShowProgressBar,
 		LogStreamFunc: func(context.Context) (io.ReadCloser, error) {
 			return reader, nil
 		},
+		ParseLineFunc: rsyncprogress.ParseLine,
+		Source:        "rsync",
 	})
 
 	// rsyncDone is closed by the rsync goroutine after it finishes (and after its deferred

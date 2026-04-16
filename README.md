@@ -13,8 +13,13 @@
 ![SSHD Docker Pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-sshd?label=sshd%20-%20docker%20pulls)
 ![Rsync Docker Pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-rsync?label=rsync%20-%20docker%20pulls)
 
-`pv-migrate` is a CLI tool/kubectl plugin to easily migrate
-the contents of one Kubernetes `PersistentVolumeClaim` to another.
+`pv-migrate` is a CLI tool/kubectl plugin for moving Kubernetes
+`PersistentVolumeClaim` data.
+
+Its primary workflow is direct PVC-to-PVC migration, including in-namespace,
+cross-namespace, and cross-cluster copies. It can also back up PVC data to
+bucket storage and restore it later using S3-compatible storage, Azure Blob,
+GCS, or a custom rclone remote.
 
 ---
 
@@ -36,6 +41,44 @@ However, it is not as simple with `PersistentVolumeClaim` resources: They are no
 but they also store data in the underlying storage backend.
 
 In these cases, moving the data stored in the PVC can become a problem, making migrations more difficult.
+`pv-migrate` handles that data movement directly between PVCs, and can also use bucket storage as an intermediate
+or durable backup target when that better fits the workflow.
+
+## Workflows
+
+### PVC-To-PVC Migration
+
+Copy data directly from one PVC to another. This is the core pv-migrate workflow.
+It uses rsync-based strategies and is the best fit when you need filesystem-level migration semantics.
+
+```bash
+$ pv-migrate --source old-pvc --dest new-pvc
+```
+
+See [PVC-to-PVC migration](docs/migrate.md) for strategies and examples.
+
+### Bucket Backup And Restore
+
+Back up a PVC to object storage and restore it later. This is useful for durable backups,
+one-off exports, staging data through a bucket, or moving data when direct cluster-to-cluster
+connectivity is inconvenient.
+
+```bash
+$ pv-migrate backup \
+  --source app-data \
+  --backend s3 \
+  --bucket pv-backups \
+  --name app-data-2026-04-11
+
+$ pv-migrate restore \
+  --dest app-data-restore \
+  --backend s3 \
+  --bucket pv-backups \
+  --name app-data-2026-04-11
+```
+
+See [bucket backup and restore](docs/backup-restore.md) for backend options, object layout,
+raw rclone config mode, and permissions caveats.
 
 ## Use Cases
 
@@ -58,11 +101,24 @@ from a `ReadWriteOnce` one (like `local-path`) to a `ReadWriteMany` like NFS.
 As the `StorageClass` is not editable, you can use `pv-migrate` to transfer
 the data from the old PVC to the new one with the desired `StorageClass`.
 
+:arrow_right: You need to keep a PVC backup in object storage before a risky operation,
+or to export PVC data out of the cluster for later restore.  
+Use `pv-migrate backup` to copy the volume into S3-compatible storage, Azure Blob, or GCS,
+then `pv-migrate restore` when you need the data back.
+
+:arrow_right: You want simple scheduled PVC backups using Kubernetes-native building blocks.  
+Run `pv-migrate backup` from a `CronJob` and rely on bucket lifecycle rules or separate automation for retention.
+
+:arrow_right: Direct cluster-to-cluster connectivity is awkward, blocked, or temporary.  
+Back up the source PVC to a bucket, then restore from that bucket into the destination cluster.
+
 ## Highlights
 
 - Supports in-namespace, in-cluster as well as cross-cluster migrations
 - Uses rsync over SSH with a freshly generated [Ed25519](https://en.wikipedia.org/wiki/EdDSA)
   or RSA key pair each time to securely migrate the files
+- Supports backing up PVC data to and restoring it from S3-compatible, Azure Blob, or GCS bucket storage
+- Supports custom rclone remotes for advanced backup/restore backends
 - Allows full customization of the manifests (e.g. specifying your own container images for rsync and sshd, configuring affinity, etc.)
 - Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed:
   - Mount both PVCs in a single pod (mount)
@@ -78,11 +134,15 @@ the data from the old PVC to the new one with the desired `StorageClass`.
 
 ## Installation
 
-See [INSTALL.md](INSTALL.md) for various installation methods and shell completion configuration.
+See [docs/install.md](docs/install.md) for various installation methods and shell completion configuration.
 
 ## Usage
 
-See [USAGE.md](USAGE.md) for the CLI reference and examples.
+See [docs/usage.md](docs/usage.md) for usage guides and command references:
+
+- [PVC-to-PVC migration](docs/migrate.md)
+- [Bucket backup and restore](docs/backup-restore.md)
+- [CLI reference](docs/cli-reference.md)
 
 ## Star History
 

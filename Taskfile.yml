@@ -26,15 +26,35 @@ tasks:
     cmds:
       - rm -rf {{.ROOT_DIR}}/dist/
 
-  update-usage:
-    desc: update usage
+  update-docs:
+    desc: update generated docs
+    cmds:
+      - task: update-cli-reference
+      - task: update-helm-chart-docs
+
+  update-cli-reference:
+    desc: update generated CLI reference
     env:
-      USAGE:
-        sh: go run ./... --help
-    cmd: >-
-        docker run  -v {{.ROOT_DIR}}:/project -e USAGE
+      ROOT_USAGE:
+        sh: go run ./cmd/pv-migrate --help
+      BACKUP_USAGE:
+        sh: go run ./cmd/pv-migrate backup --help
+      RESTORE_USAGE:
+        sh: go run ./cmd/pv-migrate restore --help
+      STATUS_USAGE:
+        sh: go run ./cmd/pv-migrate status --help
+      CLEANUP_USAGE:
+        sh: go run ./cmd/pv-migrate cleanup --help
+      COMPLETION_USAGE:
+        sh: go run ./cmd/pv-migrate completion --help
+    cmds:
+      - mkdir -p {{.ROOT_DIR}}/docs
+      - >-
+        docker run --rm -v {{.ROOT_DIR}}:/project
+        -e ROOT_USAGE -e BACKUP_USAGE -e RESTORE_USAGE -e STATUS_USAGE -e CLEANUP_USAGE -e COMPLETION_USAGE
         hairyhenderson/gomplate:stable
-        --file /project/USAGE.md.gotmpl --out /project/USAGE.md
+        --file /project/docs/cli-reference.md.gotmpl
+        --out /project/docs/cli-reference.md
 
   update-helm-chart-docs:
     desc: update helm chart docs

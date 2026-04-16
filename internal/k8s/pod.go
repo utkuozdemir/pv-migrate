@@ -80,6 +80,18 @@ func waitForPodTermination(ctx context.Context, cli kubernetes.Interface, ns, na
 	var result *corev1.PodPhase
 
 	resCli := cli.CoreV1().Pods(ns)
+
+	pod, err := resCli.Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pod: %w", err)
+	}
+
+	if pod.Status.Phase != corev1.PodRunning {
+		phase := pod.Status.Phase
+
+		return &phase, nil
+	}
+
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
 	listWatch := &cache.ListWatch{
 		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
