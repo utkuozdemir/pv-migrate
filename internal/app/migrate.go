@@ -298,8 +298,8 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 		"Do not fail if the source or destination PVC is mounted")
 	flags.BoolVarP(&migration.NoChown, FlagNoChown, "o", migration.NoChown, "Omit chown during rsync")
 	flags.StringVar(&migration.ID, FlagID, migration.ID,
-		"Custom migration ID (lowercase alphanumeric with optional hyphens, max 28 chars). "+
-			"If not set, a random ID is generated. Used to identify the migration in 'status' and 'cleanup' commands")
+		"Custom operation ID (lowercase alphanumeric with optional hyphens, max 28 chars). "+
+			"If not set, a random ID is generated. Used to identify the operation in 'status' and 'cleanup' commands")
 	flags.BoolVar(&migration.Detach, FlagDetach, migration.Detach,
 		"Detach after the migration job starts running in the cluster. "+
 			"The CLI will exit and the migration will continue in the background. "+

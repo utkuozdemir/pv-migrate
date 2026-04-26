@@ -32,24 +32,23 @@ GCS, or a custom rclone remote.
 
 ![pv-migrate demo GIF](img/demo.gif)
 
-## Introduction
+## Why this exists
 
-On Kubernetes, if you need to rename a resource (like a `Deployment`) or to move it to a different namespace,
-you can simply create a copy of its manifest with the new namespace and/or name and apply it.
+On Kubernetes, renaming a resource like a `Deployment` is usually just a manifest change.
+Create the same object with a new name or namespace, apply it, and move on.
 
-However, it is not as simple with `PersistentVolumeClaim` resources: They are not only metadata,
-but they also store data in the underlying storage backend.
+PVCs are different. The Kubernetes object is only the metadata. The real data
+lives in the storage backend.
 
-In these cases, moving the data stored in the PVC can become a problem, making migrations more difficult.
-`pv-migrate` handles that data movement directly between PVCs, and can also use bucket storage as an intermediate
-or durable backup target when that better fits the workflow.
+`pv-migrate` moves that data. It can copy directly between PVCs, or use bucket
+storage as a backup target or intermediate hop.
 
 ## Workflows
 
-### PVC-To-PVC Migration
+### PVC-to-PVC migration
 
-Copy data directly from one PVC to another. This is the core pv-migrate workflow.
-It uses rsync-based strategies and is the best fit when you need filesystem-level migration semantics.
+Copy data directly from one PVC to another. This is the core pv-migrate workflow
+and uses rsync-based strategies.
 
 ```bash
 $ pv-migrate --source old-pvc --dest new-pvc
@@ -57,11 +56,10 @@ $ pv-migrate --source old-pvc --dest new-pvc
 
 See [PVC-to-PVC migration](docs/migrate.md) for strategies and examples.
 
-### Bucket Backup And Restore
+### Bucket backup and restore
 
-Back up a PVC to object storage and restore it later. This is useful for durable backups,
-one-off exports, staging data through a bucket, or moving data when direct cluster-to-cluster
-connectivity is inconvenient.
+Back up a PVC to object storage and restore it later. Use this for backups,
+one-off exports, or moves where direct cluster-to-cluster connectivity is awkward.
 
 ```bash
 $ pv-migrate backup \
@@ -80,16 +78,16 @@ $ pv-migrate restore \
 See [bucket backup and restore](docs/backup-restore.md) for backend options, object layout,
 raw rclone config mode, and permissions caveats.
 
-## Use Cases
+## Use cases
 
 :arrow_right: You have a database that has a PersistentVolumeClaim `db-data` of size `50Gi`.  
 Your DB grew over time, and you need more space for it.  
 You cannot resize the PVC because it doesn't support [volume expansion](https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/).  
-Simply create a new, bigger PVC `db-data-v2` and use `pv-migrate` to copy data from `db-data` to `db-data-v2`.
+Create a new, bigger PVC `db-data-v2` and use `pv-migrate` to copy data from `db-data` to `db-data-v2`.
 
 
 :arrow_right: You need to move PersistentVolumeClaim `my-pvc`  from namespace `ns-a` to namespace `ns-b`.  
-Simply create the PVC with the same name and manifest in `ns-b` and use `pv-migrate` to copy its content.
+Create the PVC with the same name and manifest in `ns-b` and use `pv-migrate` to copy its content.
 
 
 :arrow_right: You are moving from one cloud provider to another, 
@@ -106,7 +104,7 @@ or to export PVC data out of the cluster for later restore.
 Use `pv-migrate backup` to copy the volume into S3-compatible storage, Azure Blob, or GCS,
 then `pv-migrate restore` when you need the data back.
 
-:arrow_right: You want simple scheduled PVC backups using Kubernetes-native building blocks.  
+:arrow_right: You want scheduled PVC backups using Kubernetes-native building blocks.
 Run `pv-migrate backup` from a `CronJob` and rely on bucket lifecycle rules or separate automation for retention.
 
 :arrow_right: Direct cluster-to-cluster connectivity is awkward, blocked, or temporary.  
@@ -114,27 +112,27 @@ Back up the source PVC to a bucket, then restore from that bucket into the desti
 
 ## Highlights
 
-- Supports in-namespace, in-cluster as well as cross-cluster migrations
+- Supports in-namespace, in-cluster, and cross-cluster migrations
 - Uses rsync over SSH with a freshly generated [Ed25519](https://en.wikipedia.org/wiki/EdDSA)
   or RSA key pair each time to securely migrate the files
 - Supports backing up PVC data to and restoring it from S3-compatible, Azure Blob, or GCS bucket storage
-- Supports custom rclone remotes for advanced backup/restore backends
-- Allows full customization of the manifests (e.g. specifying your own container images for rsync and sshd, configuring affinity, etc.)
-- Supports multiple migration strategies to do the migration efficiently and fallback to other strategies when needed:
+- Supports custom rclone remotes for backup/restore backends
+- Lets you override rendered manifests, including images, affinity, and other Helm values
+- Supports multiple migration strategies and falls back when needed:
   - Mount both PVCs in a single pod (mount)
   - ClusterIP service (clusterip)
   - LoadBalancer service (loadbalancer)
   - NodePort service (nodeport, opt-in)
   - Local port-forward transfer (local, opt-in)
 - Push mode (`--rsync-push`) for when the source side cannot expose a service, e.g., behind a firewall or NAT
-- Detach mode (`--detach`) for large transfers that take a long time, allowing the migration to continue in the cluster without keeping the CLI connected
+- Detach mode (`--detach`) for large transfers, so the job can keep running after the CLI exits
 - Customizable strategy order
-- Supports arm32v7 (Raspberry Pi etc.) and arm64 architectures as well as amd64
+- Supports arm32v7 (Raspberry Pi, etc.), arm64, and amd64
 - Supports completion for popular shells: bash, zsh, fish, powershell
 
 ## Installation
 
-See [docs/install.md](docs/install.md) for various installation methods and shell completion configuration.
+See [docs/install.md](docs/install.md) for install options and shell completion setup.
 
 ## Usage
 
@@ -144,7 +142,7 @@ See [docs/usage.md](docs/usage.md) for usage guides and command references:
 - [Bucket backup and restore](docs/backup-restore.md)
 - [CLI reference](docs/cli-reference.md)
 
-## Star History
+## Star history
 
 <a href="https://star-history.com/#utkuozdemir/pv-migrate&Date">
  <picture>

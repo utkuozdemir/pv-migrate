@@ -1,13 +1,13 @@
-# PVC-To-PVC Migration
+# PVC-to-PVC migration
 
 PVC-to-PVC migration copies data directly from one Kubernetes `PersistentVolumeClaim` to another.
 This is the original pv-migrate workflow and uses rsync, usually over SSH, with several Kubernetes networking strategies.
 
-For exact flags, see the [CLI reference](cli-reference.md#root-command).
+See the [CLI reference](cli-reference.md#root-command) for all flags.
 
 ## Strategies
 
-`pv-migrate` can try multiple migration strategies in order and fall back when a strategy is not applicable.
+`pv-migrate` can try multiple migration strategies in order and fall back when one does not apply.
 
 | Name | Description |
 | --- | --- |
@@ -98,9 +98,9 @@ $ pv-migrate \
   --dest new-pvc
 ```
 
-## Detached Mode
+## Detached mode
 
-For large migrations, use `--detach` to let the migration continue in the cluster without keeping the CLI connected:
+For large migrations, use `--detach` to let the job continue in the cluster after the CLI exits:
 
 ```bash
 $ pv-migrate --source old-pvc --dest new-pvc --detach --id my-db-migration
@@ -111,7 +111,7 @@ $ pv-migrate cleanup my-db-migration
 
 `status --follow` shows a live progress bar while the rsync job is running.
 
-## Push Mode
+## Push mode
 
 By default, sshd runs on the source side and rsync pulls data from it.
 When the source side cannot expose a service, for example behind a firewall or NAT, use `--rsync-push` to reverse the direction:
@@ -127,7 +127,7 @@ $ pv-migrate \
 
 `--rsync-push` has no effect for the `mount` and `local` strategies.
 
-## Non-Root Mode
+## Non-root mode
 
 Use `--non-root` on clusters that enforce restricted pod security.
 For rsync-based migration this runs containers as a non-root user and skips ownership and directory timestamp preservation.

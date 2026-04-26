@@ -1,36 +1,37 @@
 # Installation
 
-There are various installation methods for different use cases.
+The recommended install path is Homebrew on macOS/Linux and Scoop on Windows. Other options below.
 
-## Using Homebrew (macOS/Linux)
+## Homebrew (macOS/Linux)
 
-If you have homebrew, the installation is as simple as:
+If you use Homebrew:
 
 ```bash
 brew tap utkuozdemir/pv-migrate
 brew install pv-migrate
 ```
 
-## Using Scoop (Windows)
+## Scoop (Windows)
+
 If you use [Scoop package manager](https://scoop.sh) on Windows,
-run the following commands in a command prompt (CMD/Powershell):
+run:
 
 ```powershell
 scoop bucket add pv-migrate https://github.com/utkuozdemir/scoop-pv-migrate.git
 scoop install pv-migrate/pv-migrate
 ```
 
-## Using krew
+## krew
 
 1. Install [krew](https://krew.sigs.k8s.io/).
-2. Install pv-migrate plugin:
+2. Install the pv-migrate plugin:
 
 ```bash
 $ kubectl krew update
 $ kubectl krew install pv-migrate
 ```
 
-## By downloading the binaries (macOS/Linux/Windows)
+## Release binaries (macOS/Linux/Windows)
 
 1. Go to the [releases](https://github.com/utkuozdemir/pv-migrate/releases) and download
    the latest release archive for your platform.
@@ -47,26 +48,25 @@ $ mv pv-migrate /usr/local/bin
 $ pv-migrate --help
 ```
 
-## Running directly in Docker container
+## Docker
 
-Alternatively, you can use the
-[official Docker images](https://hub.docker.com/repository/docker/utkuozdemir/pv-migrate)
-that come with the `pv-migrate` binary pre-installed:
+You can also run the
+[official Docker image](https://hub.docker.com/repository/docker/utkuozdemir/pv-migrate):
 
 ```bash
 docker run --rm -it utkuozdemir/pv-migrate:<IMAGE_TAG> --source <source-pvc> --dest <dest-pvc> ...
 ```
 
-## Installing Shell Completion
+## Shell completion
 
 If you install `pv-migrate` using Homebrew, completions for bash,
-zsh and fish will be installed for you - you don't need to do anything further.
+zsh and fish are installed for you.
 
-Completions are not supported when `pv-migrate` is installed using krew - see [here](https://github.com/kubernetes-sigs/krew/issues/543).
+Completions are not supported when `pv-migrate` is installed using krew. See
+[kubernetes-sigs/krew#543](https://github.com/kubernetes-sigs/krew/issues/543).
 
 If you have installed `pv-migrate` by directly downloading the binaries,
-run `pv-migrate completion --help` and follow the instructions.  
-Here's the sample output of instructions:
+run `pv-migrate completion --help` and follow the instructions.
 
 ```
 To load completions:

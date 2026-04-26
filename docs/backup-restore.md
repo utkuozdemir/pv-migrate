@@ -1,11 +1,11 @@
-# Bucket Backup And Restore
+# Bucket backup and restore
 
 Bucket backup/restore copies PVC data to object storage and restores it later.
 It uses rclone inside a Kubernetes Job and supports S3-compatible storage, Azure Blob, GCS, and raw rclone config mode.
 
-For exact flags, see the [CLI reference](cli-reference.md#backup).
+See the [CLI reference](cli-reference.md#backup) for all flags.
 
-## Managed Bucket Mode
+## Managed bucket mode
 
 Managed mode builds the rclone config from pv-migrate flags.
 Use this when your backend is one of the built-in backend types.
@@ -51,20 +51,31 @@ $ pv-migrate restore \
   --delete-extraneous-files
 ```
 
-Credential flags can also be provided through environment variables:
-`PV_MIGRATE_S3_ACCESS_KEY`, `PV_MIGRATE_S3_SECRET_KEY`,
-`PV_MIGRATE_AZURE_STORAGE_ACCOUNT`, `PV_MIGRATE_AZURE_STORAGE_KEY`, and
-`PV_MIGRATE_GCS_SERVICE_ACCOUNT_JSON`.
-Explicit flags take precedence over environment variables.
-Prefer environment variables in automated and shared environments to avoid exposing secrets in process arguments.
-`PV_MIGRATE_GCS_SERVICE_ACCOUNT_JSON` must contain the JSON credentials themselves; use
-`--gcs-service-account-file` when you want to point at a local file path instead.
+### Credentials
 
-Managed S3 mode defaults to rclone's generic `Other` provider. For native AWS S3,
-set `--s3-provider AWS`. Managed GCS mode defaults to `bucket_policy_only = true`;
-set `--gcs-bucket-policy-only=false` for legacy buckets that still use object ACLs.
+You can pass credentials as flags or environment variables. Explicit flags take
+precedence over environment variables.
 
-The backup name is the logical identity of the backup in the bucket.
+Prefer environment variables in automated or shared environments so secrets do
+not appear in process arguments.
+
+Supported environment variables:
+
+- S3: `PV_MIGRATE_S3_ACCESS_KEY`, `PV_MIGRATE_S3_SECRET_KEY`
+- Azure: `PV_MIGRATE_AZURE_STORAGE_ACCOUNT`, `PV_MIGRATE_AZURE_STORAGE_KEY`
+- GCS: `PV_MIGRATE_GCS_SERVICE_ACCOUNT_JSON`
+
+For GCS, `PV_MIGRATE_GCS_SERVICE_ACCOUNT_JSON` must contain the JSON credentials
+contents. Use `--gcs-service-account-file` when you want to pass a local file
+path instead.
+
+Managed S3 mode uses rclone's generic `Other` provider by default. Leave it
+unless your provider needs another rclone mode; then set `--s3-provider`.
+
+Managed GCS mode defaults to `bucket_policy_only = true`. Set
+`--gcs-bucket-policy-only=false` for legacy buckets that still use object ACLs.
+
+`--name` identifies the backup inside the bucket.
 The default prefix is `pv-migrate`, and prefixes can contain `/` for nesting:
 
 ```bash
@@ -76,7 +87,7 @@ $ pv-migrate backup \
   --name app-data-2026-04-11
 ```
 
-## Object Layout
+## Object layout
 
 In managed mode, backup data is stored under:
 
@@ -90,6 +101,9 @@ The backup metadata sidecar is stored at:
 <bucket>/<prefix>/<name>.meta.yaml
 ```
 
+The metadata records the backup time and source PVC. It is useful for inspection,
+but restore does not need it.
+
 For example:
 
 ```text
@@ -97,7 +111,7 @@ pv-backups/pv-migrate/app-data-2026-04-11/
 pv-backups/pv-migrate/app-data-2026-04-11.meta.yaml
 ```
 
-## Raw Rclone Config Mode
+## Raw rclone config mode
 
 Use raw rclone config mode when you need a backend or rclone option that pv-migrate does not model directly.
 In this mode, `--remote` controls the destination/source path and `--name`, `--bucket`, and `--prefix` are not used for path construction.
@@ -118,10 +132,11 @@ $ pv-migrate restore \
   --remote myremote:bucket/custom/path
 ```
 
-Managed-mode backups write a best-effort metadata sidecar file. Raw rclone config mode does not write that sidecar,
-because pv-migrate treats the remote spec as an opaque rclone path.
+Managed mode tries to write a metadata sidecar file after the data upload
+succeeds. Raw rclone config mode does not write that file because pv-migrate
+treats the remote spec as an opaque rclone path.
 
-## Subdirectory Backup And Restore
+## Subdirectory backup and restore
 
 Use `--path` to back up or restore a subdirectory inside the PVC:
 
@@ -145,7 +160,7 @@ $ pv-migrate restore \
   --name uploads-2026-04-11
 ```
 
-## Detached Mode And Progress
+## Detached mode and progress
 
 Use `--detach` for long backup or restore jobs:
 
@@ -182,10 +197,18 @@ It is useful as an escape hatch, but overriding the built-in stats or JSON log f
 When `--dry-run`, `--dry-run=true`, or `-n` is present in `--rclone-extra-args`,
 pv-migrate skips writing the metadata sidecar so the backup run does not mutate the bucket.
 
-## Scheduled Backups
+## Permissions and ownership
+
+Bucket backup/restore copies file contents. It does not preserve POSIX owner,
+group, or mode. Restored files are created by the rclone process user, and
+regular files commonly restore with default file permissions such as `0644`.
+
+Use PVC-to-PVC migration if you need owners, groups, or modes to survive the copy.
+
+## Scheduled backups
 
 You can run `pv-migrate backup` from a Kubernetes `CronJob` to create scheduled PVC backups.
-This is useful when you want a simple Kubernetes-native data mover that writes to object storage.
+This gives you a Kubernetes-native data mover that writes to object storage.
 
 > [!WARNING]
 > This is not a full backup platform. pv-migrate does not manage retention, backup catalogs, restore verification,
@@ -266,7 +289,7 @@ spec:
           restartPolicy: Never
           containers:
             - name: pv-migrate
-              image: docker.io/utkuozdemir/pv-migrate:latest
+              image: docker.io/utkuozdemir/pv-migrate:<version>
               env:
                 - name: PV_MIGRATE_S3_ACCESS_KEY
                   valueFrom:
@@ -294,20 +317,13 @@ spec:
                 - --name=$(BACKUP_NAME)
 ```
 
-Notes for scheduled backups:
+Notes:
 
-- The official pv-migrate image is a scratch image and does not include a shell, so use direct `args` as shown.
-- This example uses Kubernetes argument expansion and the CronJob-created `Job` name as the backup name.
-- If you set a fixed `--name`, repeated runs write to the same object prefix unless bucket versioning or another retention mechanism handles that.
-- If you need timestamped names or custom pre/post scripts, run pv-migrate from your own wrapper image or automation that provides those tools.
-- Use object-storage lifecycle policies or a separate cleanup job for retention.
-- Store object-storage credentials in Kubernetes Secrets, not inline in the CronJob manifest.
-- Prefer environment variables for credentials in Pod manifests, so secret values are not exposed in process arguments.
-- Decide whether `--ignore-mounted` is safe for the workload. For databases and other stateful systems, pause the app, use an application dump, or take a storage snapshot first if you need transactional consistency.
-- Ensure the CronJob service account can create, patch, watch, and delete the Kubernetes resources pv-migrate manages through Helm. You may need to extend the RBAC example if you use Helm overrides or a custom environment.
-- Remember that bucket backup/restore does not currently preserve POSIX owner, group, or mode.
+- Replace `<version>` with the release tag you want to run. The official pv-migrate image has no shell, so use direct `args` as shown.
+- The example uses the `Job` name created by the CronJob as `--name`, so each run writes to a distinct backup prefix.
+- pv-migrate does not handle retention or make app-consistent backups. Use bucket lifecycle policies for retention, and pause or snapshot workloads that need transactional consistency.
 
-## Non-Root Mode
+## Non-root mode
 
 `backup` and `restore` support `--non-root`.
 This runs the rclone container as UID/GID `10000` and sets `fsGroup` to `10000`.
@@ -316,20 +332,5 @@ This can help in restricted PodSecurity clusters, but it has the normal non-root
 
 - Backup can fail if files are not readable by UID/GID `10000`.
 - Restore can fail if the destination volume is not writable by UID/GID `10000` or if the CSI driver does not honor `fsGroup`.
-
-## Permissions And Ownership
-
-Bucket backup/restore is content-oriented and does not currently preserve POSIX owner, group, or mode across a backup/restore round trip.
-Restored files are created by the rclone process user, and regular files commonly restore with default file permissions such as `0644`.
-
-Use PVC-to-PVC migration when POSIX metadata fidelity is required.
-
-## Cleanup
-
-By default, pv-migrate cleans up the Helm release after attached operations complete.
-Use `--no-cleanup` or `--no-cleanup-on-failure` when you need to inspect generated resources.
-
-Detached operations are not cleaned up automatically because the CLI exits after the job starts.
-Use `pv-migrate cleanup <id>` after the job completes.
 
 For further customization of rendered manifests, see the [Helm chart values](../internal/helm/pv-migrate).

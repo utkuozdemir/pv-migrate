@@ -7,16 +7,16 @@
 
 See [Installation](install.md) for CLI and kubectl plugin setup.
 
-For exact flags and generated command help, see the [CLI reference](cli-reference.md).
+See the [CLI reference](cli-reference.md) for all flags and generated help.
 
 The Kubernetes resources created by pv-migrate are sourced from the embedded [Helm chart](../internal/helm/pv-migrate).
 You can pass raw values to the backing Helm chart using the `--helm-*` flags for further customization:
 container images, resources, service accounts, annotations, labels, affinity, tolerations, and other chart values.
 
-## Detached Operations
+## Detached operations
 
-Both migration and bucket backup/restore operations support detach mode.
-Use `--detach` to let the data mover job continue in the cluster after the CLI exits.
+Both migration and bucket backup/restore support detach mode.
+Use `--detach` to let the data mover job continue after the CLI exits.
 
 ```bash
 $ pv-migrate --source old-pvc --dest new-pvc --detach --id my-migration
@@ -25,7 +25,7 @@ $ pv-migrate status my-migration --follow
 $ pv-migrate cleanup my-migration
 ```
 
-For bucket backup/restore, use the same status and cleanup commands with the operation ID:
+For bucket backup/restore, use the same status and cleanup commands:
 
 ```bash
 $ pv-migrate backup --source app-data --backend s3 --bucket backups --name app-data --detach --id app-backup
@@ -33,7 +33,15 @@ $ pv-migrate status app-backup
 $ pv-migrate cleanup app-backup
 ```
 
-## Where To Go Next
+## Cleanup
+
+By default, pv-migrate cleans up the Helm release after attached operations complete.
+Use `--no-cleanup` or `--no-cleanup-on-failure` when you need to inspect generated resources.
+
+Detached operations are not cleaned up automatically.
+Use `pv-migrate cleanup <id>` after the job completes.
+
+## Where to go next
 
 - Start with [PVC-to-PVC migration](migrate.md) if you are moving data between Kubernetes volumes.
 - Start with [bucket backup and restore](backup-restore.md) if you want a durable object-storage backup or a later restore.
