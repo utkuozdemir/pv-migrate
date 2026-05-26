@@ -246,12 +246,16 @@ func handleMountedPVCs(
 
 // validatePVCs runs the pre-flight checks on the resolved source and
 // destination PVCs before the migration is attempted.
-func validatePVCs(r *migration.Request, sourceInfo, destInfo *pvc.Info, logger *slog.Logger) error {
+func validatePVCs(request *migration.Request, sourceInfo, destInfo *pvc.Info, logger *slog.Logger) error {
+	if sourceInfo == nil || sourceInfo.Claim == nil || destInfo == nil || destInfo.Claim == nil {
+		return errors.New("source or destination PVC info is invalid")
+	}
+
 	if !destInfo.SupportsRWO && !destInfo.SupportsRWX {
 		return errors.New("destination PVC is not writable")
 	}
 
-	return handleSizes(r, sourceInfo, destInfo, logger)
+	return handleSizes(request, sourceInfo, destInfo, logger)
 }
 
 // handleSizes fails early when the destination PVC is smaller than the source
