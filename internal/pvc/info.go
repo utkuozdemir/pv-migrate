@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
@@ -79,6 +80,18 @@ func New(
 		SupportsROX:        supportsROX,
 		SupportsRWX:        supportsRWX,
 	}, nil
+}
+
+// Size returns the storage capacity of the PVC. It prefers the actual capacity
+// of the bound PersistentVolume (Status.Capacity) and falls back to the
+// requested capacity (Spec.Resources.Requests) when the PVC is not yet bound.
+// It returns a zero quantity when neither is set.
+func (i *Info) Size() resource.Quantity {
+	if capacity, ok := i.Claim.Status.Capacity[corev1.ResourceStorage]; ok && !capacity.IsZero() {
+		return capacity
+	}
+
+	return i.Claim.Spec.Resources.Requests[corev1.ResourceStorage]
 }
 
 func findMountedNode(ctx context.Context, kubeClient kubernetes.Interface,

@@ -71,6 +71,47 @@ func TestBuildTaskMounted(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestBuildMigrationSizeCheck(t *testing.T) {
+	t.Parallel()
+
+	logger := slogt.New(t)
+
+	t.Run("fails when destination is smaller than source", func(t *testing.T) {
+		t.Parallel()
+
+		m := Migrator{getKubeClient: fakeClusterClientGetterWithSizes("2Gi", "1Gi")}
+		req := buildMigration(true)
+
+		tsk, err := m.buildMigration(t.Context(), req, logger)
+		assert.Nil(t, tsk)
+		require.ErrorContains(t, err, "smaller than source")
+		require.ErrorContains(t, err, "--ignore-sizes")
+	})
+
+	t.Run("succeeds when destination is smaller but --ignore-sizes is set", func(t *testing.T) {
+		t.Parallel()
+
+		m := Migrator{getKubeClient: fakeClusterClientGetterWithSizes("2Gi", "1Gi")}
+		req := buildMigration(true)
+		req.IgnoreSizes = true
+
+		tsk, err := m.buildMigration(t.Context(), req, logger)
+		require.NoError(t, err)
+		assert.NotNil(t, tsk)
+	})
+
+	t.Run("succeeds when destination is larger than source", func(t *testing.T) {
+		t.Parallel()
+
+		m := Migrator{getKubeClient: fakeClusterClientGetterWithSizes("1Gi", "2Gi")}
+		req := buildMigration(true)
+
+		tsk, err := m.buildMigration(t.Context(), req, logger)
+		require.NoError(t, err)
+		assert.NotNil(t, tsk)
+	})
+}
+
 func TestRunStrategiesInOrder(t *testing.T) {
 	t.Parallel()
 
@@ -146,8 +187,12 @@ func buildMigrationRequestWithStrategies(
 }
 
 func fakeClusterClientGetter() clusterClientGetter {
-	pvcA := buildTestPVC(sourceNS, sourcePVC, corev1.ReadOnlyMany)
-	pvcB := buildTestPVC(destNS, destPVC, corev1.ReadWriteOnce, corev1.ReadWriteMany)
+	return fakeClusterClientGetterWithSizes("512Mi", "512Mi")
+}
+
+func fakeClusterClientGetterWithSizes(sourceSize, destSize string) clusterClientGetter {
+	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceSize, corev1.ReadOnlyMany)
+	pvcB := buildTestPVC(destNS, destPVC, destSize, corev1.ReadWriteOnce, corev1.ReadWriteMany)
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPVC)
 
@@ -177,7 +222,10 @@ func buildTestPod(ns, name, node, pvc string) *corev1.Pod {
 	}
 }
 
-func buildTestPVC(ns, name string, accessModes ...corev1.PersistentVolumeAccessMode) *corev1.PersistentVolumeClaim {
+func buildTestPVC(
+	ns, name, size string,
+	accessModes ...corev1.PersistentVolumeAccessMode,
+) *corev1.PersistentVolumeClaim {
 	return &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace: ns,
@@ -187,7 +235,7 @@ func buildTestPVC(ns, name string, accessModes ...corev1.PersistentVolumeAccessM
 			AccessModes: accessModes,
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: map[corev1.ResourceName]resource.Quantity{
-					"storage": resource.MustParse("512Mi"),
+					"storage": resource.MustParse(size),
 				},
 			},
 		},
