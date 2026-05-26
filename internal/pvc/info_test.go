@@ -161,6 +161,18 @@ func TestSize(t *testing.T) {
 		size := info.Size()
 		assert.True(t, size.IsZero())
 	})
+
+	t.Run("returns zero for nil receiver or nil claim", func(t *testing.T) {
+		t.Parallel()
+
+		var nilInfo *pvc.Info
+
+		nilReceiverSize := nilInfo.Size()
+		assert.True(t, nilReceiverSize.IsZero())
+
+		nilClaimSize := (&pvc.Info{}).Size()
+		assert.True(t, nilClaimSize.IsZero())
+	})
 }
 
 func buildClusterClient(

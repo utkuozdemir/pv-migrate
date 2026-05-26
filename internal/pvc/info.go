@@ -87,6 +87,10 @@ func New(
 // requested capacity (Spec.Resources.Requests) when the PVC is not yet bound.
 // It returns a zero quantity when neither is set.
 func (i *Info) Size() resource.Quantity {
+	if i == nil || i.Claim == nil {
+		return resource.Quantity{}
+	}
+
 	if capacity, ok := i.Claim.Status.Capacity[corev1.ResourceStorage]; ok && !capacity.IsZero() {
 		return capacity
 	}
