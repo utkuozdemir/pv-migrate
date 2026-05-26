@@ -71,6 +71,7 @@ const (
 
 	FlagDestDeleteExtraneousFiles = "dest-delete-extraneous-files"
 	FlagIgnoreMounted             = "ignore-mounted"
+	FlagIgnoreSizes               = "ignore-sizes"
 	FlagNoChown                   = "no-chown"
 	FlagDetach                    = "detach"
 	FlagNoCleanup                 = "no-cleanup"
@@ -296,6 +297,8 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	)
 	flags.BoolVarP(&migration.IgnoreMounted, FlagIgnoreMounted, "i", migration.IgnoreMounted,
 		"Do not fail if the source or destination PVC is mounted")
+	flags.BoolVar(&migration.IgnoreSizes, FlagIgnoreSizes, migration.IgnoreSizes,
+		"Do not fail if the destination PVC is smaller than the source PVC")
 	flags.BoolVarP(&migration.NoChown, FlagNoChown, "o", migration.NoChown, "Omit chown during rsync")
 	flags.StringVar(&migration.ID, FlagID, migration.ID,
 		"Custom operation ID (lowercase alphanumeric with optional hyphens, max 28 chars). "+

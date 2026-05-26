@@ -188,8 +188,8 @@ func (m *Migrator) buildMigration(ctx context.Context, request *migration.Reques
 		return nil, err
 	}
 
-	if !destPvcInfo.SupportsRWO && !destPvcInfo.SupportsRWX {
-		return nil, errors.New("destination PVC is not writable")
+	if err = validatePVCs(request, sourcePvcInfo, destPvcInfo, logger); err != nil {
+		return nil, err
 	}
 
 	mig := migration.Migration{
@@ -239,6 +239,50 @@ func handleMountedPVCs(
 	err = handleMounted(destPvcInfo, ignoreMounted, logger)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// validatePVCs runs the pre-flight checks on the resolved source and
+// destination PVCs before the migration is attempted.
+func validatePVCs(r *migration.Request, sourceInfo, destInfo *pvc.Info, logger *slog.Logger) error {
+	if !destInfo.SupportsRWO && !destInfo.SupportsRWX {
+		return errors.New("destination PVC is not writable")
+	}
+
+	return handleSizes(r, sourceInfo, destInfo, logger)
+}
+
+// handleSizes fails early when the destination PVC is smaller than the source
+// PVC. Such a migration would otherwise typically fail midway with a generic
+// "all strategies failed" error once the destination runs out of space.
+// The check compares the resolved storage sizes (see pvc.Info.Size) and is
+// skipped when --ignore-sizes is requested or when either size is unknown.
+func handleSizes(r *migration.Request, sourceInfo, destInfo *pvc.Info, logger *slog.Logger) error {
+	sourceSize := sourceInfo.Size()
+	destSize := destInfo.Size()
+
+	if r.IgnoreSizes {
+		logger.Info("💡 --ignore-sizes is requested, skipping PVC size check",
+			"source_size", sourceSize.String(), "dest_size", destSize.String())
+
+		return nil
+	}
+
+	if sourceSize.IsZero() || destSize.IsZero() {
+		logger.Debug("Skipping PVC size check, capacity unknown for source or destination",
+			"source_size", sourceSize.String(), "dest_size", destSize.String())
+
+		return nil
+	}
+
+	if destSize.Cmp(sourceSize) < 0 {
+		return fmt.Errorf("destination PVC %s/%s (%s) is smaller than source PVC %s/%s (%s): "+
+			"the migration would likely fail once the destination runs out of space. "+
+			"If you are sure the data fits, re-run with --ignore-sizes",
+			destInfo.Claim.Namespace, destInfo.Claim.Name, destSize.String(),
+			sourceInfo.Claim.Namespace, sourceInfo.Claim.Name, sourceSize.String())
 	}
 
 	return nil

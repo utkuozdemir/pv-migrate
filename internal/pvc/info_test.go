@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -113,6 +114,52 @@ func TestNew(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Empty(t, pvcInfo.MountedNode)
+	})
+}
+
+func TestSize(t *testing.T) {
+	t.Parallel()
+
+	t.Run("prefers actual capacity over requested", func(t *testing.T) {
+		t.Parallel()
+
+		info := &pvc.Info{Claim: &corev1.PersistentVolumeClaim{
+			Spec: corev1.PersistentVolumeClaimSpec{
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+			Status: corev1.PersistentVolumeClaimStatus{
+				Capacity: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("2Gi")},
+			},
+		}}
+
+		size := info.Size()
+		assert.Equal(t, "2Gi", size.String())
+	})
+
+	t.Run("falls back to requested when not bound", func(t *testing.T) {
+		t.Parallel()
+
+		info := &pvc.Info{Claim: &corev1.PersistentVolumeClaim{
+			Spec: corev1.PersistentVolumeClaimSpec{
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{corev1.ResourceStorage: resource.MustParse("1Gi")},
+				},
+			},
+		}}
+
+		size := info.Size()
+		assert.Equal(t, "1Gi", size.String())
+	})
+
+	t.Run("returns zero when nothing is set", func(t *testing.T) {
+		t.Parallel()
+
+		info := &pvc.Info{Claim: &corev1.PersistentVolumeClaim{}}
+
+		size := info.Size()
+		assert.True(t, size.IsZero())
 	})
 }
 

@@ -86,6 +86,7 @@ type Migration struct {
 
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
+	IgnoreSizes           bool
 	NoChown               bool
 	Detach                bool
 	Push                  bool
@@ -223,6 +224,7 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		},
 		DeleteExtraneousFiles: mig.DeleteExtraneousFiles,
 		IgnoreMounted:         mig.IgnoreMounted,
+		IgnoreSizes:           mig.IgnoreSizes,
 		NoChown:               mig.NoChown,
 		Detach:                mig.Detach,
 		Push:                  mig.Push,
