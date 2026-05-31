@@ -234,7 +234,7 @@ func runRsyncSession(
 			return reader, nil
 		},
 		ParseLineFunc: rsyncprogress.ParseLine,
-		Source:        "rsync",
+		Source:        rsyncComponent,
 	})
 
 	// rsyncDone is closed by the rsync goroutine after it finishes (and after its deferred
@@ -404,7 +404,7 @@ func installLocalOnSource(
 	sshdVals["privateKey"] = privateKey
 	sshdVals["privateKeyMountPath"] = privateKeyMountPath
 
-	return installHelmChart(attempt, mig.SourceInfo, releaseName, map[string]any{"sshd": sshdVals}, logger)
+	return installHelmChart(attempt, mig.SourceInfo, releaseName, map[string]any{sshdComponent: sshdVals}, logger)
 }
 
 func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey string, logger *slog.Logger) error {
@@ -412,7 +412,7 @@ func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey strin
 	side := componentSide{info: mig.DestInfo, mountPath: destMountPath}
 
 	return installHelmChart(
-		attempt, mig.DestInfo, releaseName, map[string]any{"sshd": buildSshdHelmValues(side, publicKey)}, logger,
+		attempt, mig.DestInfo, releaseName, map[string]any{sshdComponent: buildSshdHelmValues(side, publicKey)}, logger,
 	)
 }
 

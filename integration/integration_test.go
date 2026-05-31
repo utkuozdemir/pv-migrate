@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-multierror"
-	"github.com/neilotoole/slogt"
+	"github.com/neilotoole/slogt/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"

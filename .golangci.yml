@@ -16,6 +16,7 @@ linters:
     - wrapcheck # don't want to wrap errors everywhere
     - mnd # magic numbers are sometimes ok, this linter is too noisy
     - nonamedreturns # named returns are useful to read errors in defer statements
+    - gomodguard # deprecated
   settings:
     goconst:
       min-occurrences: 5

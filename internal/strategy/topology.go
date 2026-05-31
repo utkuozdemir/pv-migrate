@@ -148,36 +148,36 @@ func buildRsyncCmd(req *migration.Request, push bool, sshHost string, port int) 
 
 func buildSshdHelmValues(side componentSide, publicKey string) map[string]any {
 	return map[string]any{
-		"enabled":   true,
-		"namespace": side.info.Claim.Namespace,
-		"publicKey": publicKey,
-		"pvcMounts": []map[string]any{
+		keyEnabled:   true,
+		keyNamespace: side.info.Claim.Namespace,
+		keyPublicKey: publicKey,
+		keyPVCMounts: []map[string]any{
 			{
-				"name":      side.info.Claim.Name,
-				"readOnly":  side.readOnly,
-				"mountPath": side.mountPath,
+				keyName:      side.info.Claim.Name,
+				keyReadOnly:  side.readOnly,
+				keyMountPath: side.mountPath,
 			},
 		},
-		"affinity": side.info.AffinityHelmValues,
+		keyAffinity: side.info.AffinityHelmValues,
 	}
 }
 
 func buildRsyncHelmValues(side componentSide, rsyncCmd, privateKey, privateKeyMountPath string) map[string]any {
 	return map[string]any{
-		"enabled":             true,
-		"namespace":           side.info.Claim.Namespace,
+		keyEnabled:            true,
+		keyNamespace:          side.info.Claim.Namespace,
 		"privateKeyMount":     true,
 		"privateKey":          privateKey,
 		"privateKeyMountPath": privateKeyMountPath,
-		"pvcMounts": []map[string]any{
+		keyPVCMounts: []map[string]any{
 			{
-				"name":      side.info.Claim.Name,
-				"mountPath": side.mountPath,
-				"readOnly":  side.readOnly,
+				keyName:      side.info.Claim.Name,
+				keyMountPath: side.mountPath,
+				keyReadOnly:  side.readOnly,
 			},
 		},
-		"command":  rsyncCmd,
-		"affinity": side.info.AffinityHelmValues,
+		"command":   rsyncCmd,
+		keyAffinity: side.info.AffinityHelmValues,
 	}
 }
 
@@ -190,7 +190,7 @@ func installSshd(
 	sshdVals := buildSshdHelmValues(topo.sshd, publicKey)
 	sshdVals["service"] = map[string]any{"type": serviceType}
 
-	return installHelmChart(attempt, topo.sshd.info, releaseName, map[string]any{"sshd": sshdVals}, logger)
+	return installHelmChart(attempt, topo.sshd.info, releaseName, map[string]any{sshdComponent: sshdVals}, logger)
 }
 
 func installRsyncJob(
@@ -216,7 +216,7 @@ func installRsyncJob(
 		rsyncVals["sshRemotePort"] = sshPort
 	}
 
-	return installHelmChart(attempt, topo.rsync.info, releaseName, map[string]any{"rsync": rsyncVals}, logger)
+	return installHelmChart(attempt, topo.rsync.info, releaseName, map[string]any{rsyncComponent: rsyncVals}, logger)
 }
 
 func waitForRsyncJob(
