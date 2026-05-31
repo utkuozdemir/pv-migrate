@@ -188,7 +188,7 @@ func (m *Migrator) buildMigration(ctx context.Context, request *migration.Reques
 		return nil, err
 	}
 
-	if err = validatePVCs(request, sourcePvcInfo, destPvcInfo, logger); err != nil {
+	if err = validatePVCs(ctx, request, sourcePvcInfo, destPvcInfo, logger); err != nil {
 		return nil, err
 	}
 
@@ -246,7 +246,12 @@ func handleMountedPVCs(
 
 // validatePVCs runs the pre-flight checks on the resolved source and
 // destination PVCs before the migration is attempted.
-func validatePVCs(request *migration.Request, sourceInfo, destInfo *pvc.Info, logger *slog.Logger) error {
+func validatePVCs(
+	ctx context.Context,
+	request *migration.Request,
+	sourceInfo, destInfo *pvc.Info,
+	logger *slog.Logger,
+) error {
 	if sourceInfo == nil || sourceInfo.Claim == nil || destInfo == nil || destInfo.Claim == nil {
 		return errors.New("source or destination PVC info is invalid")
 	}
@@ -255,19 +260,26 @@ func validatePVCs(request *migration.Request, sourceInfo, destInfo *pvc.Info, lo
 		return errors.New("destination PVC is not writable")
 	}
 
-	return handleSizes(request, sourceInfo, destInfo, logger)
+	return handleSizes(ctx, request, sourceInfo, destInfo, logger)
 }
 
 // handleSizes fails early when the destination PVC is smaller than the source
 // PVC. Such a migration would otherwise typically fail midway with a generic
 // "all strategies failed" error once the destination runs out of space.
 // The check compares the resolved storage sizes (see pvc.Info.Size) and is
-// skipped when --ignore-sizes is requested or when either size is unknown.
-func handleSizes(r *migration.Request, sourceInfo, destInfo *pvc.Info, logger *slog.Logger) error {
+// skipped when --ignore-sizes is requested, when either size is unknown, or when
+// either PVC's storage provisioner does not enforce the requested capacity (see
+// capacityEnforced), in which case the declared sizes are meaningless.
+func handleSizes(
+	ctx context.Context,
+	request *migration.Request,
+	sourceInfo, destInfo *pvc.Info,
+	logger *slog.Logger,
+) error {
 	sourceSize := sourceInfo.Size()
 	destSize := destInfo.Size()
 
-	if r.IgnoreSizes {
+	if request.IgnoreSizes {
 		logger.Info("💡 --ignore-sizes is requested, skipping PVC size check",
 			"source_size", sourceSize.String(), "dest_size", destSize.String())
 
@@ -281,15 +293,64 @@ func handleSizes(r *migration.Request, sourceInfo, destInfo *pvc.Info, logger *s
 		return nil
 	}
 
-	if destSize.Cmp(sourceSize) < 0 {
-		return fmt.Errorf("destination PVC %s/%s (%s) is smaller than source PVC %s/%s (%s): "+
-			"the migration would likely fail once the destination runs out of space. "+
-			"If you are sure the data fits, re-run with --ignore-sizes",
-			destInfo.Claim.Namespace, destInfo.Claim.Name, destSize.String(),
-			sourceInfo.Claim.Namespace, sourceInfo.Claim.Name, sourceSize.String())
+	if destSize.Cmp(sourceSize) >= 0 {
+		return nil
 	}
 
-	return nil
+	// The destination is smaller than the source. This only leads to a failure
+	// if the provisioner actually enforces the requested capacity. Many local
+	// provisioners (e.g. rancher.io/local-path) ignore it, so the sizes are
+	// meaningless and the check would be a false positive.
+	for _, candidate := range []struct {
+		role string
+		info *pvc.Info
+	}{
+		{role: "source", info: sourceInfo},
+		{role: "destination", info: destInfo},
+	} {
+		provisioner, err := candidate.info.Provisioner(ctx)
+		if err != nil {
+			logger.Debug("Could not resolve PVC storage provisioner, continuing with size check",
+				"pvc", candidate.info.Claim.Namespace+"/"+candidate.info.Claim.Name, "error", err.Error())
+		}
+
+		if !capacityEnforced(provisioner) {
+			logger.Info("💡 PVC storage provisioner does not enforce capacity, skipping PVC size check",
+				"role", candidate.role, "provisioner", provisioner,
+				"source_size", sourceSize.String(), "dest_size", destSize.String())
+
+			return nil
+		}
+	}
+
+	return fmt.Errorf("destination PVC %s/%s (%s) is smaller than source PVC %s/%s (%s): "+
+		"the migration would likely fail once the destination runs out of space. "+
+		"If you are sure the data fits, re-run with --ignore-sizes",
+		destInfo.Claim.Namespace, destInfo.Claim.Name, destSize.String(),
+		sourceInfo.Claim.Namespace, sourceInfo.Claim.Name, sourceSize.String())
+}
+
+// capacityEnforced reports whether a storage provisioner enforces the requested
+// volume capacity. Several common local provisioners ignore it (rancher.io/local-path
+// used by k3s/k3d/kind/OrbStack, the minikube/MicroK8s/Docker Desktop hostpath
+// provisioners, OpenEBS LocalPV, etc.), so the PVC size is effectively a no-op and
+// comparing source and destination sizes is meaningless. An empty or unknown
+// provisioner is treated as enforcing, so the size check still runs by default.
+func capacityEnforced(provisioner string) bool {
+	if provisioner == "" {
+		return true
+	}
+
+	p := strings.ToLower(provisioner)
+
+	switch {
+	case strings.Contains(p, "local-path"),
+		strings.Contains(p, "hostpath"),
+		p == "openebs.io/local":
+		return false
+	default:
+		return true
+	}
 }
 
 func handleMounted(info *pvc.Info, ignoreMounted bool, logger *slog.Logger) error {

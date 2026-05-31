@@ -98,6 +98,55 @@ func (i *Info) Size() resource.Quantity {
 	return i.Claim.Spec.Resources.Requests[corev1.ResourceStorage]
 }
 
+const (
+	// storageProvisionerAnnotation is set on a PVC by the controller to record
+	// which provisioner handles its dynamic provisioning.
+	storageProvisionerAnnotation = "volume.kubernetes.io/storage-provisioner"
+	// betaStorageProvisionerAnnotation is the pre-1.23 form of the above; some
+	// clusters still carry it.
+	betaStorageProvisionerAnnotation = "volume.beta.kubernetes.io/storage-provisioner"
+)
+
+// Provisioner resolves the name of the storage provisioner backing the PVC on a
+// best-effort basis. It first reads the provisioner annotation set on the claim,
+// which is present once a dynamically provisioned PVC has been picked up by the
+// controller, then falls back to the provisioner of the claim's StorageClass.
+// The fallback is needed for PVCs that are not yet bound (e.g. those using the
+// WaitForFirstConsumer volume binding mode), whose annotation is not set yet.
+// It returns an empty name when the provisioner cannot be determined; the
+// returned error is non-nil only when a StorageClass lookup was attempted and
+// failed, so callers may treat it as best-effort.
+func (i *Info) Provisioner(ctx context.Context) (string, error) {
+	if i == nil || i.Claim == nil {
+		return "", nil
+	}
+
+	if provisioner := i.Claim.Annotations[storageProvisionerAnnotation]; provisioner != "" {
+		return provisioner, nil
+	}
+
+	if provisioner := i.Claim.Annotations[betaStorageProvisionerAnnotation]; provisioner != "" {
+		return provisioner, nil
+	}
+
+	storageClassName := i.Claim.Spec.StorageClassName
+	if storageClassName == nil || *storageClassName == "" {
+		return "", nil
+	}
+
+	if i.ClusterClient == nil || i.ClusterClient.KubeClient == nil {
+		return "", nil
+	}
+
+	storageClass, err := i.ClusterClient.KubeClient.StorageV1().
+		StorageClasses().Get(ctx, *storageClassName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get storage class %s: %w", *storageClassName, err)
+	}
+
+	return storageClass.Provisioner, nil
+}
+
 func findMountedNode(ctx context.Context, kubeClient kubernetes.Interface,
 	pvc *corev1.PersistentVolumeClaim,
 ) (string, error) {
