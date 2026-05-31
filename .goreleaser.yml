@@ -107,10 +107,11 @@ dockers_v2:
 release:
   prerelease: auto
 
-# brews is deprecated in favor of homebrew_casks, but casks are unsuitable for CLI tools:
-# they don't upgrade with `brew upgrade` by default, and require macOS code signing.
-# See: https://github.com/orgs/goreleaser/discussions/5563
-brews:
+# homebrew_casks replaces the deprecated "brews" config (hard-deprecated in
+# goreleaser v2.16, removed in v3). Casks now work on Linux too since
+# Homebrew/brew#19121, and existing "brew install pv-migrate" users are
+# auto-migrated to the cask via tap_migrations.json in the tap repo.
+homebrew_casks:
   - repository:
       owner: utkuozdemir
       name: homebrew-pv-migrate
@@ -119,18 +120,21 @@ brews:
     commit_author:
       name: Utku Ozdemir
       email: utkuozdemir@gmail.com
-    directory: Formula
-    goarm: "7"
+    directory: Casks
     homepage: https://github.com/utkuozdemir/pv-migrate
     description: Persistent volume migration plugin for Kubernetes
-    license: Apache-2.0
-    test: |
-      system "#{bin}/pv-migrate -v"
-    install: |-
-      bin.install "pv-migrate"
-      bash_completion.install "completions/pv-migrate.bash" => "pv-migrate"
-      zsh_completion.install "completions/pv-migrate.zsh" => "_pv-migrate"
-      fish_completion.install "completions/pv-migrate.fish"
+    completions:
+      bash: completions/pv-migrate.bash
+      zsh: completions/pv-migrate.zsh
+      fish: completions/pv-migrate.fish
+    # pv-migrate binaries are not code-signed/notarized, so strip the macOS
+    # quarantine bit on install to avoid the "damaged and can't be opened" error.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/pv-migrate"]
+          end
 
 scoops:
   - repository:
