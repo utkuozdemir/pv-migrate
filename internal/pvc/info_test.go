@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -172,6 +173,98 @@ func TestSize(t *testing.T) {
 
 		nilClaimSize := (&pvc.Info{}).Size()
 		assert.True(t, nilClaimSize.IsZero())
+	})
+}
+
+func TestProvisioner(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reads the storage-provisioner annotation", func(t *testing.T) {
+		t.Parallel()
+
+		info := &pvc.Info{Claim: &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+				"volume.kubernetes.io/storage-provisioner": "rancher.io/local-path",
+			}},
+		}}
+
+		provisioner, err := info.Provisioner(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "rancher.io/local-path", provisioner)
+	})
+
+	t.Run("reads the beta storage-provisioner annotation", func(t *testing.T) {
+		t.Parallel()
+
+		info := &pvc.Info{Claim: &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+				"volume.beta.kubernetes.io/storage-provisioner": "k8s.io/minikube-hostpath",
+			}},
+		}}
+
+		provisioner, err := info.Provisioner(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "k8s.io/minikube-hostpath", provisioner)
+	})
+
+	t.Run("falls back to the storage class provisioner when not yet bound", func(t *testing.T) {
+		t.Parallel()
+
+		storageClassName := "local-path"
+		storageClass := &storagev1.StorageClass{
+			ObjectMeta:  metav1.ObjectMeta{Name: storageClassName},
+			Provisioner: "rancher.io/local-path",
+		}
+		info := &pvc.Info{
+			ClusterClient: &k8s.ClusterClient{KubeClient: fake.NewClientset(storageClass)},
+			Claim: &corev1.PersistentVolumeClaim{
+				Spec: corev1.PersistentVolumeClaimSpec{StorageClassName: &storageClassName},
+			},
+		}
+
+		provisioner, err := info.Provisioner(t.Context())
+		require.NoError(t, err)
+		assert.Equal(t, "rancher.io/local-path", provisioner)
+	})
+
+	t.Run("returns empty when neither annotation nor storage class is set", func(t *testing.T) {
+		t.Parallel()
+
+		info := &pvc.Info{Claim: &corev1.PersistentVolumeClaim{}}
+
+		provisioner, err := info.Provisioner(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, provisioner)
+	})
+
+	t.Run("returns an error when the storage class lookup fails", func(t *testing.T) {
+		t.Parallel()
+
+		storageClassName := "missing"
+		info := &pvc.Info{
+			ClusterClient: &k8s.ClusterClient{KubeClient: fake.NewClientset()},
+			Claim: &corev1.PersistentVolumeClaim{
+				Spec: corev1.PersistentVolumeClaimSpec{StorageClassName: &storageClassName},
+			},
+		}
+
+		provisioner, err := info.Provisioner(t.Context())
+		require.Error(t, err)
+		assert.Empty(t, provisioner)
+	})
+
+	t.Run("returns empty for nil receiver or nil claim", func(t *testing.T) {
+		t.Parallel()
+
+		var nilInfo *pvc.Info
+
+		provisioner, err := nilInfo.Provisioner(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, provisioner)
+
+		provisioner, err = (&pvc.Info{}).Provisioner(t.Context())
+		require.NoError(t, err)
+		assert.Empty(t, provisioner)
 	})
 }
 

@@ -110,6 +110,46 @@ func TestBuildMigrationSizeCheck(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, tsk)
 	})
+
+	t.Run("succeeds when destination is smaller but its provisioner does not enforce capacity", func(t *testing.T) {
+		t.Parallel()
+
+		m := Migrator{getKubeClient: fakeClusterClientGetterWithProvisioner("2Gi", "1Gi", "rancher.io/local-path")}
+		req := buildMigration(true)
+
+		tsk, err := m.buildMigration(t.Context(), req, logger)
+		require.NoError(t, err)
+		assert.NotNil(t, tsk)
+	})
+}
+
+func TestCapacityEnforced(t *testing.T) {
+	t.Parallel()
+
+	tests := map[string]struct {
+		provisioner string
+		want        bool
+	}{
+		"rancher local-path":      {provisioner: "rancher.io/local-path", want: false},
+		"minikube hostpath":       {provisioner: "k8s.io/minikube-hostpath", want: false},
+		"microk8s hostpath":       {provisioner: "microk8s.io/hostpath", want: false},
+		"docker desktop hostpath": {provisioner: "docker.io/hostpath", want: false},
+		"kubevirt hostpath":       {provisioner: "kubevirt.io/hostpath-provisioner", want: false},
+		"kubevirt hostpath csi":   {provisioner: "kubevirt.io.hostpath-provisioner", want: false},
+		"openebs local":           {provisioner: "openebs.io/local", want: false},
+		"aws ebs csi":             {provisioner: "ebs.csi.aws.com", want: true},
+		"gce pd csi":              {provisioner: "pd.csi.storage.gke.io", want: true},
+		"local static":            {provisioner: "local-volume-provisioner-node-abc123", want: true},
+		"unknown empty":           {provisioner: "", want: true},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			assert.Equal(t, tt.want, capacityEnforced(tt.provisioner))
+		})
+	}
 }
 
 func TestRunStrategiesInOrder(t *testing.T) {
@@ -191,8 +231,19 @@ func fakeClusterClientGetter() clusterClientGetter {
 }
 
 func fakeClusterClientGetterWithSizes(sourceSize, destSize string) clusterClientGetter {
+	return fakeClusterClientGetterWithProvisioner(sourceSize, destSize, "")
+}
+
+func fakeClusterClientGetterWithProvisioner(sourceSize, destSize, destProvisioner string) clusterClientGetter {
 	pvcA := buildTestPVC(sourceNS, sourcePVC, sourceSize, corev1.ReadOnlyMany)
 	pvcB := buildTestPVC(destNS, destPVC, destSize, corev1.ReadWriteOnce, corev1.ReadWriteMany)
+
+	if destProvisioner != "" {
+		pvcB.Annotations = map[string]string{
+			"volume.kubernetes.io/storage-provisioner": destProvisioner,
+		}
+	}
+
 	podA := buildTestPod(sourceNS, sourcePod, sourceNode, sourcePVC)
 	podB := buildTestPod(destNS, destPod, destNode, destPVC)
 
