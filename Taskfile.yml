@@ -82,5 +82,5 @@ tasks:
     cmds:
       - "echo Last {{.NUM_LAST_TAGS}} tags: {{.LAST_TAGS}}"
       - "echo Next tag: {{.NEXT_TAG}}"
-      - git tag -a {{.NEXT_TAG}} -m "Release {{.NEXT_TAG}}"
+      - git tag -a {{.NEXT_TAG}} -m "{{.NEXT_TAG}}"
       - git push origin {{.NEXT_TAG}}
