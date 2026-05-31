@@ -68,7 +68,7 @@ func buildClusterIPHelmVals(
 	}
 
 	return map[string]any{
-		"rsync": buildRsyncHelmValues(topo.rsync, rsyncCmdStr, privateKey, privateKeyMountPath),
-		"sshd":  buildSshdHelmValues(topo.sshd, publicKey),
+		rsyncComponent: buildRsyncHelmValues(topo.rsync, rsyncCmdStr, privateKey, privateKeyMountPath),
+		sshdComponent:  buildSshdHelmValues(topo.sshd, publicKey),
 	}, nil
 }

@@ -32,6 +32,18 @@ const (
 	srcMountPath  = "/source"
 	destMountPath = "/dest"
 
+	rsyncComponent = "rsync"
+	sshdComponent  = "sshd"
+
+	keyEnabled   = "enabled"
+	keyNamespace = "namespace"
+	keyPublicKey = "publicKey"
+	keyPVCMounts = "pvcMounts"
+	keyName      = "name"
+	keyMountPath = "mountPath"
+	keyReadOnly  = "readOnly"
+	keyAffinity  = "affinity"
+
 	rootSSHUser    = "root"
 	rootSSHPort    = 22
 	nonRootSSHUser = "pvmigrate"
@@ -156,7 +168,7 @@ func applyNonRootValues(vals map[string]any, req *migration.Request) {
 		"fsGroup": nonRootUID,
 	}
 
-	for _, component := range []string{"sshd", "rsync"} {
+	for _, component := range []string{sshdComponent, rsyncComponent} {
 		section, ok := vals[component].(map[string]any)
 		if !ok {
 			continue

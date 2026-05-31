@@ -29,23 +29,23 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	}
 
 	vals := map[string]any{
-		"rsync": map[string]any{
-			"enabled":   true,
-			"namespace": namespace,
-			"nodeName":  node,
-			"pvcMounts": []map[string]any{
+		rsyncComponent: map[string]any{
+			keyEnabled:   true,
+			keyNamespace: namespace,
+			"nodeName":   node,
+			keyPVCMounts: []map[string]any{
 				{
-					"name":      sourceInfo.Claim.Name,
-					"mountPath": srcMountPath,
-					"readOnly":  !mig.Request.SourceMountReadWrite,
+					keyName:      sourceInfo.Claim.Name,
+					keyMountPath: srcMountPath,
+					keyReadOnly:  !mig.Request.SourceMountReadWrite,
 				},
 				{
-					"name":      destInfo.Claim.Name,
-					"mountPath": destMountPath,
+					keyName:      destInfo.Claim.Name,
+					keyMountPath: destMountPath,
 				},
 			},
-			"command":  rsyncCmd,
-			"affinity": sourceInfo.AffinityHelmValues,
+			"command":   rsyncCmd,
+			keyAffinity: sourceInfo.AffinityHelmValues,
 		},
 	}
 
