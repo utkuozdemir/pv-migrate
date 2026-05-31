@@ -46,24 +46,24 @@ jobs:
         uses: arduino/setup-task@v2.0.0
         with:
           # renovate: depName=go-task/task datasource=github-releases
-          version: 3.50.0
+          version: 3.51.1
       - name: Tidy go.mod
         run: go mod tidy
       - name: Run unit tests
         run: go test ./...
       - name: Run linters
-        uses: golangci/golangci-lint-action@v9.2.0
+        uses: golangci/golangci-lint-action@v9.2.1
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
-          version: v2.11.4
+          version: v2.12.2
           args: --timeout=10m0s
           install-mode: goinstall
       - name: Build with Goreleaser
         if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v7.2.1
+        uses: goreleaser/goreleaser-action@v7.2.2
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.15.4
+          version: v2.16.0
           args: build --snapshot --clean --single-target
       - name: Update generated files
         run: task generate-all
@@ -95,7 +95,7 @@ jobs:
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
-          CILIUM_CLI_VERSION: v0.19.2
+          CILIUM_CLI_VERSION: v0.19.4
         run: |
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
@@ -168,7 +168,7 @@ jobs:
           retention-days: 7
 
       - name: Send coverage
-        uses: codecov/codecov-action@v6.0.0
+        uses: codecov/codecov-action@v6.0.1
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
