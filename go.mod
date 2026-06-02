@@ -1,7 +1,7 @@
 module github.com/utkuozdemir/pv-migrate
 
 // renovate: go
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/dustinkirkland/golang-petname v0.0.0-20260215035315-f0c533e9ce9b
