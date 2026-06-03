@@ -37,7 +37,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6.0.3
       - name: Install go
         uses: actions/setup-go@v6.4.0
         with:
@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6.0.3
 
       - name: Get short SHA
         id: vars
@@ -177,7 +177,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.2
+        uses: actions/checkout@v6.0.3
 
       - name: Get short SHA
         id: vars
@@ -199,7 +199,7 @@ jobs:
         with:
           cluster_name: backup-test
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.31.0
+          version: v0.32.0
 
       - name: Load rclone image
         run: kind load docker-image integration-test-rclone:${{ steps.vars.outputs.sha }} --name backup-test
