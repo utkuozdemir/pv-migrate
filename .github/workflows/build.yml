@@ -168,7 +168,7 @@ jobs:
           retention-days: 7
 
       - name: Send coverage
-        uses: codecov/codecov-action@v6.0.2
+        uses: codecov/codecov-action@v7.0.0
         with:
           files: coverage.txt
           token: ${{ secrets.CODECOV_TOKEN }}
