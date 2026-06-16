@@ -1,4 +1,4 @@
-FROM alpine:3.24.0
+FROM alpine:3.24.1
 
 RUN apk add --no-cache rsync openssh && \
     addgroup -g 10000 pvmigrate && \

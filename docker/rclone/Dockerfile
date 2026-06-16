@@ -1,4 +1,4 @@
-FROM alpine:3.24.0
+FROM alpine:3.24.1
 
 # Keep this UID/GID in sync with nonRootUID in internal/bucketstorage.
 RUN apk add --no-cache rclone && \
