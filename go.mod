@@ -21,7 +21,7 @@ require (
 	k8s.io/cli-runtime v0.36.2
 	k8s.io/client-go v0.36.2
 	k8s.io/klog/v2 v2.140.0
-	k8s.io/utils v0.0.0-20260617174310-a95e086a2553
+	k8s.io/utils v0.0.0-20260626114624-be93311217bd
 )
 
 require (
