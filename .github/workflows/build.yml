@@ -52,7 +52,7 @@ jobs:
       - name: Run unit tests
         run: go test ./...
       - name: Run linters
-        uses: golangci/golangci-lint-action@v9.2.1
+        uses: golangci/golangci-lint-action@v9.3.0
         with:
           # renovate: depName=golangci/golangci-lint datasource=github-releases
           version: v2.12.2
@@ -60,7 +60,7 @@ jobs:
           install-mode: goinstall
       - name: Build with Goreleaser
         if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v7.2.2
+        uses: goreleaser/goreleaser-action@v7.2.3
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
           version: v2.16.0
