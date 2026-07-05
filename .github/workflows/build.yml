@@ -63,7 +63,7 @@ jobs:
         uses: goreleaser/goreleaser-action@v7.2.3
         with:
           # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.16.0
+          version: v2.17.0
           args: build --snapshot --clean --single-target
       - name: Update generated files
         run: task generate-all
