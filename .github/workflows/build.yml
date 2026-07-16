@@ -39,7 +39,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7.0.0
       - name: Install go
-        uses: actions/setup-go@v6.5.0
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       - name: Install Task
@@ -87,7 +87,7 @@ jobs:
           docker build -t integration-test-sshd:$TAG ./docker/sshd/
 
       - name: Install go
-        uses: actions/setup-go@v6.5.0
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       - name: Install helm
@@ -187,7 +187,7 @@ jobs:
         run: docker build -t integration-test-rclone:${{ steps.vars.outputs.sha }} ./docker/rclone/
 
       - name: Install go
-        uses: actions/setup-go@v6.5.0
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
 
