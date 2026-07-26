@@ -50,9 +50,9 @@ func TestBuildRemoteSpecs(t *testing.T) {
 // line instead of at their own flag.
 //
 // The set is wider than a newline because YAML permits no control character on
-// that line except tab, and it reads two of the C1 controls and two Unicode
-// separators as line breaks of their own. Each case here was checked to make the
-// rendered manifest unparseable.
+// that line except tab, reads one of the C1 controls and two Unicode separators as
+// line breaks of their own, and is defined over characters rather than bytes. Each
+// case here was checked to make the rendered manifest unparseable.
 func TestBuildRejectsUnrenderableCharacters(t *testing.T) {
 	t.Parallel()
 
@@ -68,6 +68,8 @@ func TestBuildRejectsUnrenderableCharacters(t *testing.T) {
 		"c1 control":          "\u0090",
 		"line separator":      "\u2028",
 		"paragraph separator": "\u2029",
+		"non-character fffe":  "\ufffe",
+		"non-character ffff":  "\uffff",
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -87,14 +89,53 @@ func TestBuildRejectsUnrenderableCharacters(t *testing.T) {
 	}
 }
 
-// TestBuildAcceptsTab is the one control character that stays allowed: YAML
-// accepts it inside a block scalar, single quotes preserve it, and a file name may
-// legitimately contain one.
-func TestBuildAcceptsTab(t *testing.T) {
+// TestBuildRejectsInvalidUTF8 covers the other thing YAML will not carry. A path
+// on Linux is bytes, not characters, so a flag value can hold a sequence that is
+// not UTF-8, and the rendered manifest is then rejected for exactly that.
+func TestBuildRejectsInvalidUTF8(t *testing.T) {
 	t.Parallel()
 
-	_, err := (&rsync.Cmd{SrcPath: "/source/a\tb/", DestPath: "/dest/"}).Build()
-	require.NoError(t, err)
+	for name, bad := range map[string]string{
+		"lone continuation": "\x80",
+		"invalid leading":   "\xff",
+		"truncated":         "\xc3",
+		"overlong":          "\xc0\xaf",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := (&rsync.Cmd{SrcPath: "/source/a" + bad + "b/", DestPath: "/dest/"}).Build()
+			require.ErrorContains(t, err, "must be valid UTF-8")
+		})
+	}
+}
+
+// TestBuildAcceptsWhatTheReaderCarries is the other side of the rule, so that it is
+// pinned as a range rather than as a list of rejections. Tab is the one control
+// character the reader accepts inside a block scalar, single quotes preserve it, and
+// a file name may legitimately hold one. The rest are the code points immediately
+// outside each rejected range, which have to keep rendering.
+func TestBuildAcceptsWhatTheReaderCarries(t *testing.T) {
+	t.Parallel()
+
+	for name, ok := range map[string]string{
+		"tab":                   "\t",
+		"replacement char":      "\ufffd",
+		"last before surrogate": "\ud7ff",
+		"first private use":     "\ue000",
+		"higher plane":          "\U0001fffe",
+		"non-breaking space":    "\u00a0",
+		"just below separator":  "\u2027",
+		"just above separator":  "\u202a",
+		"multibyte":             "двойка",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := (&rsync.Cmd{SrcPath: "/source/a" + ok + "b/", DestPath: "/dest/"}).Build()
+			require.NoError(t, err)
+		})
+	}
 }
 
 // TestBuiltCommandArgvThroughShell is the test that the source and destination

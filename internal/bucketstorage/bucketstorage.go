@@ -267,32 +267,62 @@ var shortFlagCluster = regexp.MustCompile(`^-[a-zA-Z]+$`)
 // in which case the metadata sidecar must not be uploaded: a run that transfers
 // nothing has no business writing a real object to the bucket.
 func hasRcloneDryRun(extraArgs string) bool {
+	// pflag applies each occurrence in order, so a later one overrides an earlier
+	// one and the last is what rclone ends up with. Answering on the first match
+	// instead would get "--dry-run=false -n" and "-n --dry-run=false" both wrong,
+	// in opposite directions.
+	dryRun := false
+
 	for arg := range strings.FieldsSeq(extraArgs) {
 		name, value, assigned := strings.Cut(arg, "=")
 
 		if assigned {
-			// pflag reads a boolean flag's value with strconv.ParseBool, so "1", "T" and
-			// "TRUE" are dry runs just as much as "true" is, and a false value is not.
-			if name == "--dry-run" || name == "-n" {
-				enabled, err := strconv.ParseBool(value)
-
-				return err == nil && enabled
-			}
+			applyAssignedFlag(&dryRun, name, value)
 
 			continue
 		}
 
-		if arg == "--dry-run" {
-			return true
-		}
-
 		// rclone uses pflag, so -n may be bundled with other short flags, as in -nv.
-		if shortFlagCluster.MatchString(arg) && strings.Contains(arg, "n") {
-			return true
+		if arg == "--dry-run" || (shortFlagCluster.MatchString(arg) && strings.Contains(arg, "n")) {
+			dryRun = true
 		}
 	}
 
-	return false
+	return dryRun
+}
+
+// applyAssignedFlag applies one `name=value` argument to the dry-run state.
+//
+// A boolean flag's value is read with strconv.ParseBool, so "1", "T" and "TRUE"
+// ask for a dry run just as much as "true" does, and "0" does not.
+func applyAssignedFlag(dryRun *bool, name, value string) {
+	switch {
+	case name == "--dry-run":
+		setFromBool(dryRun, value)
+	case shortFlagCluster.MatchString(name):
+		// pflag walks a bundle left to right, setting each shorthand on its own, and
+		// gives the assigned value only to the last one. So -vn=false turns the dry run
+		// off, while -nv=false leaves it on because there the n was already set bare.
+		letters := strings.TrimPrefix(name, "-")
+
+		for i, letter := range letters {
+			switch {
+			case letter != 'n':
+			case i == len(letters)-1:
+				setFromBool(dryRun, value)
+			default:
+				*dryRun = true
+			}
+		}
+	}
+}
+
+// setFromBool leaves the target alone when the value is not a boolean at all,
+// since rclone would reject such an argument itself.
+func setFromBool(target *bool, value string) {
+	if enabled, err := strconv.ParseBool(value); err == nil {
+		*target = enabled
+	}
 }
 
 func validateBucketSegment(value, flag string) error {
