@@ -155,3 +155,7 @@ See [docs/usage.md](docs/usage.md) for usage guides and command references:
 ## Contributing
 
 See [CONTRIBUTING](CONTRIBUTING.md) for details.
+
+[AGENTS.md](AGENTS.md) is the project guide for humans and AI assistants working
+in this repository: how the pieces fit together, and which invariants are easy to
+break by accident.
