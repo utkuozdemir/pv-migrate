@@ -3,6 +3,8 @@ package rclone
 import (
 	"fmt"
 	"strings"
+
+	"github.com/utkuozdemir/pv-migrate/internal/shell"
 )
 
 const (
@@ -24,6 +26,23 @@ type Cmd struct {
 
 // Build produces the full rclone command string.
 func (c *Cmd) Build() (string, error) {
+	// The local path carries its flag name so the error points at what to change.
+	// The other two are not flags: the remote path is assembled from --bucket,
+	// --prefix and --name or from --remote, and the config path is where the
+	// generated config is mounted in the pod.
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{"--path", c.LocalPath},
+		{"remote path", c.RemotePath},
+		{"rclone config path", c.ConfigPath},
+	} {
+		if err := shell.CheckSingleLine(field.name, field.value); err != nil {
+			return "", err
+		}
+	}
+
 	var src, dest string
 
 	switch c.Direction {
@@ -47,27 +66,18 @@ func (c *Cmd) Build() (string, error) {
 	fmt.Fprintf(&builder, "rclone %s", action)
 
 	if c.ConfigPath != "" {
-		fmt.Fprintf(&builder, " --config %s", ShellQuote(c.ConfigPath))
+		fmt.Fprintf(&builder, " --config %s", shell.Quote(c.ConfigPath))
 	}
 
 	builder.WriteString(" " + defaultProgressFlags)
 
-	fmt.Fprintf(&builder, " %s %s", ShellQuote(src), ShellQuote(dest))
+	fmt.Fprintf(&builder, " %s %s", shell.Quote(src), shell.Quote(dest))
 
 	if c.ExtraArgs != "" {
 		fmt.Fprintf(&builder, " %s", c.ExtraArgs)
 	}
 
 	return builder.String(), nil
-}
-
-// ShellQuote quotes a string as one POSIX shell argument.
-func ShellQuote(value string) string {
-	if value == "" {
-		return "''"
-	}
-
-	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
 }
 
 // BuildRemotePath constructs the remote path for backup data:

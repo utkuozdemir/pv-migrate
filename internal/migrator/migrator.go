@@ -7,11 +7,10 @@ import (
 	"log/slog"
 	"strings"
 
-	petname "github.com/dustinkirkland/golang-petname"
-
 	"github.com/utkuozdemir/pv-migrate/internal/helm"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
+	"github.com/utkuozdemir/pv-migrate/internal/opid"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 )
@@ -51,7 +50,7 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 
 	migrationID := request.ID
 	if migrationID == "" {
-		migrationID = petname.Generate(2, "-")
+		migrationID = opid.Generate()
 	}
 
 	strategies := dedup(request.Strategies)
@@ -61,7 +60,7 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 
 	for _, name := range strategies {
 		str := nameToStrategyMap[name]
-		releasePrefix := "pv-migrate-" + migrationID + "-" + name
+		releasePrefix := opid.ReleasePrefix + migrationID + "-" + name
 		attemptLogger := logger.With("strategy", name)
 		attempt := &migration.Attempt{
 			ID:                    migrationID,

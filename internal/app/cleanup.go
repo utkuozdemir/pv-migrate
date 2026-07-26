@@ -18,9 +18,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/opid"
 )
-
-const helmReleasePrefix = "pv-migrate-"
 
 func buildCleanupCmd(logger **slog.Logger) *cobra.Command {
 	var (
@@ -44,13 +43,13 @@ func buildCleanupCmd(logger **slog.Logger) *cobra.Command {
 
 			var filterPrefix string
 			if all {
-				filterPrefix = helmReleasePrefix
+				filterPrefix = opid.ReleasePrefix
 			} else {
 				if args[0] == "" {
 					return errors.New("operation ID must not be empty")
 				}
 
-				filterPrefix = helmReleasePrefix + args[0] + "-"
+				filterPrefix = opid.ReleasePrefix + args[0] + "-"
 			}
 
 			return runCleanup(

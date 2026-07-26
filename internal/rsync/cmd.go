@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/utkuozdemir/pv-migrate/internal/shell"
 )
 
 type Cmd struct {
@@ -14,7 +16,6 @@ type Cmd struct {
 	Delete      bool
 	SrcUseSSH   bool
 	DestUseSSH  bool
-	Command     string
 	SrcSSHUser  string
 	SrcSSHHost  string
 	SrcPath     string
@@ -25,18 +26,59 @@ type Cmd struct {
 	ExtraArgs   string
 }
 
-//nolint:cyclop
 func (c *Cmd) Build() (string, error) {
 	if c.SrcUseSSH && c.DestUseSSH {
 		return "", errors.New("cannot use ssh on both source and destination")
 	}
 
-	cmd := "rsync"
-	if c.Command != "" {
-		cmd = c.Command
+	if err := c.validate(); err != nil {
+		return "", err
 	}
 
-	sshArgs := []string{
+	// The source and destination specs are quoted as single shell words: the
+	// paths come from --source-path/--dest-path and the hosts can come from
+	// --dest-host-override, so either may legitimately contain a space. ExtraArgs
+	// is left alone on purpose, since it is documented as raw rsync flags.
+	return fmt.Sprintf("rsync %s %s %s",
+		strings.Join(c.args(), " "),
+		shell.Quote(c.buildSrc()),
+		shell.Quote(c.buildDest()),
+	), nil
+}
+
+// args returns rsync's own flags, including the -e value that tells it how to
+// reach the remote side.
+func (c *Cmd) args() []string {
+	args := []string{
+		"-av", "--info=progress2,misc0,flist0",
+		"--no-inc-recursive", "-e", shell.Quote(strings.Join(c.sshArgs(), " ")),
+	}
+
+	if c.Compress {
+		args = append(args, "-z")
+	}
+
+	if c.NoChown || c.NonRoot {
+		args = append(args, "--no-o", "--no-g")
+	}
+
+	if c.NonRoot {
+		args = append(args, "--omit-dir-times")
+	}
+
+	if c.Delete {
+		args = append(args, "--delete")
+	}
+
+	if c.ExtraArgs != "" {
+		args = append(args, c.ExtraArgs)
+	}
+
+	return args
+}
+
+func (c *Cmd) sshArgs() []string {
+	args := []string{
 		"ssh",
 		"-o", "StrictHostKeyChecking=no",
 		"-o", "UserKnownHostsFile=/dev/null",
@@ -46,75 +88,60 @@ func (c *Cmd) Build() (string, error) {
 		"-o", "ServerAliveInterval=10",
 		"-o", "ServerAliveCountMax=3",
 	}
+
 	if c.Port != 0 {
-		sshArgs = append(sshArgs, "-p", strconv.Itoa(c.Port))
+		args = append(args, "-p", strconv.Itoa(c.Port))
 	}
 
-	sshArgsStr := fmt.Sprintf("\"%s\"", strings.Join(sshArgs, " "))
-
-	rsyncArgs := []string{
-		"-av", "--info=progress2,misc0,flist0",
-		"--no-inc-recursive", "-e", sshArgsStr,
-	}
-
-	if c.Compress {
-		rsyncArgs = append(rsyncArgs, "-z")
-	}
-
-	if c.NoChown || c.NonRoot {
-		rsyncArgs = append(rsyncArgs, "--no-o", "--no-g")
-	}
-
-	if c.NonRoot {
-		rsyncArgs = append(rsyncArgs, "--omit-dir-times")
-	}
-
-	if c.Delete {
-		rsyncArgs = append(rsyncArgs, "--delete")
-	}
-
-	if c.ExtraArgs != "" {
-		rsyncArgs = append(rsyncArgs, c.ExtraArgs)
-	}
-
-	rsyncArgsStr := strings.Join(rsyncArgs, " ")
-
-	src := c.buildSrc()
-	dest := c.buildDest()
-
-	return fmt.Sprintf("%s %s %s %s", cmd, rsyncArgsStr, src, dest), nil
+	return args
 }
 
+// validate rejects values that cannot be represented in the built command. The
+// paths carry their flag names so the error points at what to change; the ssh
+// host may instead have been resolved from the cluster, so it is named for what
+// it is.
+func (c *Cmd) validate() error {
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{"--source-path", c.SrcPath},
+		{"--dest-path", c.DestPath},
+		{"ssh host", c.SrcSSHHost},
+		{"ssh host", c.DestSSHHost},
+	} {
+		if err := shell.CheckSingleLine(field.name, field.value); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// buildSrc returns the rsync source spec, either a bare path or a
+// user@host:path remote spec.
 func (c *Cmd) buildSrc() string {
-	var src strings.Builder
-
-	if c.SrcUseSSH {
-		sshDestUser := "root"
-		if c.SrcSSHUser != "" {
-			sshDestUser = c.SrcSSHUser
-		}
-
-		fmt.Fprintf(&src, "%s@%s:", sshDestUser, c.SrcSSHHost)
+	if !c.SrcUseSSH {
+		return c.SrcPath
 	}
 
-	src.WriteString(c.SrcPath)
-
-	return src.String()
+	return sshUser(c.SrcSSHUser) + "@" + c.SrcSSHHost + ":" + c.SrcPath
 }
 
+// buildDest returns the rsync destination spec, either a bare path or a
+// user@host:path remote spec.
 func (c *Cmd) buildDest() string {
-	var dest strings.Builder
-
-	if c.DestUseSSH {
-		sshDestUser := "root"
-		if c.DestSSHUser != "" {
-			sshDestUser = c.DestSSHUser
-		}
-
-		fmt.Fprintf(&dest, "%s@%s:", sshDestUser, c.DestSSHHost)
+	if !c.DestUseSSH {
+		return c.DestPath
 	}
 
-	dest.WriteString(c.DestPath)
+	return sshUser(c.DestSSHUser) + "@" + c.DestSSHHost + ":" + c.DestPath
+}
 
-	return dest.String()
+func sshUser(user string) string {
+	if user == "" {
+		return "root"
+	}
+
+	return user
 }

@@ -57,14 +57,12 @@ func buildClusterIPHelmVals(
 
 	sshTargetHost := helmReleaseName + "-sshd." + topo.sshd.info.Claim.Namespace
 	if mig.Request.DestHostOverride != "" {
-		sshTargetHost = mig.Request.DestHostOverride
+		sshTargetHost = formatSSHTargetHost(mig.Request.DestHostOverride)
 	}
 
-	rsyncCmd := buildRsyncCmd(mig.Request, topo.push, sshTargetHost, 0)
-
-	rsyncCmdStr, err := rsyncCmd.Build()
+	rsyncCmdStr, err := buildRsyncCmdString(mig.Request, topo.push, sshTargetHost, 0)
 	if err != nil {
-		return nil, fmt.Errorf("failed to build rsync command: %w", err)
+		return nil, err
 	}
 
 	return map[string]any{

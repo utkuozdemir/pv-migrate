@@ -5,4 +5,5 @@ var (
 	BuildHelmValues      = buildHelmValues
 	MergeHelmValues      = mergeHelmValues
 	ShouldUploadMetadata = shouldUploadMetadata
+	ValidateSubpath      = validateSubpath
 )

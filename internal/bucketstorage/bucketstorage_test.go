@@ -183,7 +183,15 @@ func TestMergeHelmValues_HelmSetOverridesImageTag(t *testing.T) {
 func TestShouldUploadMetadata_SkipsDryRun(t *testing.T) {
 	t.Parallel()
 
-	for _, extraArgs := range []string{"--dry-run", "--dry-run=true", "-n"} {
+	// rclone parses its flags with pflag, so a short flag can be bundled with
+	// others. A bundled -n used to go unnoticed, and the backup then wrote a
+	// metadata object for a run that transferred nothing.
+	for _, extraArgs := range []string{
+		"--dry-run", "-n", "-nv", "-vn", "-v -n", "-Pnv",
+		// pflag reads a boolean flag's value with strconv.ParseBool
+		"--dry-run=true", "--dry-run=TRUE", "--dry-run=True", "--dry-run=1", "--dry-run=t",
+		"-n=true", "-n=1",
+	} {
 		t.Run(extraArgs, func(t *testing.T) {
 			t.Parallel()
 
@@ -197,15 +205,33 @@ func TestShouldUploadMetadata_SkipsDryRun(t *testing.T) {
 	}
 }
 
-func TestShouldUploadMetadata_IgnoresDryRunFalse(t *testing.T) {
+// TestShouldUploadMetadata_NotFooledByValues covers the other direction. This is
+// a heuristic over a raw shell fragment, not a parse of it, so it has to err
+// towards uploading: reading a dry run into an ordinary backup would leave that
+// backup without the metadata that identifies it.
+func TestShouldUploadMetadata_NotFooledByValues(t *testing.T) {
 	t.Parallel()
 
-	req := &bucketstorage.Request{
-		Direction:       rclone.DirectionBackup,
-		RcloneExtraArgs: "--dry-run=false",
-	}
+	for _, extraArgs := range []string{
+		"--dry-run=false", "--dry-run=FALSE", "--dry-run=0", "--dry-run=f",
+		"-n=false", "-n=0",
+		"--dry-run=notabool",
+		"--transfers -1n",
+		"--exclude nope",
+		"--bwlimit 1n",
+		"",
+	} {
+		t.Run(extraArgs, func(t *testing.T) {
+			t.Parallel()
 
-	assert.True(t, bucketstorage.ShouldUploadMetadata(req))
+			req := &bucketstorage.Request{
+				Direction:       rclone.DirectionBackup,
+				RcloneExtraArgs: extraArgs,
+			}
+
+			assert.True(t, bucketstorage.ShouldUploadMetadata(req))
+		})
+	}
 }
 
 func TestBuildHelmValues_MetadataPresentWhenGenerated(t *testing.T) {

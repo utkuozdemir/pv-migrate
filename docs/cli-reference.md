@@ -35,7 +35,7 @@ Flags:
   -t, --helm-timeout duration           Helm install/uninstall timeout (default 1m0s)
   -f, --helm-values strings             Additional Helm values files (YAML file or URL, can specify multiple)
   -h, --help                            help for pv-migrate
-      --id string                       Custom operation ID (lowercase alphanumeric with optional hyphens, max 28 chars). If not set, a random ID is generated. Used to identify the operation in 'status' and 'cleanup' commands
+      --id string                       Custom operation ID (lowercase alphanumeric with optional hyphens, max 24 chars). If not set, a random ID is generated. Used to identify the operation in 'status' and 'cleanup' commands
   -i, --ignore-mounted                  Do not fail if the source or destination PVC is mounted
       --ignore-sizes                    Do not fail if the destination PVC is smaller than the source PVC
       --loadbalancer-timeout duration   Timeout for the load balancer to receive an external IP. Only used by the loadbalancer strategy (default 2m0s)
@@ -85,7 +85,7 @@ Flags:
   -t, --helm-timeout duration             Helm install/uninstall timeout (default 1m0s)
   -f, --helm-values strings               Additional Helm values files (YAML file or URL, can specify multiple)
   -h, --help                              help for backup
-      --id string                         Custom operation ID (lowercase alphanumeric with optional hyphens, max 28 chars)
+      --id string                         Custom operation ID (lowercase alphanumeric with optional hyphens, max 24 chars)
   -i, --ignore-mounted                    Do not fail if the PVC is mounted
       --name string                       Backup name (identity in the bucket, required unless using --rclone-config)
   -x, --no-cleanup                        Do not clean up after the operation
@@ -138,7 +138,7 @@ Flags:
   -t, --helm-timeout duration             Helm install/uninstall timeout (default 1m0s)
   -f, --helm-values strings               Additional Helm values files (YAML file or URL, can specify multiple)
   -h, --help                              help for restore
-      --id string                         Custom operation ID (lowercase alphanumeric with optional hyphens, max 28 chars)
+      --id string                         Custom operation ID (lowercase alphanumeric with optional hyphens, max 24 chars)
   -i, --ignore-mounted                    Do not fail if the PVC is mounted
       --name string                       Backup name (identity in the bucket, required unless using --rclone-config)
   -x, --no-cleanup                        Do not clean up after the operation

@@ -1,26 +1,62 @@
 version: "3"
 
+vars:
+  # Tracked scripts only, NUL-separated so a path with a space survives.
+  #
+  # A walk of the working tree would also reach the shell completions that the
+  # release build generates into an ignored directory. Cobra writes those in its
+  # own style, so `task lint` failed for anyone who had run `task build` in the
+  # same checkout, and `task fmt` rewrote generated files. The same applies to any
+  # scratch directory or second worktree living under this one.
+  SHELL_FILES: git ls-files -z '*.sh'
+  # -r keeps shfmt from being run with no file arguments if the list is ever empty,
+  # in which case it would read stdin instead of checking anything. BSD xargs
+  # already behaves that way; GNU needs telling.
+  SHFMT_FLAGS: -i 2 -ci -sr
+
 tasks:
   fmt:
-    desc: format code
-    vars:
-      MODULE:
-        sh: head -n 1 go.mod | cut -d' ' -f2
+    desc: format code and shell scripts
     cmds:
       - go mod tidy
       - go fix ./...
       - golangci-lint run --fix ./...
       - golangci-lint fmt ./...
-      - shfmt -l -i 2 -ci -sr -w .
+      - '{{.SHELL_FILES}} | xargs -0 -r shfmt -l -w {{.SHFMT_FLAGS}}'
 
+  # Split into named checks so that a failure names the check that failed. Run as
+  # one list of commands, `task` could only report the whole thing as exit status 1.
   lint:
-    desc: lint code
+    desc: lint everything (go, chart, shell scripts, release config)
     cmds:
-      - go mod tidy --diff
-      - golangci-lint run ./...
-      - helm lint internal/helm/pv-migrate
-      - shfmt -l -i 2 -ci -sr .
+      - task: lint:go
+      - task: lint:chart
+      - task: lint:shell
       - task: lint:release
+
+  lint:go:
+    desc: lint go code and module tidiness
+    cmds:
+      - |
+        if ! go mod tidy --diff; then
+          echo "==> go.mod/go.sum are not tidy. Run: task fmt" >&2
+          exit 1
+        fi
+      - golangci-lint run ./...
+
+  lint:chart:
+    desc: lint the embedded helm chart
+    cmds:
+      - helm lint internal/helm/pv-migrate
+
+  lint:shell:
+    desc: check shell script formatting
+    cmds:
+      - |
+        if ! {{.SHELL_FILES}} | xargs -0 -r shfmt -d {{.SHFMT_FLAGS}}; then
+          echo "==> the shell scripts above are not formatted. Run: task fmt" >&2
+          exit 1
+        fi
 
   lint:release:
     desc: validate the release configuration

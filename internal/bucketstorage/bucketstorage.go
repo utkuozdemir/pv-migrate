@@ -9,10 +9,10 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
-	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/mattn/go-isatty"
 	"helm.sh/helm/v4/pkg/action"
 	chart "helm.sh/helm/v4/pkg/chart/v2"
@@ -24,6 +24,7 @@ import (
 
 	"github.com/utkuozdemir/pv-migrate/internal/helm"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/opid"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rclone"
 )
@@ -94,7 +95,7 @@ func Run(ctx context.Context, req *Request) error {
 
 	operationID := req.ID
 	if operationID == "" {
-		operationID = petname.Generate(2, "-")
+		operationID = opid.Generate()
 	}
 
 	logger = logger.With("id", operationID, "direction", req.Direction)
@@ -172,7 +173,7 @@ func Run(ctx context.Context, req *Request) error {
 
 	helmVals := buildHelmValues(ns, req, pvcInfo, rcloneConf, cmdStr, readOnly, metadataBase64, metadataRemotePath)
 
-	releaseName := fmt.Sprintf("pv-migrate-%s-%s", operationID, req.Direction)
+	releaseName := opid.ReleasePrefix + operationID + "-" + req.Direction
 
 	logger = logger.With("release", releaseName)
 	logger.Info("📦 Installing Helm chart")
@@ -234,6 +235,12 @@ func buildRemotePath(req *Request) (string, error) {
 		return "", errors.New("--name is required")
 	}
 
+	// The bucket is part of the same object path as the prefix and the name, so it
+	// goes through the same rule rather than being the one segment nobody checks.
+	if err := validateBucketSegment(req.Bucket, "bucket"); err != nil {
+		return "", err
+	}
+
 	if err := ValidateName(req.Name); err != nil {
 		return "", err
 	}
@@ -251,9 +258,36 @@ func shouldUploadMetadata(req *Request) bool {
 		!hasRcloneDryRun(req.RcloneExtraArgs)
 }
 
+// shortFlagCluster matches a run of rclone short flags, which are letters only.
+// Requiring the whole token to be letters keeps a value like -1n from reading as
+// a dry run.
+var shortFlagCluster = regexp.MustCompile(`^-[a-zA-Z]+$`)
+
+// hasRcloneDryRun reports whether the extra rclone arguments ask for a dry run,
+// in which case the metadata sidecar must not be uploaded: a run that transfers
+// nothing has no business writing a real object to the bucket.
 func hasRcloneDryRun(extraArgs string) bool {
 	for arg := range strings.FieldsSeq(extraArgs) {
-		if arg == "-n" || arg == "--dry-run" || arg == "--dry-run=true" {
+		name, value, assigned := strings.Cut(arg, "=")
+
+		if assigned {
+			// pflag reads a boolean flag's value with strconv.ParseBool, so "1", "T" and
+			// "TRUE" are dry runs just as much as "true" is, and a false value is not.
+			if name == "--dry-run" || name == "-n" {
+				enabled, err := strconv.ParseBool(value)
+
+				return err == nil && enabled
+			}
+
+			continue
+		}
+
+		if arg == "--dry-run" {
+			return true
+		}
+
+		// rclone uses pflag, so -n may be bundled with other short flags, as in -nv.
+		if shortFlagCluster.MatchString(arg) && strings.Contains(arg, "n") {
 			return true
 		}
 	}

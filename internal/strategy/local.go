@@ -342,8 +342,10 @@ func proxyConn(ctx context.Context, src net.Conn, destPort int, logger *slog.Log
 }
 
 func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
-	srcPath := srcMountPath + "/" + mig.Request.Source.Path
-	destPath := destMountPath + "/" + mig.Request.Dest.Path
+	srcPath, destPath, err := resolveMountPaths(mig.Request)
+	if err != nil {
+		return "", err
+	}
 
 	rsyncCmd := rsync.Cmd{
 		Port:        mig.Request.SSHReverseTunnelPort,

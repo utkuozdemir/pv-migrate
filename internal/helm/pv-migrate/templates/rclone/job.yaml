@@ -67,7 +67,7 @@ spec:
                 n=0
                 while [ "$n" -le "$retries" ]
                 do
-                  rclone --config {{ .Values.rclone.configMountPath | quote }} copyto /tmp/metadata.yaml {{ .Values.rclone.metadataRemotePath | quote }} && metadata_rc=0 && break
+                  rclone --config "$PV_MIGRATE_CONFIG_PATH" copyto /tmp/metadata.yaml "$PV_MIGRATE_METADATA_REMOTE_PATH" && metadata_rc=0 && break
                   n=$((n+1))
                   echo "metadata upload attempt $n/$attempts failed, waiting $period seconds before trying again"
                   sleep $period
@@ -82,6 +82,18 @@ spec:
                 echo "$failure failed after $retries retries"
               fi
               exit $rc
+          {{- if .Values.rclone.metadataBase64 }}
+          # The remote path and the config path reach the script as environment
+          # variables rather than being templated into it. Rendering them inline
+          # would put them inside shell double quotes, where a command
+          # substitution still runs, so the object path assembled from --bucket,
+          # --prefix and --name would be shell input.
+          env:
+            - name: PV_MIGRATE_CONFIG_PATH
+              value: {{ .Values.rclone.configMountPath | quote }}
+            - name: PV_MIGRATE_METADATA_REMOTE_PATH
+              value: {{ .Values.rclone.metadataRemotePath | quote }}
+          {{- end }}
           securityContext:
             {{- toYaml .Values.rclone.securityContext | nindent 12 }}
           image: "{{ .Values.rclone.image.repository }}:{{ .Values.rclone.image.tag }}"

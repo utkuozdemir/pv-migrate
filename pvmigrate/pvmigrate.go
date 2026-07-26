@@ -2,16 +2,16 @@ package pvmigrate
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
-	"regexp"
 	"time"
 
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
 	"github.com/utkuozdemir/pv-migrate/internal/migrator"
+	"github.com/utkuozdemir/pv-migrate/internal/opid"
+	"github.com/utkuozdemir/pv-migrate/internal/strategy"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 )
 
@@ -46,6 +46,12 @@ const (
 	DefaultSSHReverseTunnelPort = 22000
 )
 
+// MaxIDLength is the longest operation identifier that can be used. The
+// identifier ends up in the name of the Helm release and of every resource the
+// release creates, and the limit is what keeps the longest of those acceptable to
+// both Helm and Kubernetes.
+const MaxIDLength = opid.MaxLength
+
 var (
 	DefaultStrategies = []Strategy{Mount, ClusterIP, LoadBalancer}
 	AllStrategies     = []Strategy{Mount, ClusterIP, LoadBalancer, NodePort, Local}
@@ -66,7 +72,7 @@ type Migration struct {
 	// ID is an optional custom migration identifier. When empty, a petname-style
 	// identifier (e.g. "fuzzy-panda") is generated automatically. The value must be
 	// lowercase alphanumeric with optional hyphens, not start or end with a hyphen,
-	// and be at most maxIDLength characters long. The ID becomes part of Helm release
+	// and be at most MaxIDLength characters long. The ID becomes part of Helm release
 	// names and Kubernetes resource names, so it must be DNS-compatible.
 	ID string
 
@@ -113,45 +119,22 @@ type Migration struct {
 	Logger *slog.Logger
 }
 
-// maxIDLength limits the operation ID so that the longest possible Kubernetes
-// resource name stays within the 63-character DNS label limit.
-// Worst case: "pv-migrate-" (11) + <id> + "-loadbalancer" (13) + "-dest" (5) + "-rsync" (6) = 35 overhead.
-const maxIDLength = 63 - 35
-
-var validIDRegex = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
-
-// validateID checks that the given operation ID is valid for use in Kubernetes
-// resource names. It must be lowercase alphanumeric with optional hyphens,
-// must not start or end with a hyphen, and be at most maxIDLength characters.
-func validateID(id string) error {
-	if len(id) == 0 {
-		return errors.New("operation ID must not be empty")
-	}
-
-	if len(id) > maxIDLength {
-		return fmt.Errorf("operation ID %q is too long (%d chars), maximum is %d", id, len(id), maxIDLength)
-	}
-
-	if !validIDRegex.MatchString(id) {
-		return fmt.Errorf("operation ID %q is invalid: must be lowercase alphanumeric with optional hyphens, "+
-			"and must not start or end with a hyphen", id)
-	}
-
-	return nil
-}
-
 // Run executes the migration.
 func Run(ctx context.Context, migration Migration) error {
 	migration.ApplyDefaults()
 
 	if migration.ID != "" {
-		if err := validateID(migration.ID); err != nil {
+		if err := opid.Validate(migration.ID); err != nil {
 			return err
 		}
 	}
 
 	if p := migration.SSHReverseTunnelPort; p < 1 || p > 65535 {
 		return fmt.Errorf("invalid ssh-reverse-tunnel-port %d: must be between 1 and 65535", p)
+	}
+
+	if err := strategy.ValidatePaths(migration.Source.Path, migration.Dest.Path); err != nil {
+		return err
 	}
 
 	req := toInternalRequest(&migration)

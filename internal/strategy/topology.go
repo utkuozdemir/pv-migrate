@@ -110,7 +110,7 @@ func runTwoReleaseStrategy(
 
 	sshTargetHost := target.host
 	if mig.Request.DestHostOverride != "" {
-		sshTargetHost = mig.Request.DestHostOverride
+		sshTargetHost = formatSSHTargetHost(mig.Request.DestHostOverride)
 	}
 
 	if err = installRsyncJob(attempt, topo, rsyncRelease, privateKey, privateKeyMountPath,
@@ -121,14 +121,21 @@ func runTwoReleaseStrategy(
 	return waitForRsyncJob(ctx, attempt, topo.rsync.info, rsyncRelease, logger)
 }
 
-func buildRsyncCmd(req *migration.Request, push bool, sshHost string, port int) rsync.Cmd {
+// buildRsyncCmdString resolves the PVC paths and returns the rsync command to run
+// on whichever side the topology puts it.
+func buildRsyncCmdString(req *migration.Request, push bool, sshHost string, port int) (string, error) {
+	srcPath, destPath, err := resolveMountPaths(req)
+	if err != nil {
+		return "", err
+	}
+
 	cmd := rsync.Cmd{
 		Port:      port,
 		NoChown:   req.NoChown,
 		NonRoot:   req.NonRoot,
 		Delete:    req.DeleteExtraneousFiles,
-		SrcPath:   srcMountPath + "/" + req.Source.Path,
-		DestPath:  destMountPath + "/" + req.Dest.Path,
+		SrcPath:   srcPath,
+		DestPath:  destPath,
 		Compress:  !req.NoCompress,
 		ExtraArgs: req.RsyncExtraArgs,
 	}
@@ -143,7 +150,12 @@ func buildRsyncCmd(req *migration.Request, push bool, sshHost string, port int) 
 		cmd.SrcSSHUser = sshUser(req)
 	}
 
-	return cmd
+	built, err := cmd.Build()
+	if err != nil {
+		return "", fmt.Errorf("failed to build rsync command: %w", err)
+	}
+
+	return built, nil
 }
 
 func buildSshdHelmValues(side componentSide, publicKey string) map[string]any {
@@ -202,11 +214,9 @@ func installRsyncJob(
 ) error {
 	mig := attempt.Migration
 
-	rsyncCmd := buildRsyncCmd(mig.Request, topo.push, sshHost, sshPort)
-
-	rsyncCmdStr, err := rsyncCmd.Build()
+	rsyncCmdStr, err := buildRsyncCmdString(mig.Request, topo.push, sshHost, sshPort)
 	if err != nil {
-		return fmt.Errorf("failed to build rsync command: %w", err)
+		return err
 	}
 
 	rsyncVals := buildRsyncHelmValues(topo.rsync, rsyncCmdStr, privateKey, privateKeyMountPath)
