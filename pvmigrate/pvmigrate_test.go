@@ -37,7 +37,7 @@ func TestValidateID(t *testing.T) {
 		},
 		{
 			name: "max length",
-			id:   strings.Repeat("a", 28),
+			id:   strings.Repeat("a", pvmigrate.MaxIDLength),
 		},
 		{
 			name:       "empty",
@@ -46,7 +46,7 @@ func TestValidateID(t *testing.T) {
 		},
 		{
 			name:       "too long",
-			id:         strings.Repeat("a", 29),
+			id:         strings.Repeat("a", pvmigrate.MaxIDLength+1),
 			wantErrMsg: "too long",
 		},
 		{

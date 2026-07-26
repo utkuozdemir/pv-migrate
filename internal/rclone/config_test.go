@@ -192,3 +192,35 @@ func TestReadConfigFile_NotFound(t *testing.T) {
 	_, err := rclone.ReadConfigFile("/nonexistent/rclone.conf")
 	require.Error(t, err)
 }
+
+// TestGenerateConfigIgnoresOtherBackendsValues covers the interaction between
+// per-backend validation and the CLI reading every credential environment
+// variable regardless of backend: a value left over from another backend must not
+// fail an operation whose config never contains it.
+func TestGenerateConfigIgnoresOtherBackendsValues(t *testing.T) {
+	t.Parallel()
+
+	for _, backend := range []string{rclone.BackendGCS, rclone.BackendAzure} {
+		t.Run(backend, func(t *testing.T) {
+			t.Parallel()
+
+			conf, err := rclone.GenerateConfig(rclone.ConfigOptions{
+				Backend: backend,
+				// as an env var sourced from a file or a secret would arrive
+				AccessKey:      "leftover\n",
+				SecretKey:      " leftover ",
+				StorageAccount: backendAccount(backend),
+			})
+			require.NoError(t, err)
+			assert.NotContains(t, conf, "leftover")
+		})
+	}
+}
+
+func backendAccount(backend string) string {
+	if backend == rclone.BackendAzure {
+		return "acct"
+	}
+
+	return ""
+}

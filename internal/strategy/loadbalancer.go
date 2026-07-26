@@ -39,6 +39,11 @@ func resolveLBTarget(
 	return sshTarget{host: formatSSHTargetHost(lbAddress)}, nil
 }
 
+// formatSSHTargetHost renders a host for use in rsync's `[user@]host:path`
+// remote spec, which is split on the first colon, so an IPv6 literal has to be
+// bracketed or rsync reads only its first group as the host. It is idempotent:
+// an already-bracketed literal does not parse as an address and is returned
+// unchanged, which is what lets it also be applied to --dest-host-override.
 func formatSSHTargetHost(host string) string {
 	if util.IsIPv6(host) {
 		return fmt.Sprintf("[%s]", host)

@@ -38,6 +38,10 @@ type ConfigOptions struct {
 
 // GenerateConfig produces an rclone.conf INI string from high-level options.
 func GenerateConfig(opts ConfigOptions) (string, error) {
+	if err := opts.validate(); err != nil {
+		return "", err
+	}
+
 	switch opts.Backend {
 	case BackendS3:
 		return generateS3Config(opts)
@@ -50,6 +54,74 @@ func GenerateConfig(opts ConfigOptions) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported backend: %s", opts.Backend)
 	}
+}
+
+// validate rejects option values that cannot be represented in the generated
+// config. An rclone.conf entry is one line, so a value carrying a newline would
+// not be stored as that value: everything after the newline would be read as
+// further config keys, silently producing a remote that differs from the one
+// asked for. A credential piped in from a file or a Kubernetes secret is the
+// most likely source. Carriage returns and NUL are rejected on the same grounds,
+// and a leading or trailing space because rclone strips it on read.
+//
+// Only the fields the chosen backend actually writes are checked. The credential
+// environment variables are all read regardless of backend, so a stray value left
+// over from another backend would otherwise fail an operation whose config never
+// contains it.
+func (o ConfigOptions) validate() error {
+	for _, field := range o.writtenFields() {
+		if err := validateConfigValue(field.name, field.value); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// configField pairs a value with the name of the flag it came from, so an error
+// points at what to change.
+type configField struct {
+	name  string
+	value string
+}
+
+// writtenFields returns the option values that end up in the generated config for
+// the chosen backend. The GCS backend contributes none: its credential is JSON,
+// which is compacted onto one line and rejected by that compaction if malformed.
+func (o ConfigOptions) writtenFields() []configField {
+	switch o.Backend {
+	case BackendS3:
+		return []configField{
+			{"s3-provider", o.Provider},
+			{"endpoint", o.Endpoint},
+			{"region", o.Region},
+			{"access-key", o.AccessKey},
+			{"secret-key", o.SecretKey},
+		}
+	case BackendAzure:
+		return []configField{
+			{"storage-account", o.StorageAccount},
+			{"storage-key", o.StorageKey},
+		}
+	default:
+		return nil
+	}
+}
+
+func validateConfigValue(name, value string) error {
+	if value == "" {
+		return nil
+	}
+
+	if strings.ContainsAny(value, "\r\n\x00") {
+		return fmt.Errorf("--%s must not contain line breaks", name)
+	}
+
+	if strings.TrimSpace(value) != value {
+		return fmt.Errorf("--%s must not have leading or trailing whitespace", name)
+	}
+
+	return nil
 }
 
 // ReadConfigFile reads a raw rclone.conf file from disk.

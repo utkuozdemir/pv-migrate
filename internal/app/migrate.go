@@ -300,9 +300,10 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	flags.BoolVar(&migration.IgnoreSizes, FlagIgnoreSizes, migration.IgnoreSizes,
 		"Do not fail if the destination PVC is smaller than the source PVC")
 	flags.BoolVarP(&migration.NoChown, FlagNoChown, "o", migration.NoChown, "Omit chown during rsync")
-	flags.StringVar(&migration.ID, FlagID, migration.ID,
-		"Custom operation ID (lowercase alphanumeric with optional hyphens, max 28 chars). "+
-			"If not set, a random ID is generated. Used to identify the operation in 'status' and 'cleanup' commands")
+	flags.StringVar(&migration.ID, FlagID, migration.ID, fmt.Sprintf(
+		"Custom operation ID (lowercase alphanumeric with optional hyphens, max %d chars). "+
+			"If not set, a random ID is generated. Used to identify the operation in 'status' and 'cleanup' commands",
+		pvmigrate.MaxIDLength))
 	flags.BoolVar(&migration.Detach, FlagDetach, migration.Detach,
 		"Detach after the migration job starts running in the cluster. "+
 			"The CLI will exit and the migration will continue in the background. "+
@@ -402,7 +403,7 @@ func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*sl
 	case logFormatJSON:
 		handler = slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level})
 	case logFormatText:
-		handler = tint.NewHandler(writer, &tint.Options{
+		handler = tint.NewTextHandler(writer, &tint.Options{
 			Level:   level,
 			NoColor: !isATTY,
 		})

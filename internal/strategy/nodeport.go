@@ -53,5 +53,5 @@ func resolveNodePortTarget(
 		logger.Info("🔗 Using sshd pod's node for NodePort connection", "node", podNode, "ip", nodeIP)
 	}
 
-	return sshTarget{host: nodeIP, port: nodePort}, nil
+	return sshTarget{host: formatSSHTargetHost(nodeIP), port: nodePort}, nil
 }

@@ -17,6 +17,7 @@ import (
 
 	"github.com/utkuozdemir/pv-migrate/internal/jobprogress"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/opid"
 )
 
 func buildStatusCmd(logger **slog.Logger) *cobra.Command {
@@ -62,7 +63,7 @@ func runStatus(
 		ns = client.NsInContext
 	}
 
-	releasePrefix := helmReleasePrefix + operationID + "-"
+	releasePrefix := opid.ReleasePrefix + operationID + "-"
 
 	job, err := k8s.FindDataMoverJob(ctx, client.KubeClient, ns, releasePrefix, logger)
 	if err != nil {

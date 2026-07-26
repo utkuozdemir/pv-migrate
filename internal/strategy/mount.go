@@ -86,8 +86,10 @@ func (r *Mount) cannotDoReason(t *migration.Migration) string {
 }
 
 func buildRsyncCmdMount(mig *migration.Migration) (string, error) {
-	srcPath := srcMountPath + "/" + mig.Request.Source.Path
-	destPath := destMountPath + "/" + mig.Request.Dest.Path
+	srcPath, destPath, err := resolveMountPaths(mig.Request)
+	if err != nil {
+		return "", err
+	}
 
 	rsyncCmd := rsync.Cmd{
 		NoChown:   mig.Request.NoChown,

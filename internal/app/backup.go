@@ -224,7 +224,8 @@ func setBackupRestoreFlags(
 ) {
 	flags := cmd.Flags()
 
-	flags.StringVar(id, FlagID, "", "Custom operation ID (lowercase alphanumeric with optional hyphens, max 28 chars)")
+	flags.StringVar(id, FlagID, "", fmt.Sprintf(
+		"Custom operation ID (lowercase alphanumeric with optional hyphens, max %d chars)", pvmigrate.MaxIDLength))
 	flags.BoolVarP(ignoreMounted, FlagIgnoreMounted, "i", false, "Do not fail if the PVC is mounted")
 	flags.BoolVar(nonRoot, FlagNonRoot, false, "Run rclone container as non-root")
 	flags.BoolVar(detach, FlagDetach, false, "Detach after the rclone job starts running")

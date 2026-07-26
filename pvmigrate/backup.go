@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/utkuozdemir/pv-migrate/internal/bucketstorage"
+	"github.com/utkuozdemir/pv-migrate/internal/opid"
 	"github.com/utkuozdemir/pv-migrate/internal/rclone"
 )
 
@@ -85,7 +86,7 @@ func RunBackup(ctx context.Context, backup Backup) error {
 	applyBackupDefaults(&backup)
 
 	if backup.ID != "" {
-		if err := validateID(backup.ID); err != nil {
+		if err := opid.Validate(backup.ID); err != nil {
 			return err
 		}
 	}
