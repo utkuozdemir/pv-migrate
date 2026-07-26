@@ -9,6 +9,8 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
 )
 
+const percentHundred = 100
+
 type Progress = progresslog.Update
 
 type logEntry struct {
@@ -36,13 +38,20 @@ func ParseLine(line string) (Progress, error) {
 		return Progress{}, errors.New("no stats in log line")
 	}
 
+	// A byte count cannot be negative, and one that is would be reported as a
+	// negative percentage and then handed to the progress bar, which rejects every
+	// subsequent update once its maximum is negative. Refuse the line instead.
+	if entry.Stats.Bytes < 0 || entry.Stats.TotalBytes < 0 {
+		return Progress{}, errors.New("negative byte count in log line")
+	}
+
 	percentage := 0
 
 	if entry.Stats.TotalBytes > 0 {
 		if entry.Stats.Bytes >= entry.Stats.TotalBytes {
-			percentage = 100
+			percentage = percentHundred
 		} else {
-			percentage = int(float64(entry.Stats.Bytes) / float64(entry.Stats.TotalBytes) * 100)
+			percentage = int(float64(entry.Stats.Bytes) / float64(entry.Stats.TotalBytes) * percentHundred)
 		}
 	}
 
@@ -50,7 +59,7 @@ func ParseLine(line string) (Progress, error) {
 		Line:        line,
 		Percentage:  percentage,
 		Transferred: entry.Stats.Bytes,
-		Total:       entry.Stats.TotalBytes,
+		Total:       max(entry.Stats.Bytes, entry.Stats.TotalBytes),
 	}, nil
 }
 
