@@ -20,6 +20,43 @@ tasks:
       - golangci-lint run ./...
       - helm lint internal/helm/pv-migrate
       - shfmt -l -i 2 -ci -sr .
+      - task: lint:release
+
+  lint:release:
+    desc: validate the release configuration
+    cmds:
+      - goreleaser check
+
+  test:
+    desc: run the unit tests
+    cmds:
+      - go test ./...
+
+  test:integration:
+    desc: run the migration integration tests against the current kube context
+    cmds:
+      - go test -tags integration -timeout 30m -v ./integration/ -run TestMigrate
+
+  # `task test` already replays every fuzz target's seed corpus, which is where
+  # the regression value sits. This drives the actual search instead, one target
+  # at a time because -fuzz only ever fuzzes one. A discovered failure is written
+  # to the package's testdata/fuzz directory, so it lands in the working tree.
+  test:fuzz:
+    desc: search for new fuzz failures (FUZZTIME=30s per target)
+    vars:
+      FUZZTIME: '{{.FUZZTIME | default "30s"}}'
+    cmds:
+      - |
+        set -eu
+        for pkg in $(go list ./...); do
+          # a listing failure means the package does not compile, which has to
+          # surface rather than read as "no fuzz targets here"
+          listed="$(go test -list 'Fuzz' "$pkg")"
+          for target in $(printf '%s\n' "$listed" | grep '^Fuzz' || true); do
+            echo "==> $pkg $target ({{.FUZZTIME}})"
+            go test "$pkg" -run '^$' -fuzz "^${target}\$" -fuzztime '{{.FUZZTIME}}'
+          done
+        done
 
   clean:
     desc: clean
@@ -69,7 +106,7 @@ tasks:
   build:
     desc: build
     cmds:
-      - goreleaser build --snapshot --rm-dist --single-target
+      - goreleaser build --snapshot --clean --single-target
 
   release:
     desc: release
