@@ -110,3 +110,29 @@ func TestFindLast(t *testing.T) {
 		})
 	}
 }
+
+// TestParseLineTotalIsArchitectureIndependent pins the boundary of the estimate's
+// overflow fallback, which the fuzz property cannot: an out-of-range float to
+// integer conversion is floored back to the transferred count by the estimate, so
+// the result still satisfies the property on either architecture while differing
+// between them.
+func TestParseLineTotalIsArchitectureIndependent(t *testing.T) {
+	t.Parallel()
+
+	// math.MaxInt64/100 passes an integer bound on the input, but scaling it by 1%
+	// rounds up to exactly 2^63, which is out of range.
+	for _, line := range []string{
+		"  92233720368547758   1%",
+		"  92233720368547757   1%",
+		"  9223372036854775807   1%",
+	} {
+		t.Run(line, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := progress.ParseLine(line)
+			require.NoError(t, err)
+			assert.Equal(t, got.Transferred, got.Total,
+				"a total that does not fit must fall back to the transferred count")
+		})
+	}
+}

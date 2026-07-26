@@ -3,6 +3,7 @@ package progress
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -11,8 +12,13 @@ import (
 )
 
 var (
+	// The percentage alternation stops at 100 on purpose. rsync computes the figure
+	// without clamping it, so it can exceed 100 when the size it ends up
+	// transferring differs from the total it started with, and there is no way to
+	// tell such a line apart from a file name that happens to look like progress.
+	// Either way it is not a reading the consumers can use, so it does not match.
 	progressRegex = regexp.MustCompile(
-		`\s*(?P<bytes>[0-9]+(,[0-9]+)*)\s+(?P<percentage>[0-9]{1,3})%`,
+		`\s*(?P<bytes>[0-9]+(,[0-9]+)*)\s+(?P<percentage>100|[0-9]{1,2})%`,
 	)
 	rsyncEndRegex = regexp.MustCompile(`\s*total size is (?P<bytes>[0-9]+(,[0-9]+)*)`)
 )
@@ -26,41 +32,15 @@ const (
 
 type Progress = progresslog.Update
 
-// FindLast returns the last progress entry found anywhere in text.
-// Rsync uses \r to overwrite progress in-place, so a single log line
-// may contain many concatenated progress entries.
+// FindLast returns the last progress entry in text, which is a chunk of the job
+// pod's log. Rsync overwrites its progress line in place with a carriage return,
+// so a chunk holds many entries and only the newest is wanted.
+//
+// The splitting and the "last line that parsed" choice belong to progresslog,
+// which is also what the rclone side uses, so both report progress the same way
+// and there is one place where that behaviour lives.
 func FindLast(text string) Progress {
-	matches := progressRegex.FindAllStringSubmatch(text, -1)
-	if len(matches) == 0 {
-		return Progress{}
-	}
-
-	last := matches[len(matches)-1]
-
-	names := progressRegex.SubexpNames()
-	named := make(map[string]string, len(names))
-
-	for i, name := range names {
-		named[name] = last[i]
-	}
-
-	percentage, err := strconv.Atoi(named["percentage"])
-	if err != nil || percentage == 0 {
-		return Progress{}
-	}
-
-	transferred, err := parseNumBytes(named["bytes"])
-	if err != nil {
-		return Progress{}
-	}
-
-	total := max(transferred, int64((float64(transferred)/float64(percentage))*percentHundred))
-
-	return Progress{
-		Percentage:  percentage,
-		Transferred: transferred,
-		Total:       total,
-	}
+	return progresslog.FindLast(text, ParseLine)
 }
 
 func ParseLine(line string) (Progress, error) {
@@ -103,15 +83,38 @@ func ParseLine(line string) (Progress, error) {
 		return Progress{}, err
 	}
 
-	// in case of a rounding error, update total, since transferred is more accurate
-	total := max(transferred, int64((float64(transferred)/float64(percentage))*percentHundred))
-
 	return Progress{
 		Line:        line,
 		Percentage:  percentage,
 		Transferred: transferred,
-		Total:       total,
+		Total:       estimateTotal(transferred, percentage),
 	}, nil
+}
+
+// estimateTotal scales the transferred byte count back up by the reported
+// percentage, since rsync's progress output carries no total of its own.
+//
+// The result is floored at transferred, because transferred is exact while the
+// percentage is rounded to a whole number.
+//
+// It falls back to transferred when the scaled value would not fit. That is
+// checked on the scaled float rather than on the input, because the scaling is
+// done in floating point and rounds up: an input small enough to pass an integer
+// bound can still produce a float at or above the limit. An out-of-range
+// float-to-int conversion is implementation-defined in Go, so letting one through
+// means the same log line reports a different total on each architecture.
+// float64(math.MaxInt64) is exactly 2^63, so anything below it converts in range.
+func estimateTotal(transferred int64, percentage int) int64 {
+	if percentage <= 0 {
+		return transferred
+	}
+
+	scaled := (float64(transferred) / float64(percentage)) * percentHundred
+	if scaled >= float64(math.MaxInt64) {
+		return transferred
+	}
+
+	return max(transferred, int64(scaled))
 }
 
 func parseNumBytes(numBytes string) (int64, error) {
