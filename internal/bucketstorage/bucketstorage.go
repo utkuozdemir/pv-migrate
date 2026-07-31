@@ -1,6 +1,7 @@
 package bucketstorage
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -21,7 +22,9 @@ import (
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
+	"k8s.io/client-go/kubernetes"
 
+	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/helm"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/opid"
@@ -85,6 +88,15 @@ type Request struct {
 
 	Writer io.Writer
 	Logger *slog.Logger
+
+	// StructuredLogs reports that the logger writes machine-readable records to
+	// the same stream as Writer. Plain-text blocks are suppressed then, and the
+	// same information is emitted as log records instead.
+	StructuredLogs bool
+
+	// ColorOutput colors the plain-text report blocks semantically. Set only
+	// when the writer is a terminal and the logs are not machine-readable.
+	ColorOutput bool
 }
 
 // Run executes a backup or restore operation.
@@ -92,6 +104,12 @@ type Request struct {
 //nolint:cyclop,funlen
 func Run(ctx context.Context, req *Request) error {
 	logger := req.Logger
+
+	// Only the public API defaults the writer, so a direct caller can leave it
+	// unset. Everything below writes to it without checking.
+	if req.Writer == nil {
+		req.Writer = io.Discard
+	}
 
 	operationID := req.ID
 	if operationID == "" {
@@ -179,6 +197,10 @@ func Run(ctx context.Context, req *Request) error {
 	logger.Info("📦 Installing Helm chart")
 
 	if err = installHelmChart(helmChart, pvcInfo, releaseName, helmVals, req, logger); err != nil {
+		// A timed-out install means resources that are stuck rather than absent,
+		// and this path runs no cleanup, so they are still there to be read.
+		writeFailure(ctx, req, client.KubeClient, ns, releaseName, err, logger)
+
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
@@ -532,13 +554,69 @@ func handleJobCompletion(
 	}
 
 	if err := k8s.WaitForJobCompletion(ctx, kubeClient, namespace, jobName,
-		shouldShowProgressBar(req.Writer), req.Writer, logger); err != nil {
-		return fmt.Errorf("%s failed: %w", req.Direction, err)
+		shouldShowProgressBar(req.Writer), req.StructuredLogs,
+		console.Palette{Enabled: req.ColorOutput}, req.Writer, logger); err != nil {
+		// Before the deferred cleanup removes the resources this is about.
+		writeFailure(ctx, req, kubeClient, namespace, releaseName, err, logger)
+
+		// Deliberately unwrapped: the error already names the failed pod and the
+		// exit state, the public API adds the operation prefix, and a plumbing
+		// wrap in between would push the answer further right.
+		return err //nolint:wrapcheck
 	}
 
 	logger.Info("✅ Operation succeeded")
 
 	return nil
+}
+
+// writeFailure explains a failure the way the migration summary does: a heading,
+// the cause on an indented line beneath it, then what the cluster reported. On a
+// structured log stream the plain-text block would corrupt the records around
+// it, so it travels inside a record instead.
+func writeFailure(
+	ctx context.Context,
+	req *Request,
+	kubeClient kubernetes.Interface,
+	namespace, releaseName string,
+	cause error,
+	logger *slog.Logger,
+) {
+	if req.StructuredLogs {
+		var buf bytes.Buffer
+
+		k8s.WriteWorkloadDiagnostics(ctx, kubeClient, namespace,
+			k8s.InstanceLabelSelector(releaseName), console.Palette{}, &buf, logger)
+
+		logger.Error("❌ What the cluster reported", "release", releaseName,
+			"namespace", namespace, "diagnostics", buf.String())
+
+		return
+	}
+
+	palette := console.Palette{Enabled: req.ColorOutput}
+
+	fmt.Fprintf(req.Writer, "%s\n", palette.Failure(capitalizedDirection(req.Direction)+" failed."))
+
+	if cause != nil {
+		for line := range strings.SplitSeq(cause.Error(), "\n") {
+			fmt.Fprintf(req.Writer, "    %s\n", line)
+		}
+	}
+
+	fmt.Fprintf(req.Writer, "\n%s\n\n  %s (namespace %s):\n",
+		palette.Bold("What the cluster reported:"), releaseName, namespace)
+	k8s.WriteWorkloadDiagnostics(ctx, kubeClient, namespace,
+		k8s.InstanceLabelSelector(releaseName), palette, req.Writer, logger)
+	fmt.Fprintln(req.Writer)
+}
+
+func capitalizedDirection(direction string) string {
+	if direction == "" {
+		return "Operation"
+	}
+
+	return strings.ToUpper(direction[:1]) + direction[1:]
 }
 
 func cleanupRelease(pvcInfo *pvc.Info, releaseName string, timeout time.Duration) error {

@@ -48,6 +48,9 @@ $ pv-migrate \
   --dest new-pvc
 ```
 
+If files are deleted from the source while the transfer is running, rsync skips them, the migration still succeeds, and a warning line names the condition.
+With `--dest-delete-extraneous-files`, the skipped files keep their existing copies on the destination, so re-run the migration or copy from a source that is not being written to.
+
 Use custom data mover images:
 
 ```bash

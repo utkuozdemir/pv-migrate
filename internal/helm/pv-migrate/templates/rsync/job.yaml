@@ -46,7 +46,6 @@ spec:
             - sh
             - -c
             - |
-              set -x
               export HOME=$(awk -F: -v uid="$(id -u)" '$3==uid{print $6}' /etc/passwd)
               n=0
               rc=1
@@ -57,19 +56,37 @@ spec:
               privateKeyFilename=$(basename "{{ .Values.rsync.privateKeyMountPath }}")
               mkdir -p "$HOME/.ssh"
               chmod 700 "$HOME/.ssh"
-              cp -v "{{ .Values.rsync.privateKeyMountPath }}" "$HOME/.ssh/"
+              cp "{{ .Values.rsync.privateKeyMountPath }}" "$HOME/.ssh/"
               chmod 400 "$HOME/.ssh/$privateKeyFilename"
               {{- end }}
               while [ "$n" -le "$retries" ]
               do
-                {{ required ".Values.rsync.command is required!" .Values.rsync.command }} {{ .Values.rsync.extraArgs }} && rc=0 && break
+                # Traced so the log shows the exact data mover invocation, and
+                # nothing else: a fully traced script buries the two lines of
+                # evidence a reader needs under its own bookkeeping.
+                set -x
+                {{ required ".Values.rsync.command is required!" .Values.rsync.command }} {{ .Values.rsync.extraArgs }}
+                { rc=$?; set +x; } 2>/dev/null
+                [ "$rc" -eq 0 ] && break
+                # Vanished source files are expected on a volume that is still being
+                # written to, and retrying cannot bring them back. The echoed line is
+                # what the client looks for to report the skipped files, since on a
+                # successful job it never sees the raw log.
+                if [ "$rc" -eq 24 ]; then
+                  echo "pv-migrate: some source files vanished during the transfer; treated as success"
+                  rc=0
+                  break
+                fi
+                # A usage error is deterministic, so retrying only burns the budget.
+                [ "$rc" -eq 1 ] && break
                 n=$((n+1))
+                [ "$n" -gt "$retries" ] && break
                 echo "rsync attempt $n/$attempts failed, waiting $period seconds before trying again"
                 sleep $period
               done
 
               if [ $rc -ne 0 ]; then
-                echo "rsync job failed after $retries retries"
+                echo "rsync job failed with exit code $rc"
               fi
               exit $rc
           securityContext:

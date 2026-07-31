@@ -33,7 +33,7 @@ func resolveNodePortTarget(
 		return sshTarget{}, fmt.Errorf("failed to get NodePort: %w", err)
 	}
 
-	sshdPod, err := getSshdPodForHelmRelease(ctx, topo.sshd.info, sshdRelease)
+	sshdPod, err := getSshdPodForHelmRelease(ctx, topo.sshd.info, sshdRelease, logger)
 	if err != nil {
 		return sshTarget{}, fmt.Errorf("failed to get sshd pod: %w", err)
 	}

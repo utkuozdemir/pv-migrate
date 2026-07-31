@@ -22,6 +22,7 @@ import (
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/klog/v2"
 
+	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/pvmigrate"
 )
@@ -577,7 +578,7 @@ func runMinioVerifyJob(t *testing.T, infra *backupTestInfra, ns, cmd string) str
 
 	// Wait for job completion
 	err := k8s.WaitForJobCompletion(ctx, infra.cli.KubeClient, ns, job.Name,
-		false, os.Stderr, slogt.New(t))
+		false, false, console.Palette{}, os.Stderr, slogt.New(t))
 	require.NoError(t, err)
 
 	// Get logs from the job pod

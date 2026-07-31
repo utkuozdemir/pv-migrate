@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"strings"
 
@@ -40,6 +41,12 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 		return err
 	}
 
+	// Only the public API defaults the writer, so a direct caller can leave it
+	// unset. Everything below writes to it without checking.
+	if request.Writer == nil {
+		request.Writer = io.Discard
+	}
+
 	logger = logger.With("source", request.Source.Namespace+"/"+request.Source.Name,
 		"dest", request.Dest.Namespace+"/"+request.Dest.Name)
 
@@ -58,7 +65,9 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 	logger = logger.With("migration_id", migrationID)
 	logger.Info("🔄 Attempting migration", "strategies", strings.Join(strategies, ","))
 
-	for _, name := range strategies {
+	outcomes := make([]attemptOutcome, 0, len(strategies))
+
+	for strategyIndex, name := range strategies {
 		str := nameToStrategyMap[name]
 		releasePrefix := opid.ReleasePrefix + migrationID + "-" + name
 		attemptLogger := logger.With("strategy", name)
@@ -71,17 +80,16 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 		attemptLogger.Info("🚁 Attempt using strategy")
 
 		if attemptErr := runAttempt(ctx, str, attempt, attemptLogger); attemptErr != nil {
-			if errors.Is(attemptErr, strategy.ErrUnaccepted) {
-				attemptLogger.Info(
-					"🦊 This strategy cannot handle this migration, will try the next one",
-					"reason", attemptErr.Error(),
-				)
+			last := strategyIndex == len(strategies)-1
+			outcomes = append(outcomes,
+				recordFailedAttempt(name, attempt, attemptErr, last, request.StructuredLogs, attemptLogger))
 
-				continue
+			// An interrupted run must not walk the remaining rungs: each failed
+			// attempt would sweep diagnostics on a context that survives the
+			// cancellation, turning one Ctrl-C into a long goodbye.
+			if ctx.Err() != nil {
+				break
 			}
-
-			attemptLogger.Warn("🔶 Migration failed with this strategy, "+
-				"will try with the remaining strategies", "error", attemptErr)
 
 			continue
 		}
@@ -97,7 +105,51 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 		return nil
 	}
 
-	return errors.New("all strategies failed for this migration")
+	reportOutcomes(request, outcomes, logger)
+
+	return newLadderExhaustedError(outcomes)
+}
+
+// recordFailedAttempt logs the attempt as it happens, the way it always has, and
+// keeps what it needs to explain the attempt again once the ladder is exhausted.
+func recordFailedAttempt(
+	name string,
+	attempt *migration.Attempt,
+	attemptErr error,
+	last, structuredLogs bool,
+	logger *slog.Logger,
+) attemptOutcome {
+	if errors.Is(attemptErr, strategy.ErrUnaccepted) {
+		outcome := attemptOutcome{strategy: name, declined: true, err: attemptErr}
+
+		// The promise of a next attempt is only made when one exists, and the
+		// reason is the typed one, without the error sentinel's suffix.
+		msg := "🦊 This strategy cannot handle this migration"
+		if !last {
+			msg += ", will try the next one"
+		}
+
+		logger.Info(msg, "reason", outcome.message())
+
+		return outcome
+	}
+
+	msg := "🔶 Migration failed with this strategy"
+	if !last {
+		msg += ", will try with the remaining strategies"
+	}
+
+	// On the last rung the summary repeats the error three lines below, so in
+	// text mode the mid-run line skips the long attribute rather than showing
+	// the same sentence twice on one screen. Mid-ladder, and always on a
+	// structured stream, the attribute is the only timely record.
+	if last && !structuredLogs {
+		logger.Warn(msg)
+	} else {
+		logger.Warn(msg, "error", attemptErr)
+	}
+
+	return attemptOutcome{strategy: name, err: attemptErr, diagnostics: attempt.Diagnostics}
 }
 
 func runAttempt(
@@ -107,6 +159,12 @@ func runAttempt(
 	logger *slog.Logger,
 ) (runErr error) {
 	defer func() {
+		// A declined strategy installed nothing, so there is nothing to clean up
+		// and nothing worth announcing about it.
+		if len(attempt.ReleaseNames) == 0 {
+			return
+		}
+
 		if attempt.Migration.Request.NoCleanup || attempt.Detached {
 			logger.Info("🧹 Cleanup skipped")
 
@@ -126,7 +184,16 @@ func runAttempt(
 		}
 	}()
 
-	return str.Run(ctx, attempt, logger)
+	runErr = str.Run(ctx, attempt, logger)
+
+	// A decline never reached the cluster, so there is nothing to ask it about.
+	// Anything else is collected here, the one point that sees every strategy's
+	// failure while the attempt's resources still exist.
+	if runErr != nil && !errors.Is(runErr, strategy.ErrUnaccepted) {
+		attempt.Diagnostics = collectDiagnostics(ctx, attempt, logger)
+	}
+
+	return runErr
 }
 
 func printDetachMessage(request *migration.Request, migrationID, strategyName string, logger *slog.Logger) {

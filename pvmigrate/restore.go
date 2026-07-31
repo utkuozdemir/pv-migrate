@@ -80,6 +80,15 @@ type Restore struct {
 
 	Writer io.Writer
 	Logger *slog.Logger
+
+	// StructuredLogs reports that Logger writes machine-readable records to the
+	// same stream as Writer. Set it to keep plain-text blocks such as failure
+	// diagnostics out of that stream; the same information is logged instead.
+	StructuredLogs bool
+
+	// ColorOutput colors the plain-text report blocks semantically. Set it only
+	// when Writer is a terminal.
+	ColorOutput bool
 }
 
 // RunRestore executes the restore.
@@ -158,6 +167,8 @@ func toRestoreRequest(restore *Restore) *bucketstorage.Request {
 		HelmFileValues:        restore.HelmFileValues,
 		HelmStringValues:      restore.HelmStringValues,
 		Writer:                restore.Writer,
+		StructuredLogs:        restore.StructuredLogs,
+		ColorOutput:           restore.ColorOutput,
 		Logger:                restore.Logger,
 	}
 }

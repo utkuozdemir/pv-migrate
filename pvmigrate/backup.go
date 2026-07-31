@@ -79,6 +79,15 @@ type Backup struct {
 
 	Writer io.Writer
 	Logger *slog.Logger
+
+	// StructuredLogs reports that Logger writes machine-readable records to the
+	// same stream as Writer. Set it to keep plain-text blocks such as failure
+	// diagnostics out of that stream; the same information is logged instead.
+	StructuredLogs bool
+
+	// ColorOutput colors the plain-text report blocks semantically. Set it only
+	// when Writer is a terminal.
+	ColorOutput bool
 }
 
 // RunBackup executes the backup.
@@ -156,6 +165,8 @@ func toBackupRequest(backup *Backup, direction string) *bucketstorage.Request {
 		HelmFileValues:        backup.HelmFileValues,
 		HelmStringValues:      backup.HelmStringValues,
 		Writer:                backup.Writer,
+		StructuredLogs:        backup.StructuredLogs,
+		ColorOutput:           backup.ColorOutput,
 		Logger:                backup.Logger,
 	}
 }

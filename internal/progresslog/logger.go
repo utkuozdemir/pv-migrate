@@ -34,6 +34,13 @@ type Update struct {
 type Logger struct {
 	options   LoggerOptions
 	successCh chan struct{}
+
+	// Owned by the single goroutine that handles a stream's lines. Stream
+	// attempts are sequential, so no locking is needed.
+	progressBar    *progressbar.ProgressBar
+	barTransferred int64
+	barMax         int64
+	barFinished    bool
 }
 
 type LoggerOptions struct {
@@ -98,6 +105,29 @@ func (l *Logger) MarkAsComplete(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// Rendered reports whether the bar has drawn anything. A bar that never got a
+// progress update never rendered, so nothing needs to terminate its line.
+func (l *Logger) Rendered() bool {
+	return l.barTransferred > 0 || l.barFinished
+}
+
+// FinishBar completes the bar's rendering. The in-stream completion signal can
+// be consumed by the retry loop instead of the render loop, so a caller that
+// joined the goroutines calls this to finish the bar deterministically. Only
+// safe once the follower has stopped, and only meaningful once the bar drew
+// something.
+func (l *Logger) FinishBar(logger *slog.Logger) {
+	if l.progressBar == nil || l.barFinished || l.barTransferred == 0 {
+		return
+	}
+
+	l.barFinished = true
+
+	if err := l.progressBar.Finish(); err != nil {
+		logger.Debug("failed to finish progress bar", "error", err)
+	}
 }
 
 func (l *Logger) startSingle(ctx context.Context, logger *slog.Logger) error {
@@ -207,17 +237,97 @@ func tailLogs(ctx context.Context, stream io.Reader, logCh chan<- string) error 
 	}
 }
 
-//nolint:cyclop,funlen
 func (l *Logger) handleLogs(ctx context.Context, logCh <-chan string, logger *slog.Logger) {
-	var progressBar *progressbar.ProgressBar
+	progressBar := l.progressBarOnce()
 
-	if l.options.ShowProgressBar {
-		progressBar = progressbar.NewOptions64(
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-l.successCh:
+			if progressBar != nil && !l.barFinished {
+				l.barFinished = true
+
+				if err := progressBar.Finish(); err != nil {
+					logger.Debug("failed to finish progress bar", "error", err)
+				}
+			}
+
+			return
+		case logLine := <-logCh:
+			l.handleLine(ctx, progressBar, logLine, logger)
+		}
+	}
+}
+
+func (l *Logger) handleLine(
+	ctx context.Context,
+	progressBar *progressbar.ProgressBar,
+	logLine string,
+	logger *slog.Logger,
+) {
+	if l.options.ParseLineFunc == nil {
+		return
+	}
+
+	progress, err := l.options.ParseLineFunc(logLine)
+	if err != nil {
+		logger.Log(ctx, slog.LevelDebug-1, "failed to parse progress line", "error", err)
+
+		return
+	}
+
+	if !l.options.ShowProgressBar {
+		args := []any{
+			slog.Group(
+				"progress",
+				"transferred",
+				progress.Transferred,
+				"total",
+				progress.Total,
+				"percentage",
+				progress.Percentage,
+			),
+		}
+
+		if l.options.Source != "" {
+			args = append(args, slog.String("source", l.options.Source))
+		}
+
+		logger.Debug(logLine, args...)
+
+		return
+	}
+
+	// Monotonic on purpose: the transferred count never legitimately goes
+	// backward within one transfer, so anything lower is a stray line, and
+	// moving a bar that already completed would strand its finished render.
+	if progress.Transferred < l.barTransferred {
+		return
+	}
+
+	l.barTransferred = progress.Transferred
+
+	if err = l.updateProgressBar(progressBar, progress.Transferred, progress.Total); err != nil {
+		logger.Warn("🔶 Failed to update progress bar", "error", err, "progress", progress)
+	}
+}
+
+// progressBarOnce returns the transfer's one progress bar, creating it on first
+// use. One bar for the Logger's whole lifetime rather than one per stream
+// attempt: an ended stream is retried, and a fresh bar per retry would render
+// its blank state over the finished one and restart the rate estimate.
+func (l *Logger) progressBarOnce() *progressbar.ProgressBar {
+	if !l.options.ShowProgressBar {
+		return nil
+	}
+
+	if l.progressBar == nil {
+		l.progressBar = progressbar.NewOptions64(
 			1,
 			progressbar.OptionSetWriter(l.options.Writer),
 			progressbar.OptionEnableColorCodes(true),
 			progressbar.OptionShowBytes(true),
-			progressbar.OptionSetRenderBlankState(true),
 			progressbar.OptionFullWidth(),
 			progressbar.OptionOnCompletion(func() {
 				fmt.Fprintln(l.options.Writer)
@@ -226,61 +336,20 @@ func (l *Logger) handleLogs(ctx context.Context, logCh <-chan string, logger *sl
 		)
 	}
 
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-l.successCh:
-			if l.options.ShowProgressBar {
-				if err := progressBar.Finish(); err != nil {
-					logger.Debug("failed to finish progress bar", "error", err)
-				}
-			}
-
-			return
-		case logLine := <-logCh:
-			if l.options.ParseLineFunc == nil {
-				continue
-			}
-
-			progress, err := l.options.ParseLineFunc(logLine)
-			if err != nil {
-				logger.Log(ctx, slog.LevelDebug-1, "failed to parse progress line", "error", err)
-
-				continue
-			}
-
-			if !l.options.ShowProgressBar {
-				args := []any{
-					slog.Group(
-						"progress",
-						"transferred",
-						progress.Transferred,
-						"total",
-						progress.Total,
-						"percentage",
-						progress.Percentage,
-					),
-				}
-
-				if l.options.Source != "" {
-					args = append(args, slog.String("source", l.options.Source))
-				}
-
-				logger.Debug(logLine, args...)
-			} else {
-				if err = updateProgressBar(progressBar, progress.Transferred, progress.Total); err != nil {
-					logger.Warn("🔶 Failed to update progress bar", "error", err, "progress", progress)
-				}
-			}
-		}
-	}
+	return l.progressBar
 }
 
-func updateProgressBar(progressBar *progressbar.ProgressBar, transferred, total int64) error {
-	progressBar.ChangeMax64(total)
+func (l *Logger) updateProgressBar(progressBar *progressbar.ProgressBar, transferred, total int64) error {
+	// Raise-only, and only when it actually grew: the library re-renders on
+	// every max change using the previous transferred count, so an unconditional
+	// call painted a strictly lower percentage before each real update and the
+	// bar visibly stepped backward on every other frame.
+	if total > l.barMax {
+		l.barMax = total
+		progressBar.ChangeMax64(total)
+	}
 
-	if total == 0 { // cannot update progress bar when its max is 0
+	if l.barMax == 0 { // cannot update progress bar when its max is 0
 		return nil
 	}
 

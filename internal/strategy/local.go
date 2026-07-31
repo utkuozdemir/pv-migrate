@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strings"
 	"time"
 
 	gossh "golang.org/x/crypto/ssh"
@@ -30,8 +31,7 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	req := mig.Request
 
 	if req.Detach {
-		return fmt.Errorf("local strategy requires a persistent connection through the local machine: %w",
-			ErrUnaccepted)
+		return Declined("local strategy requires a persistent connection through the local machine")
 	}
 
 	if hasHelmOverrides(req) {
@@ -49,21 +49,21 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	attempt.ReleaseNames = []string{srcReleaseName, destReleaseName}
 
 	if err = installLocalOnSource(
-		attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, logger,
+		ctx, attempt, srcReleaseName, publicKey, privateKey, privateKeyMountPath, logger,
 	); err != nil {
 		return fmt.Errorf("failed to install on source: %w", err)
 	}
 
-	if err = installLocalOnDest(attempt, destReleaseName, publicKey, logger); err != nil {
+	if err = installLocalOnDest(ctx, attempt, destReleaseName, publicKey, logger); err != nil {
 		return fmt.Errorf("failed to install on dest: %w", err)
 	}
 
-	srcPod, err := getSshdPodForHelmRelease(ctx, mig.SourceInfo, srcReleaseName)
+	srcPod, err := getSshdPodForHelmRelease(ctx, mig.SourceInfo, srcReleaseName, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get source sshd pod: %w", err)
 	}
 
-	destPod, err := getSshdPodForHelmRelease(ctx, mig.DestInfo, destReleaseName)
+	destPod, err := getSshdPodForHelmRelease(ctx, mig.DestInfo, destReleaseName, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get dest sshd pod: %w", err)
 	}
@@ -224,18 +224,16 @@ func runRsyncSession(
 ) error {
 	reader, writer := io.Pipe()
 
-	session.Stdout = writer
-	session.Stderr = writer
+	// The tail records at the source, before the pipe: the async progress
+	// pipeline may still be draining when the session ends, but this writer has
+	// already seen every byte, so a failure message never misses the last lines.
+	tail := &lineTail{limit: sessionTailLines}
+	output := io.MultiWriter(tail, writer)
 
-	progressLogger := progresslog.NewLogger(progresslog.LoggerOptions{
-		Writer:          req.Writer,
-		ShowProgressBar: req.ShowProgressBar,
-		LogStreamFunc: func(context.Context) (io.ReadCloser, error) {
-			return reader, nil
-		},
-		ParseLineFunc: rsyncprogress.ParseLine,
-		Source:        rsyncComponent,
-	})
+	session.Stdout = output
+	session.Stderr = output
+
+	progressLogger := sessionProgressLogger(req, reader)
 
 	// rsyncDone is closed by the rsync goroutine after it finishes (and after its deferred
 	// cleanups run), so the context-watcher goroutine knows when to exit.
@@ -268,19 +266,135 @@ func runRsyncSession(
 
 	// Rsync runner: executes rsync on the source pod via SSH, then tears down shared
 	// resources so the other goroutines can exit cleanly.
+	var vanished bool
+
 	eg.Go(func() error {
 		defer close(rsyncDone)
 		defer func() { logClose(writer, logger, "🔶 Failed to close pipe writer") }()
 		defer func() { logClose(tunnelListener, logger, "🔶 Failed to close tunnel listener") }()
 
-		if runErr := session.Run(rsyncCmd); runErr != nil {
-			return fmt.Errorf("rsync session failed: %w", runErr)
-		}
+		var sessionVanished bool
 
-		return progressLogger.MarkAsComplete(ctx)
+		err := completeRsyncSession(ctx, session.Run(rsyncCmd), progressLogger, &sessionVanished)
+		vanished = sessionVanished
+
+		return err
 	})
 
-	return eg.Wait() //nolint:wrapcheck
+	// The group is joined before anything is reported: the progress bar owns the
+	// output until every goroutine has stopped, and the tail is complete by now.
+	return finishRsyncSession(eg.Wait(), vanished, tail, progressLogger, logger)
+}
+
+// finishRsyncSession reports the joined group's outcome. Only the session's own
+// failure gets the exit-status interpretation and the output tail; any other
+// error passes through untouched.
+func finishRsyncSession(
+	waitErr error, vanished bool, tail *lineTail, progressLogger *progresslog.Logger, logger *slog.Logger,
+) error {
+	if waitErr != nil {
+		var sessionErr *rsyncRunError
+		if errors.As(waitErr, &sessionErr) {
+			return rsyncSessionError(sessionErr.err, tail.Lines())
+		}
+
+		return waitErr //nolint:wrapcheck
+	}
+
+	progressLogger.FinishBar(logger)
+
+	if vanished {
+		logger.Warn("🔶 Completed with a warning: some source files vanished during the transfer and were skipped. " +
+			"Re-run the migration, or copy from a source that is not being written to")
+	}
+
+	return nil
+}
+
+// sessionProgressLogger tails the pipe the rsync session writes into.
+func sessionProgressLogger(req *migration.Request, reader io.ReadCloser) *progresslog.Logger {
+	return progresslog.NewLogger(progresslog.LoggerOptions{
+		Writer:          req.Writer,
+		ShowProgressBar: req.ShowProgressBar,
+		LogStreamFunc: func(context.Context) (io.ReadCloser, error) {
+			return reader, nil
+		},
+		ParseLineFunc: rsyncprogress.ParseLine,
+		Source:        rsyncComponent,
+	})
+}
+
+// exitStatusError is a failure that carries the status the remote command exited
+// with. The interface rather than the concrete type, because the SSH exit error's
+// status cannot be set from outside its own package and so cannot be tested for.
+type exitStatusError interface {
+	error
+	ExitStatus() int
+}
+
+var _ exitStatusError = (*gossh.ExitError)(nil)
+
+// rsyncRunError marks a failure of the rsync session itself, as opposed to the
+// tunnel or the progress logger, so the caller knows which error to explain
+// with the session's exit status and output tail.
+type rsyncRunError struct {
+	err error
+}
+
+func (e *rsyncRunError) Error() string { return e.err.Error() }
+
+func (e *rsyncRunError) Unwrap() error { return e.err }
+
+// completeRsyncSession turns the session's result into the attempt's result.
+// A vanished-files exit falls through to the completion signal rather than
+// returning early: the progress logger keeps retrying the closed pipe until it
+// is told the transfer is done, so an early return would never let the group
+// finish. The vanished flag is reported back rather than logged here, because
+// the progress bar still owns the output at this point.
+func completeRsyncSession(
+	ctx context.Context,
+	runErr error,
+	progressLogger *progresslog.Logger,
+	vanished *bool,
+) error {
+	if runErr != nil {
+		if !isVanishedSourceFiles(runErr) {
+			return &rsyncRunError{err: runErr}
+		}
+
+		*vanished = true
+	}
+
+	return progressLogger.MarkAsComplete(ctx)
+}
+
+// isVanishedSourceFiles reports whether rsync stopped only because files
+// disappeared from the source while it was reading them. There is no retry
+// script on this path, so the in-cluster script's rule lands here instead.
+func isVanishedSourceFiles(runErr error) bool {
+	var exitErr exitStatusError
+
+	return errors.As(runErr, &exitErr) && exitErr.ExitStatus() == rsync.VanishedFilesExitCode
+}
+
+// rsyncSessionError explains a failed local rsync session with what was observed:
+// the status the session reported, rsync's documented meaning for it, and the
+// last raw output lines, which unlike an in-cluster job have no log to fetch back.
+func rsyncSessionError(runErr error, recentLines []string) error {
+	err := fmt.Errorf("rsync session failed: %w", runErr)
+
+	var exitErr exitStatusError
+	if errors.As(runErr, &exitErr) {
+		if meaning := rsync.Interpret(exitErr.ExitStatus()); meaning != "" {
+			err = fmt.Errorf("%w (%s)", err, meaning)
+		}
+	}
+
+	if len(recentLines) > 0 {
+		err = fmt.Errorf("%w\nlast lines of rsync output:\n%s", err, strings.Join(recentLines, "\n"))
+	}
+
+	return err
 }
 
 func forwardTunnelConnections(ctx context.Context, listener net.Listener, destPort int, logger *slog.Logger) error {
@@ -373,6 +487,7 @@ func getSshdPodForHelmRelease(
 	ctx context.Context,
 	pvcInfo *pvc.Info,
 	name string,
+	logger *slog.Logger,
 ) (*corev1.Pod, error) {
 	labelSelector := "app.kubernetes.io/component=sshd,app.kubernetes.io/instance=" + name
 
@@ -381,6 +496,7 @@ func getSshdPodForHelmRelease(
 		pvcInfo.ClusterClient.KubeClient,
 		pvcInfo.Claim.Namespace,
 		labelSelector,
+		logger,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get sshd pod for helm release %s: %w", name, err)
@@ -390,6 +506,7 @@ func getSshdPodForHelmRelease(
 }
 
 func installLocalOnSource(
+	ctx context.Context,
 	attempt *migration.Attempt,
 	releaseName, publicKey, privateKey, privateKeyMountPath string,
 	logger *slog.Logger,
@@ -406,15 +523,18 @@ func installLocalOnSource(
 	sshdVals["privateKey"] = privateKey
 	sshdVals["privateKeyMountPath"] = privateKeyMountPath
 
-	return installHelmChart(attempt, mig.SourceInfo, releaseName, map[string]any{sshdComponent: sshdVals}, logger)
+	return installHelmChart(ctx, attempt, mig.SourceInfo, releaseName, map[string]any{sshdComponent: sshdVals}, logger)
 }
 
-func installLocalOnDest(attempt *migration.Attempt, releaseName, publicKey string, logger *slog.Logger) error {
+func installLocalOnDest(
+	ctx context.Context, attempt *migration.Attempt, releaseName, publicKey string, logger *slog.Logger,
+) error {
 	mig := attempt.Migration
 	side := componentSide{info: mig.DestInfo, mountPath: destMountPath}
 
 	return installHelmChart(
-		attempt, mig.DestInfo, releaseName, map[string]any{sshdComponent: buildSshdHelmValues(side, publicKey)}, logger,
+		ctx, attempt, mig.DestInfo, releaseName,
+		map[string]any{sshdComponent: buildSshdHelmValues(side, publicKey)}, logger,
 	)
 }
 
