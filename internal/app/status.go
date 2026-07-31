@@ -7,14 +7,17 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/jobprogress"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/opid"
@@ -37,7 +40,8 @@ func buildStatusCmd(logger **slog.Logger) *cobra.Command {
 				return errors.New("operation ID must not be empty")
 			}
 
-			return runStatus(cmd.Context(), *logger, kubeconfig, kubeContext, namespace, args[0], follow)
+			return runStatus(cmd.Context(), *logger, kubeconfig, kubeContext, namespace, args[0], follow,
+				structuredLogsRequested(cmd))
 		},
 	}
 
@@ -51,7 +55,8 @@ func buildStatusCmd(logger **slog.Logger) *cobra.Command {
 }
 
 func runStatus(
-	ctx context.Context, logger *slog.Logger, kubeconfig, kubeContext, namespace, operationID string, follow bool,
+	ctx context.Context, logger *slog.Logger, kubeconfig, kubeContext, namespace, operationID string,
+	follow, structuredLogs bool,
 ) error {
 	client, err := k8s.GetClusterClient(kubeconfig, kubeContext, logger)
 	if err != nil {
@@ -71,18 +76,9 @@ func runStatus(
 	}
 
 	if follow {
-		if job.Status.Succeeded > 0 || job.Status.Failed > 0 {
-			k8s.WriteRecentJobPodLogs(ctx, client.KubeClient, job, os.Stderr, logger)
-			printJobStatus(job, logger)
-
-			if job.Status.Failed > 0 {
-				return fmt.Errorf("failed to follow progress: job %s/%s failed", job.Namespace, job.Name)
-			}
-
-			return nil
-		}
-
-		err = followJobProgress(ctx, client.KubeClient, job, logger)
+		// No special case for an already-finished job: the waiter handles a
+		// terminal pod, and it is the only path that explains the exit code.
+		err = followJobProgress(ctx, client.KubeClient, job, structuredLogs, logger)
 		job = refreshJob(ctx, client.KubeClient, job, logger)
 		printJobStatus(job, logger)
 
@@ -93,15 +89,50 @@ func runStatus(
 		printJobProgress(ctx, client.KubeClient, job, logger)
 	}
 
+	// A failed operation is why status gets run at all, so the one-line status
+	// alone would bury the answer the pod still holds. The status line leads, so
+	// the evidence below it has context, then the explanation closes, and the
+	// exit code is non-zero so automation sees the failure too.
+	if job.Status.Failed > 0 {
+		printJobStatus(job, logger)
+
+		palette := console.Palette{Enabled: console.ForTerminal(isatty.IsTerminal(os.Stderr.Fd()), structuredLogs)}
+		explanation := k8s.DescribeJobFailure(ctx, client.KubeClient, job)
+
+		// The migration summary's shape: the verdict with its cause first, the
+		// evidence below it. In structured mode the explanation travels as a
+		// record instead, and the evidence follows the same rule.
+		if structuredLogs {
+			if explanation != "" {
+				logger.Error("❌ Operation failed", "error", explanation)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "\n%s\n", palette.Failure("Operation failed."))
+
+			for line := range strings.SplitSeq(explanation, "\n") {
+				fmt.Fprintf(os.Stderr, "    %s\n", line)
+			}
+		}
+
+		k8s.WriteJobFailureEvidence(ctx, client.KubeClient, job, structuredLogs, palette, os.Stderr, logger)
+
+		return fmt.Errorf("operation %s failed", operationID)
+	}
+
 	printJobStatus(job, logger)
 
 	return nil
 }
 
-func followJobProgress(ctx context.Context, cli kubernetes.Interface, job *batchv1.Job, logger *slog.Logger) error {
+func followJobProgress(
+	ctx context.Context, cli kubernetes.Interface, job *batchv1.Job, structuredLogs bool, logger *slog.Logger,
+) error {
 	logger.Info("Following job progress", "job", job.Name, "type", jobprogress.Description(job.Name))
 
-	if err := k8s.WaitForJobCompletion(ctx, cli, job.Namespace, job.Name, true, os.Stderr, logger); err != nil {
+	palette := console.Palette{Enabled: console.ForTerminal(isatty.IsTerminal(os.Stderr.Fd()), structuredLogs)}
+
+	if err := k8s.WaitForJobCompletion(ctx, cli, job.Namespace, job.Name, true, structuredLogs,
+		palette, os.Stderr, logger); err != nil {
 		return fmt.Errorf("failed to follow progress: %w", err)
 	}
 
@@ -166,23 +197,53 @@ func printJobStatus(job *batchv1.Job, logger *slog.Logger) {
 		status = "Pending"
 	}
 
-	var elapsed string
+	elapsed := jobElapsed(job)
 
-	if job.Status.StartTime != nil {
-		end := time.Now()
-		if job.Status.CompletionTime != nil {
-			end = job.Status.CompletionTime.Time
-		}
+	// The level carries the state: a failed operation announced at a green INFO
+	// reads as fine on a skim.
+	logFn := logger.Info
 
-		elapsed = end.Sub(job.Status.StartTime.Time).Truncate(time.Second).String()
+	switch {
+	case job.Status.Failed > 0:
+		logFn = logger.Error
+	case job.Status.Succeeded == 0 && job.Status.Active == 0:
+		logFn = logger.Warn
 	}
 
-	logger.Info("Operation status",
+	logFn("Operation status",
 		"job", job.Name,
 		"namespace", job.Namespace,
 		"status", status,
 		"elapsed", elapsed,
 	)
+}
+
+// jobElapsed reports how long the job ran. A failed job has no completion
+// time, and "now minus start" on one that failed days ago reads as a days-long
+// run, so the failure condition's transition time is the end when it is there.
+func jobElapsed(job *batchv1.Job) string {
+	if job.Status.StartTime == nil {
+		return ""
+	}
+
+	end := time.Now()
+
+	switch {
+	case job.Status.CompletionTime != nil:
+		end = job.Status.CompletionTime.Time
+	case job.Status.Failed > 0:
+		for i := range job.Status.Conditions {
+			cond := &job.Status.Conditions[i]
+			if cond.Type == batchv1.JobFailed && cond.Status == corev1.ConditionTrue &&
+				!cond.LastTransitionTime.IsZero() {
+				end = cond.LastTransitionTime.Time
+
+				break
+			}
+		}
+	}
+
+	return end.Sub(job.Status.StartTime.Time).Truncate(time.Second).String()
 }
 
 func formatBytes(bytes int64) string {

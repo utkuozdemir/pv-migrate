@@ -3,6 +3,8 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -11,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
+	clientcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
 	watchtools "k8s.io/client-go/tools/watch"
 )
@@ -19,15 +22,65 @@ const (
 	podWatchTimeout = 2 * time.Minute
 )
 
-func WaitForPod(ctx context.Context, cli kubernetes.Interface, ns, labelSelector string) (*corev1.Pod, error) {
+func WaitForPod(
+	ctx context.Context, cli kubernetes.Interface, ns, labelSelector string, logger *slog.Logger,
+) (*corev1.Pod, error) {
 	var result *corev1.Pod
+
+	// The watch already delivers every pod update; narrating a container's
+	// waiting reason the moment it appears turns minutes of silence into an
+	// answer, using the same observation the failure block would print later.
+	lastWaiting := ""
 
 	resCli := cli.CoreV1().Pods(ns)
 
 	ctx, cancel := context.WithTimeout(ctx, podWatchTimeout)
 	defer cancel()
 
-	listWatch := &cache.ListWatch{
+	listWatch := podLabelListWatch(resCli, labelSelector)
+
+	condition := func(event watch.Event) (bool, error) {
+		res, ok := event.Object.(*corev1.Pod)
+		if !ok {
+			return false, fmt.Errorf(
+				"unexpected type while watching pods: ns: %s, labelSelector: %s",
+				ns,
+				labelSelector,
+			)
+		}
+
+		if waiting := describePodWaiting(res); waiting != "" && waiting != lastWaiting && logger != nil {
+			lastWaiting = waiting
+
+			logger.Warn("🔶 Pod is not starting yet", "pod", res.Name, "waiting", waiting)
+		}
+
+		if res.Status.Phase != corev1.PodPending {
+			result = res
+
+			return true, nil
+		}
+
+		return false, nil
+	}
+
+	if _, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil, condition); err != nil {
+		// The bare watch error says "timed out waiting for the condition" and
+		// names neither the wait nor its budget.
+		if ctx.Err() != nil {
+			return nil, fmt.Errorf("timed out after %s waiting for a pod (selector %s) to start: %w",
+				podWatchTimeout, labelSelector, err)
+		}
+
+		return nil, fmt.Errorf("failed to wait for pod: %w", err)
+	}
+
+	return result, nil
+}
+
+// podLabelListWatch lists and watches pods by label selector.
+func podLabelListWatch(resCli clientcorev1.PodInterface, labelSelector string) *cache.ListWatch {
+	return &cache.ListWatch{
 		ListWithContextFunc: func(ctx context.Context, options metav1.ListOptions) (runtime.Object, error) {
 			options.LabelSelector = labelSelector
 
@@ -49,35 +102,28 @@ func WaitForPod(ctx context.Context, cli kubernetes.Interface, ns, labelSelector
 			return resWatch, nil
 		},
 	}
-
-	if _, err := watchtools.UntilWithSync(ctx, listWatch, &corev1.Pod{}, nil,
-		func(event watch.Event) (bool, error) {
-			res, ok := event.Object.(*corev1.Pod)
-			if !ok {
-				return false, fmt.Errorf(
-					"unexpected type while watching pods: ns: %s, labelSelector: %s",
-					ns,
-					labelSelector,
-				)
-			}
-
-			phase := res.Status.Phase
-			if phase != corev1.PodPending {
-				result = res
-
-				return true, nil
-			}
-
-			return false, nil
-		}); err != nil {
-		return nil, fmt.Errorf("failed to wait for pod: %w", err)
-	}
-
-	return result, nil
 }
 
-func waitForPodTermination(ctx context.Context, cli kubernetes.Interface, ns, name string) (*corev1.PodPhase, error) {
-	var result *corev1.PodPhase
+// describePodWaiting summarizes why a pending pod's containers are waiting, or
+// returns an empty string when there is nothing to say yet.
+func describePodWaiting(pod *corev1.Pod) string {
+	var parts []string
+
+	for i := range pod.Status.ContainerStatuses {
+		status := &pod.Status.ContainerStatuses[i]
+		if status.State.Waiting != nil && status.State.Waiting.Reason != "" {
+			parts = append(parts, status.Name+": "+describeWaiting(status.State.Waiting))
+		}
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+// waitForPodTermination returns the pod as it looked when it left the Running
+// phase. The whole object rather than the phase, because whoever decided the pod
+// failed also needs the container's exit code from that same observation.
+func waitForPodTermination(ctx context.Context, cli kubernetes.Interface, ns, name string) (*corev1.Pod, error) {
+	var result *corev1.Pod
 
 	resCli := cli.CoreV1().Pods(ns)
 
@@ -87,9 +133,7 @@ func waitForPodTermination(ctx context.Context, cli kubernetes.Interface, ns, na
 	}
 
 	if pod.Status.Phase != corev1.PodRunning {
-		phase := pod.Status.Phase
-
-		return &phase, nil
+		return pod, nil
 	}
 
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
@@ -123,9 +167,8 @@ func waitForPodTermination(ctx context.Context, cli kubernetes.Interface, ns, na
 				return false, fmt.Errorf("unexpected type while watching pods: %s/%s", ns, name)
 			}
 
-			phase := res.Status.Phase
-			if phase != corev1.PodRunning {
-				result = &phase
+			if res.Status.Phase != corev1.PodRunning {
+				result = res
 
 				return true, nil
 			}

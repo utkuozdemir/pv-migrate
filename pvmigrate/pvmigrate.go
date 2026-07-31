@@ -117,9 +117,22 @@ type Migration struct {
 
 	Writer io.Writer
 	Logger *slog.Logger
+
+	// StructuredLogs reports that Logger writes machine-readable records to the
+	// same stream as Writer. Set it to keep plain-text blocks such as the failure
+	// summary out of that stream; the same information is logged instead.
+	StructuredLogs bool
+
+	// ColorOutput colors the plain-text report blocks semantically. Set it only
+	// when Writer is a terminal.
+	ColorOutput bool
 }
 
 // Run executes the migration.
+//
+// When every requested strategy declines or fails, the returned error's message
+// stays a single line, and the per-strategy errors are reachable through the
+// standard unwrap tree, so errors.Is and errors.As can inspect them.
 func Run(ctx context.Context, migration Migration) error {
 	migration.ApplyDefaults()
 
@@ -229,5 +242,7 @@ func toInternalRequest(mig *Migration) *migration.Request {
 		HelmFileValues:        mig.HelmFileValues,
 		HelmStringValues:      mig.HelmStringValues,
 		Writer:                mig.Writer,
+		StructuredLogs:        mig.StructuredLogs,
+		ColorOutput:           mig.ColorOutput,
 	}
 }

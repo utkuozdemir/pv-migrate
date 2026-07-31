@@ -14,7 +14,7 @@ type Mount struct{}
 func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	if reason := r.cannotDoReason(mig); reason != "" {
-		return fmt.Errorf("%s: %w", reason, ErrUnaccepted)
+		return Declined(reason)
 	}
 
 	sourceInfo := attempt.Migration.SourceInfo
@@ -52,9 +52,8 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	releaseName := attempt.HelmReleaseNamePrefix
 	attempt.ReleaseNames = []string{releaseName}
 
-	err = installHelmChart(attempt, sourceInfo, releaseName, vals, logger)
-	if err != nil {
-		return fmt.Errorf("failed to install helm chart: %w", err)
+	if err = installHelmChart(ctx, attempt, sourceInfo, releaseName, vals, logger); err != nil {
+		return err
 	}
 
 	return waitForRsyncJob(ctx, attempt, sourceInfo, releaseName, logger)

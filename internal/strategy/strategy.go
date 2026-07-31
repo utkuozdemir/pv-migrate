@@ -1,6 +1,7 @@
 package strategy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -18,6 +19,8 @@ import (
 	"helm.sh/helm/v4/pkg/storage/driver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
+	"github.com/utkuozdemir/pv-migrate/internal/console"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 )
@@ -64,6 +67,26 @@ var (
 
 	ErrUnaccepted = errors.New("unaccepted")
 )
+
+// DeclinedError reports that a strategy cannot handle this migration, together
+// with the reason it gave. It unwraps to ErrUnaccepted so the ladder's existing
+// check is unaffected, and the reason stays reachable without parsing a message.
+type DeclinedError struct {
+	Reason string
+}
+
+func (e *DeclinedError) Error() string {
+	return e.Reason + ": " + ErrUnaccepted.Error()
+}
+
+func (e *DeclinedError) Unwrap() error {
+	return ErrUnaccepted
+}
+
+// Declined returns the error a strategy returns when it cannot do the job.
+func Declined(reason string) error {
+	return &DeclinedError{Reason: reason}
+}
 
 type Strategy interface {
 	// Run runs the migration for the given task execution.
@@ -227,12 +250,20 @@ func getMergedHelmValues(
 }
 
 func installHelmChart(
+	ctx context.Context,
 	attempt *migration.Attempt,
 	pvcInfo *pvc.Info,
 	name string,
 	values map[string]any,
 	logger *slog.Logger,
 ) error {
+	// Recorded before anything is installed, and here rather than reconstructed
+	// later, because this is the one point every strategy passes through and the
+	// only one that knows which cluster and namespace this release goes into. An
+	// install that creates nothing simply yields nothing to report.
+	attempt.DiagnosticTargets = append(attempt.DiagnosticTargets,
+		migration.DiagnosticTarget{Release: name, Info: pvcInfo})
+
 	helmActionConfig, err := initHelmActionConfig(pvcInfo)
 	if err != nil {
 		return fmt.Errorf("failed to init helm action config: %w", err)
@@ -245,11 +276,8 @@ func installHelmChart(
 	install.ReleaseName = name
 	install.WaitStrategy = kube.LegacyStrategy
 
-	if req := mig.Request; req.HelmTimeout < req.LoadBalancerTimeout {
-		install.Timeout = req.LoadBalancerTimeout
-	} else {
-		install.Timeout = req.HelmTimeout
-	}
+	timeout, timeoutFlag := effectiveInstallTimeout(mig.Request, values)
+	install.Timeout = timeout
 
 	applyNonRootValues(values, mig.Request)
 
@@ -258,9 +286,102 @@ func installHelmChart(
 		return fmt.Errorf("failed to get merged helm values: %w", err)
 	}
 
+	// A long wait usually means the cluster already knows what is stuck, so at
+	// half the budget the resources are peeked at once, turning the silent half
+	// of the wait into an answer.
+	stopPeek := peekAfter(timeout/2, func() {
+		writeMidInstallDiagnostics(ctx, attempt, pvcInfo, name, logger)
+	})
+	defer stopPeek()
+
 	if _, err = install.Run(mig.Chart, vals); err != nil {
+		// The bare context error names no duration and no knob, and it is the
+		// headline of every stuck-resource failure.
+		if errors.Is(err, context.DeadlineExceeded) {
+			return fmt.Errorf(
+				"timed out after %s waiting for the release's resources to become ready (see %s): %w",
+				timeout, timeoutFlag, err)
+		}
+
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
 	return nil
+}
+
+// effectiveInstallTimeout picks the install wait budget and names the flag it
+// came from. The load balancer timeout only applies when this release actually
+// waits for a load balancer, so a LoadBalancer-only flag cannot silently
+// lengthen every other strategy's install.
+func effectiveInstallTimeout(req *migration.Request, values map[string]any) (time.Duration, string) {
+	if installsLoadBalancer(values) && req.LoadBalancerTimeout > req.HelmTimeout {
+		return req.LoadBalancerTimeout, "--loadbalancer-timeout, which exceeds --helm-timeout"
+	}
+
+	return req.HelmTimeout, "--helm-timeout"
+}
+
+// installsLoadBalancer reports whether the values ask for a LoadBalancer
+// service, which the install wait then waits on.
+func installsLoadBalancer(values map[string]any) bool {
+	sshd, ok := values[sshdComponent].(map[string]any)
+	if !ok {
+		return false
+	}
+
+	service, ok := sshd["service"].(map[string]any)
+	if !ok {
+		return false
+	}
+
+	return service["type"] == "LoadBalancer"
+}
+
+// peekAfter runs the peek once after the delay unless stopped first.
+func peekAfter(delay time.Duration, peek func()) func() {
+	done := make(chan struct{})
+
+	go func() {
+		select {
+		case <-done:
+		case <-time.After(delay):
+			peek()
+		}
+	}()
+
+	return func() { close(done) }
+}
+
+// writeMidInstallDiagnostics narrates a still-running install wait with what the
+// cluster reports at that moment, on the same writer and in the same shape the
+// failure block would use. Log records carry it on a structured stream.
+func writeMidInstallDiagnostics(
+	ctx context.Context,
+	attempt *migration.Attempt,
+	pvcInfo *pvc.Info,
+	release string,
+	logger *slog.Logger,
+) {
+	req := attempt.Migration.Request
+	cli := pvcInfo.ClusterClient.KubeClient
+	ns := pvcInfo.Claim.Namespace
+
+	if req.StructuredLogs {
+		var buf bytes.Buffer
+
+		k8s.WriteWorkloadDiagnostics(ctx, cli, ns,
+			k8s.InstanceLabelSelector(release), console.Palette{}, &buf, logger)
+		logger.Warn("🔶 Still waiting for the release's resources; what the cluster reports so far",
+			"release", release, "namespace", ns, "diagnostics", buf.String())
+
+		return
+	}
+
+	palette := console.Palette{Enabled: req.ColorOutput}
+
+	fmt.Fprintf(req.Writer, "\n%s\n\n  %s (namespace %s):\n",
+		palette.Bold("Still waiting; what the cluster reports so far:"), release, ns)
+	k8s.WriteWorkloadDiagnostics(ctx, cli, ns,
+		k8s.InstanceLabelSelector(release), palette, req.Writer, logger)
+	fmt.Fprintln(req.Writer)
 }

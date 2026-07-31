@@ -368,6 +368,26 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 	return nil
 }
 
+// structuredLogsRequested reports whether this invocation logs machine-readable
+// records, in which case plain-text blocks would corrupt the stream they share.
+func structuredLogsRequested(cmd *cobra.Command) bool {
+	format, err := cmd.Flags().GetString(FlagLogFormat)
+
+	return err == nil && format == logFormatJSON
+}
+
+// colorOutputWanted reports whether the plain-text blocks written to the given
+// writer should be colored: a terminal on the other end, no structured stream.
+func colorOutputWanted(cmd *cobra.Command, writer io.Writer) bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+
+	file, ok := writer.(*os.File)
+
+	return ok && isatty.IsTerminal(file.Fd()) && !structuredLogsRequested(cmd)
+}
+
 func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, logger *slog.Logger) error {
 	ctx := cmd.Context()
 
@@ -375,6 +395,8 @@ func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, logger
 	options.Migration.KeyAlgorithm = pvmigrate.KeyAlgorithm(options.keyAlgorithm)
 	options.Migration.Writer = writer
 	options.Migration.Logger = logger
+	options.Migration.StructuredLogs = options.LogFormat == logFormatJSON
+	options.Migration.ColorOutput = colorOutputWanted(cmd, writer)
 
 	logger.Info("🚀 Starting migration")
 
@@ -382,11 +404,9 @@ func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, logger
 		logger.Info("❕ Extraneous files will be deleted from the destination")
 	}
 
-	if err := pvmigrate.Run(ctx, options.Migration); err != nil {
-		return fmt.Errorf("migration failed: %w", err)
-	}
-
-	return nil
+	// The public API already prefixes the error with "migration failed"; wrapping
+	// it again here only doubled the prefix in the one line the user reads.
+	return pvmigrate.Run(ctx, options.Migration)
 }
 
 func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*slog.Logger, error) {
@@ -405,7 +425,7 @@ func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*sl
 	case logFormatText:
 		handler = tint.NewTextHandler(writer, &tint.Options{
 			Level:   level,
-			NoColor: !isATTY,
+			NoColor: !isATTY || os.Getenv("NO_COLOR") != "",
 		})
 	default:
 		return nil, fmt.Errorf("unknown log format: %s", logFormat)

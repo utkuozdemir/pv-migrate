@@ -125,6 +125,11 @@ Some specifics that surprise people:
 - rsync prints no total, so the total is inferred by scaling the transferred count by the percentage. That multiplication is skipped when it would overflow, because an out-of-range float-to-int conversion is implementation-defined in Go and would otherwise give a different answer on each CI architecture.
 - rclone prints JSON and revises its total upward as it walks, so a stats line can legitimately show more transferred than total.
 - Both `FindLast` functions share one implementation in `internal/progresslog`. Keep it that way: the previous duplicate drifted and one copy went stale.
+- While a transfer is being followed, the progress logger owns the writer, and it retries an ended stream until it is cancelled.
+  Anything that wants to print to that writer has to cancel the tail and join the goroutine first, or it interleaves with the bar's redraws.
+  The same retry is why a data mover result that is being treated as a success must still reach the logger's completion signal rather than returning early: the goroutine would otherwise never finish.
+- A retried follow resumes at the log's tail instead of replaying it, the bar is created once per transfer rather than once per stream attempt, and updates that move the transferred count backward are dropped.
+  All three exist because a replayed log used to re-drive a fresh bar to completion on every retry, stranding a finished bar line each time with a nonsense transfer rate.
 
 ## The embedded chart
 
@@ -133,6 +138,9 @@ Two things follow:
 
 - The chart is not published for standalone use and is not versioned independently. Its in-repo version is a placeholder that the CLI overwrites with its own at load time.
 - Changing a template changes the binary, so chart edits are code changes and need the Go tests, not only `helm lint`.
+- The Job scripts decide the container's exit code, and the client reads it back and attaches the data mover's own documented meaning for it.
+  So the retry loops capture the code rather than collapsing it, a condition the script decides to treat as a success announces itself with a line the client scans for, and the interpretation tables live next to the command builders they describe.
+  These scripts are covered by rendering the chart in a Go test and running the script under a real shell with a stand-in data mover, with the retry values zeroed so nothing sleeps.
 
 The chart README is generated from the comments in `values.yaml` by helm-docs and CI fails if it is stale, so never edit it directly.
 `docs/cli-reference.md` is likewise generated, from the commands' own help output.

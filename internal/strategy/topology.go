@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
@@ -99,7 +100,7 @@ func runTwoReleaseStrategy(
 	sshdRelease, rsyncRelease := releases[0], releases[1]
 	attempt.ReleaseNames = releases[:]
 
-	if err = installSshd(attempt, topo, sshdRelease, publicKey, serviceType, logger); err != nil {
+	if err = installSshd(ctx, attempt, topo, sshdRelease, publicKey, serviceType, logger); err != nil {
 		return fmt.Errorf("failed to install sshd: %w", err)
 	}
 
@@ -113,7 +114,7 @@ func runTwoReleaseStrategy(
 		sshTargetHost = formatSSHTargetHost(mig.Request.DestHostOverride)
 	}
 
-	if err = installRsyncJob(attempt, topo, rsyncRelease, privateKey, privateKeyMountPath,
+	if err = installRsyncJob(ctx, attempt, topo, rsyncRelease, privateKey, privateKeyMountPath,
 		sshTargetHost, target.port, logger); err != nil {
 		return fmt.Errorf("failed to install rsync job: %w", err)
 	}
@@ -194,6 +195,7 @@ func buildRsyncHelmValues(side componentSide, rsyncCmd, privateKey, privateKeyMo
 }
 
 func installSshd(
+	ctx context.Context,
 	attempt *migration.Attempt,
 	topo topology,
 	releaseName, publicKey, serviceType string,
@@ -202,10 +204,11 @@ func installSshd(
 	sshdVals := buildSshdHelmValues(topo.sshd, publicKey)
 	sshdVals["service"] = map[string]any{"type": serviceType}
 
-	return installHelmChart(attempt, topo.sshd.info, releaseName, map[string]any{sshdComponent: sshdVals}, logger)
+	return installHelmChart(ctx, attempt, topo.sshd.info, releaseName, map[string]any{sshdComponent: sshdVals}, logger)
 }
 
 func installRsyncJob(
+	ctx context.Context,
 	attempt *migration.Attempt,
 	topo topology,
 	releaseName, privateKey, privateKeyMountPath, sshHost string,
@@ -226,7 +229,8 @@ func installRsyncJob(
 		rsyncVals["sshRemotePort"] = sshPort
 	}
 
-	return installHelmChart(attempt, topo.rsync.info, releaseName, map[string]any{rsyncComponent: rsyncVals}, logger)
+	return installHelmChart(
+		ctx, attempt, topo.rsync.info, releaseName, map[string]any{rsyncComponent: rsyncVals}, logger)
 }
 
 func waitForRsyncJob(
@@ -251,12 +255,14 @@ func waitForRsyncJob(
 		return nil
 	}
 
-	if err := k8s.WaitForJobCompletion(
+	// Deliberately not wrapped: the error already names the failed pod and the
+	// exit state, and the summary row already names the strategy, so a
+	// "failed to wait for job completion" prefix would only push the answer
+	// further right.
+	//nolint:wrapcheck
+	return k8s.WaitForJobCompletion(
 		ctx, kubeClient, namespace, jobName,
-		mig.Request.ShowProgressBar, mig.Request.Writer, logger,
-	); err != nil {
-		return fmt.Errorf("failed to wait for job completion: %w", err)
-	}
-
-	return nil
+		mig.Request.ShowProgressBar, mig.Request.StructuredLogs,
+		console.Palette{Enabled: mig.Request.ColorOutput}, mig.Request.Writer, logger,
+	)
 }

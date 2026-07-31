@@ -89,6 +89,8 @@ func runBackup(cmd *cobra.Command, backup *pvmigrate.Backup, logger *slog.Logger
 	ctx := cmd.Context()
 	backup.Writer = cmd.ErrOrStderr()
 	backup.Logger = logger
+	backup.StructuredLogs = structuredLogsRequested(cmd)
+	backup.ColorOutput = colorOutputWanted(cmd, backup.Writer)
 
 	if err := readGCSServiceAccountFile(cmd, &backup.GCSServiceAccountJSON); err != nil {
 		return err
@@ -152,6 +154,8 @@ func runRestore(cmd *cobra.Command, restore *pvmigrate.Restore, logger *slog.Log
 	ctx := cmd.Context()
 	restore.Writer = cmd.ErrOrStderr()
 	restore.Logger = logger
+	restore.StructuredLogs = structuredLogsRequested(cmd)
+	restore.ColorOutput = colorOutputWanted(cmd, restore.Writer)
 
 	if err := readGCSServiceAccountFile(cmd, &restore.GCSServiceAccountJSON); err != nil {
 		return err

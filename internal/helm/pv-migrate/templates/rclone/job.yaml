@@ -54,8 +54,12 @@ spec:
               failure="rclone job"
               while [ "$n" -le "$retries" ]
               do
-                {{ required ".Values.rclone.command is required!" .Values.rclone.command }} {{ .Values.rclone.extraArgs }} && rc=0 && break
+                set -x
+                {{ required ".Values.rclone.command is required!" .Values.rclone.command }} {{ .Values.rclone.extraArgs }}
+                { rc=$?; set +x; } 2>/dev/null
+                [ "$rc" -eq 0 ] && break
                 n=$((n+1))
+                [ "$n" -gt "$retries" ] && break
                 echo "rclone attempt $n/$attempts failed, waiting $period seconds before trying again"
                 sleep $period
               done
@@ -63,23 +67,29 @@ spec:
 
               if [ $rc -eq 0 ]; then
                 echo '{{ .Values.rclone.metadataBase64 }}' | base64 -d > /tmp/metadata.yaml
-                metadata_rc=1
                 n=0
                 while [ "$n" -le "$retries" ]
                 do
-                  rclone --config "$PV_MIGRATE_CONFIG_PATH" copyto /tmp/metadata.yaml "$PV_MIGRATE_METADATA_REMOTE_PATH" && metadata_rc=0 && break
+                  rclone --config "$PV_MIGRATE_CONFIG_PATH" copyto /tmp/metadata.yaml "$PV_MIGRATE_METADATA_REMOTE_PATH"
+                  metadata_rc=$?
+                  [ "$metadata_rc" -eq 0 ] && break
                   n=$((n+1))
+                  [ "$n" -gt "$retries" ] && break
                   echo "metadata upload attempt $n/$attempts failed, waiting $period seconds before trying again"
                   sleep $period
                 done
+                # The metadata object is how a restore finds this backup, so a backup
+                # without it is not a backup. Its failure becomes the job's failure.
                 if [ $metadata_rc -ne 0 ]; then
-                  echo "data synced OK, metadata upload failed after $retries retries"
+                  echo "data synced OK, but the metadata upload failed, so restore would not find this backup"
+                  failure="metadata upload"
+                  rc=$metadata_rc
                 fi
               fi
               {{- end }}
 
               if [ $rc -ne 0 ]; then
-                echo "$failure failed after $retries retries"
+                echo "$failure failed with exit code $rc"
               fi
               exit $rc
           {{- if .Values.rclone.metadataBase64 }}
