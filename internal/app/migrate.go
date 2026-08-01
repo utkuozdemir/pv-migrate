@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 
+	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"github.com/utkuozdemir/pv-migrate/pvmigrate"
 )
@@ -423,7 +424,14 @@ func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*sl
 	case logFormatJSON:
 		handler = slog.NewJSONHandler(writer, &slog.HandlerOptions{Level: level})
 	case logFormatText:
-		handler = tint.NewTextHandler(writer, &tint.Options{
+		out := writer
+		if isATTY {
+			// A transfer paints a progress bar on this same terminal, and a
+			// record printed on top of it corrupts both.
+			out = console.EraseLineBefore(writer)
+		}
+
+		handler = tint.NewTextHandler(out, &tint.Options{
 			Level:   level,
 			NoColor: !isATTY || os.Getenv("NO_COLOR") != "",
 		})

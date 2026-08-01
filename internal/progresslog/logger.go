@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
+	"runtime"
 	"strings"
 	"time"
 
+	"github.com/mattn/go-isatty"
 	"github.com/schollz/progressbar/v3"
 	"golang.org/x/sync/errgroup"
 )
@@ -338,6 +341,11 @@ func (l *Logger) progressBarOnce() *progressbar.ProgressBar {
 			barMaximum,
 			progressbar.OptionSetWriter(l.options.Writer),
 			progressbar.OptionEnableColorCodes(true),
+			// An ordinary frame becomes one write, so that a log record cannot
+			// arrive between a clear and a paint and be painted over. The frame
+			// that completes the bar is still followed by a separate newline
+			// below, which is the one gap left.
+			progressbar.OptionUseANSICodes(paintsInOneWrite(l.options.Writer)),
 			progressbar.OptionFullWidth(),
 			progressbar.OptionOnCompletion(func() {
 				fmt.Fprintln(l.options.Writer)
@@ -355,6 +363,24 @@ func (l *Logger) progressBarOnce() *progressbar.ProgressBar {
 // reconstructing one from its rounded percentage produced an estimate that was
 // wrong by up to a factor of two on the first sample and had to be revised for
 // the rest of the transfer.
+// paintsInOneWrite reports whether the bar may paint a frame as a single write
+// that erases the rest of the line.
+//
+// That needs a terminal which reads the erase sequence, and Windows is left out
+// of it: a console there may not interpret one, and the bar would leave the
+// tail of its previous frame on screen instead of clearing it. The two-write
+// clear it falls back to is what shipped before, so nothing is worse there than
+// it was.
+func paintsInOneWrite(writer io.Writer) bool {
+	if runtime.GOOS == "windows" {
+		return false
+	}
+
+	file, ok := writer.(*os.File)
+
+	return ok && isatty.IsTerminal(file.Fd())
+}
+
 func (l *Logger) updateProgressBar(progressBar *progressbar.ProgressBar, percentage int) error {
 	if err := progressBar.Set64(int64(min(percentage, barStreamedMaximum))); err != nil {
 		return fmt.Errorf("failed to set progress bar value: %w", err)
