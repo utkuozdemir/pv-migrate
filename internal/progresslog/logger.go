@@ -18,6 +18,18 @@ import (
 const (
 	logRetryInitialDelay = 250 * time.Millisecond
 	logRetryMaxDelay     = 5 * time.Second
+
+	// barMaximum is what the bar is drawn against. The data movers state a
+	// percentage, so the bar counts percent and its end never moves.
+	barMaximum = 100
+
+	// barStreamedMaximum is as far as a reported percentage may drive the bar.
+	// Reaching the end finishes the bar for good in the library, and rclone can
+	// report everything transferred and then find more work. Completion is left
+	// to the caller, which knows whether the job itself finished.
+	barStreamedMaximum = barMaximum - 1
+
+	barDescription = "📂 Copying data..."
 )
 
 type LogStreamFunc func(ctx context.Context) (io.ReadCloser, error)
@@ -39,7 +51,6 @@ type Logger struct {
 	// attempts are sequential, so no locking is needed.
 	progressBar    *progressbar.ProgressBar
 	barTransferred int64
-	barMax         int64
 	barFinished    bool
 }
 
@@ -308,7 +319,7 @@ func (l *Logger) handleLine(
 
 	l.barTransferred = progress.Transferred
 
-	if err = l.updateProgressBar(progressBar, progress.Transferred, progress.Total); err != nil {
+	if err = l.updateProgressBar(progressBar, progress.Percentage); err != nil {
 		logger.Warn("🔶 Failed to update progress bar", "error", err, "progress", progress)
 	}
 }
@@ -324,36 +335,28 @@ func (l *Logger) progressBarOnce() *progressbar.ProgressBar {
 
 	if l.progressBar == nil {
 		l.progressBar = progressbar.NewOptions64(
-			1,
+			barMaximum,
 			progressbar.OptionSetWriter(l.options.Writer),
 			progressbar.OptionEnableColorCodes(true),
-			progressbar.OptionShowBytes(true),
 			progressbar.OptionFullWidth(),
 			progressbar.OptionOnCompletion(func() {
 				fmt.Fprintln(l.options.Writer)
 			}),
-			progressbar.OptionSetDescription("📂 Copying data..."),
+			progressbar.OptionSetDescription(barDescription),
 		)
 	}
 
 	return l.progressBar
 }
 
-func (l *Logger) updateProgressBar(progressBar *progressbar.ProgressBar, transferred, total int64) error {
-	// Raise-only, and only when it actually grew: the library re-renders on
-	// every max change using the previous transferred count, so an unconditional
-	// call painted a strictly lower percentage before each real update and the
-	// bar visibly stepped backward on every other frame.
-	if total > l.barMax {
-		l.barMax = total
-		progressBar.ChangeMax64(total)
-	}
-
-	if l.barMax == 0 { // cannot update progress bar when its max is 0
-		return nil
-	}
-
-	if err := progressBar.Set64(transferred); err != nil {
+// updateProgressBar moves the bar to the percentage the data mover last
+// reported. The bar counts percent rather than bytes because that is the one
+// figure both movers state outright: rsync gives no total to count against, and
+// reconstructing one from its rounded percentage produced an estimate that was
+// wrong by up to a factor of two on the first sample and had to be revised for
+// the rest of the transfer.
+func (l *Logger) updateProgressBar(progressBar *progressbar.ProgressBar, percentage int) error {
+	if err := progressBar.Set64(int64(min(percentage, barStreamedMaximum))); err != nil {
 		return fmt.Errorf("failed to set progress bar value: %w", err)
 	}
 

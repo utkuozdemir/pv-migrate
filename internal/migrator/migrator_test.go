@@ -1,8 +1,11 @@
 package migrator
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/neilotoole/slogt/v2"
@@ -202,6 +205,55 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	err := migrator.Run(ctx, mig, logger)
 	require.NoError(t, err)
 	assert.Equal(t, []int{3, 1, 2}, result)
+}
+
+// TestRunStatesItsIdentityOnce pins the shape of the run's logging: the source
+// and destination are said once, in the record that announces the migration,
+// and every record from there on carries the identifier that groups them.
+func TestRunStatesItsIdentityOnce(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+
+	migrator := Migrator{
+		getKubeClient: fakeClusterClientGetter(),
+		getStrategyMap: func([]string) (map[string]strategy.Strategy, error) {
+			return map[string]strategy.Strategy{"str1": &mockStrategy{
+				runFunc: func(context.Context, *migration.Attempt) error { return nil },
+			}}, nil
+		},
+	}
+
+	req := buildMigrationRequestWithStrategies([]string{"str1"}, true)
+
+	require.NoError(t, migrator.Run(t.Context(), req, slog.New(slog.NewJSONHandler(&buf, nil))))
+
+	announcements, identified, total := 0, 0, 0
+
+	for line := range strings.Lines(buf.String()) {
+		var record map[string]any
+
+		require.NoError(t, json.Unmarshal([]byte(line), &record))
+
+		total++
+
+		if _, ok := record["migration_id"]; ok {
+			identified++
+		}
+
+		if _, ok := record["source"]; !ok {
+			continue
+		}
+
+		announcements++
+
+		assert.Equal(t, sourceNS+"/"+sourcePVC, record["source"])
+		assert.Equal(t, destNS+"/"+destPVC, record["dest"])
+		assert.NotEmpty(t, record["migration_id"])
+	}
+
+	assert.Equal(t, 1, announcements, "the source and destination are said once")
+	assert.Equal(t, total, identified, "every record carries the identifier")
 }
 
 func buildMigration(ignoreMounted bool) *migration.Request {

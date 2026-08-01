@@ -30,7 +30,16 @@ GCS, or a custom rclone remote.
 
 ## Demo
 
-![pv-migrate demo GIF](img/demo.gif)
+Copying a claim into another one:
+
+![A pv-migrate run copying one PersistentVolumeClaim into another, with a progress bar](img/demo.gif)
+
+When a migration fails, the output explains why. It gives the exit code the data
+mover returned, with the meaning that mover's own documentation attaches to it,
+the last lines of the failed pod's log, and what the cluster reported about the
+resources involved.
+
+![A pv-migrate run failing, showing the data mover's exit code and what the cluster reported](img/demo-failure.gif)
 
 ## Why this exists
 

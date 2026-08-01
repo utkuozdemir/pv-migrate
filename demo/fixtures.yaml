@@ -1,0 +1,94 @@
+# What the demo recordings migrate.
+#
+# The files are all the same size on purpose. A mix of one huge file and many
+# tiny ones makes the progress bar race and then crawl, while uniform sizes let
+# it advance steadily. A gigabyte keeps the transfer on screen for several
+# seconds without dragging the recording out.
+#
+# It all lives in one namespace, so deleting the namespace removes it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data
+  namespace: demo
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 4Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-data-new
+  namespace: demo
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 4Gi
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: demo-seed
+  namespace: demo
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              for dir in uploads exports backups media; do
+                mkdir -p "/data/$dir"
+                i=0
+                while [ $i -lt 500 ]; do
+                  dd if=/dev/urandom of="/data/$dir/item_$i.dat" bs=512k count=1 2>/dev/null
+                  i=$((i + 1))
+                done
+              done
+              du -sh /data
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: app-data
+---
+# The destination has to be bound before the migration starts, since a claim
+# whose storage class waits for a consumer has no volume until something mounts
+# it, and the recording should not spend its first seconds on that.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: demo-bind
+  namespace: demo
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: bind
+          image: busybox:1.36
+          command: ["sh", "-c", "touch /data/.bound"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: app-data-new

@@ -27,9 +27,9 @@ func WaitForPod(
 ) (*corev1.Pod, error) {
 	var result *corev1.Pod
 
-	// The watch already delivers every pod update; narrating a container's
-	// waiting reason the moment it appears turns minutes of silence into an
-	// answer, using the same observation the failure block would print later.
+	// The watch already delivers every pod update, so narrating a container's
+	// waiting reason turns minutes of silence into an answer, using the same
+	// observation the failure block would print later.
 	lastWaiting := ""
 
 	resCli := cli.CoreV1().Pods(ns)
@@ -104,16 +104,28 @@ func podLabelListWatch(resCli clientcorev1.PodInterface, labelSelector string) *
 	}
 }
 
+// benignWaitingReasons are what a container reports while it is starting up.
+// Every healthy run reports one of them for a second or two, so announcing them
+// makes an ordinary migration look like it is in trouble. What is left over all
+// means something has actually gone wrong, and that is worth saying as soon as
+// it is known.
+var benignWaitingReasons = map[string]bool{
+	"ContainerCreating": true,
+	"PodInitializing":   true,
+}
+
 // describePodWaiting summarizes why a pending pod's containers are waiting, or
 // returns an empty string when there is nothing to say yet.
 func describePodWaiting(pod *corev1.Pod) string {
 	var parts []string
 
-	for i := range pod.Status.ContainerStatuses {
-		status := &pod.Status.ContainerStatuses[i]
-		if status.State.Waiting != nil && status.State.Waiting.Reason != "" {
-			parts = append(parts, status.Name+": "+describeWaiting(status.State.Waiting))
+	for _, status := range pod.Status.ContainerStatuses {
+		waiting := status.State.Waiting
+		if waiting == nil || waiting.Reason == "" || benignWaitingReasons[waiting.Reason] {
+			continue
 		}
+
+		parts = append(parts, status.Name+": "+describeWaiting(waiting))
 	}
 
 	return strings.Join(parts, ", ")
