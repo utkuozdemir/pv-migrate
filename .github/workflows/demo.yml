@@ -40,7 +40,7 @@ jobs:
         with:
           cluster_name: demo
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.31.0
+          version: v0.32.0
 
       - name: Build the binary the recording drives
         run: go build -o dist/demo/pv-migrate ./cmd/pv-migrate
