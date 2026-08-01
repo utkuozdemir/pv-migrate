@@ -131,7 +131,8 @@ func followJobProgress(
 
 	palette := console.Palette{Enabled: console.ForTerminal(isatty.IsTerminal(os.Stderr.Fd()), structuredLogs)}
 
-	if err := k8s.WaitForJobCompletion(ctx, cli, job.Namespace, job.Name, true, structuredLogs,
+	if err := k8s.WaitForJobCompletion(ctx, cli, job.Namespace, job.Name,
+		isatty.IsTerminal(os.Stderr.Fd()), structuredLogs,
 		palette, os.Stderr, logger); err != nil {
 		return fmt.Errorf("failed to follow progress: %w", err)
 	}

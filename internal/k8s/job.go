@@ -129,6 +129,14 @@ func WaitForJobStart(ctx context.Context, cli kubernetes.Interface,
 // structuredLogs set, everything that would be raw text on the writer travels
 // as log records instead, so a machine-readable stream stays machine-readable.
 //
+// showBar reports whether a progress bar belongs on this run. Never on a
+// structured stream: a bar paints with carriage returns and escape sequences,
+// which have no business in output something else is meant to parse. Decided
+// here, the one place every caller passes through, rather than by each of them.
+func showBar(requested, structuredLogs bool) bool {
+	return requested && !structuredLogs
+}
+
 //nolint:funlen
 func WaitForJobCompletion(ctx context.Context, cli kubernetes.Interface,
 	ns, name string, showProgressBar, structuredLogs bool, palette console.Palette,
@@ -137,6 +145,8 @@ func WaitForJobCompletion(ctx context.Context, cli kubernetes.Interface,
 	if writer == nil {
 		writer = io.Discard
 	}
+
+	showProgressBar = showBar(showProgressBar, structuredLogs)
 
 	pod, handled, err := resolveRunningJobPod(ctx, cli, ns, name, structuredLogs, palette, writer, logger)
 	if handled {
