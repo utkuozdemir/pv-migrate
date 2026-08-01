@@ -189,6 +189,7 @@ Things worth knowing before changing them:
 - The transfer needs to be worth watching. Uniform file sizes keep the progress bar moving at a steady rate, and the destination is emptied first, since rsync copies only what differs and a second run against a full destination is over before the bar moves.
 - Both tapes pin a strategy. Left alone the ladder picks the mount strategy, which copies locally in a second or two and is too fast to see. The failure tape pins mount for the opposite reason, to keep that recording short, and doing so assumes one pod can mount both claims. On a cluster that provisions them in different zones the strategy declines instead, and the recording shows the wrong failure.
 - The workflow runs the same steps as the local task, from the same tapes. Only the recorder differs. CI runs VHS from its own image, whose fonts include the colour emoji this tool prints and which a bare runner may not have.
+- That image also brings its own locale and fonts, and both matter. Without a UTF-8 locale the shell mangles the prompt the tapes wait for, and a missing font is substituted silently, which moves every wrap point. The tapes therefore set the locale and name the font instead of relying on the recorder's defaults, and recording by hand on a machine without that font produces a picture that wraps differently.
 
 Regenerate them by hand or by dispatching the workflow, never on a schedule.
 Every run brings its own timestamps and generated names, so a periodic re-record would commit another megabyte of GIF showing nothing new.

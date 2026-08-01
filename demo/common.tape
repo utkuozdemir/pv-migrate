@@ -9,6 +9,18 @@
 # the terminal in the picture matches the page around it.
 
 Set Shell "bash"
+
+# The recorder's own image sets no locale, and without one the shell mangles
+# anything outside ASCII: the prompt below arrives as ">" rather than "❯", and
+# a tape waiting for it waits forever. Set here rather than in the workflow so
+# that a recording made anywhere is made the same way. LC_ALL alone, since it
+# outranks every other locale variable.
+Env LC_ALL C.UTF-8
+# Named rather than left to the default, because the recorder falls back
+# silently when a font is missing and the recording then wraps at a different
+# column. The workflow's image carries this one; a machine recording by hand
+# needs it installed to produce the same picture.
+Set FontFamily "JetBrains Mono"
 Set FontSize 36
 Set Width 2800
 Set Height 1240

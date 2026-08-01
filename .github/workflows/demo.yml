@@ -42,12 +42,6 @@ jobs:
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
           version: v0.32.0
 
-      - name: Build the binary the recording drives
-        run: go build -o dist/demo/pv-migrate ./cmd/pv-migrate
-
-      - name: Create the demo fixtures
-        run: task demo:fixtures
-
       # The recording steps live in the Taskfile, the same ones a maintainer
       # runs locally. Only the recorder differs. VHS runs from its own image
       # rather than being installed on the runner, because that image carries
