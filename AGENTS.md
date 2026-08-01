@@ -174,6 +174,25 @@ Two rules, both learned by getting them wrong first:
 
 The same reasoning rules out fuzzing a closed regex, a fixed-field serializer, or standard-library glue: enumerate those instead, and if the property is arithmetic, assert it against the real validator rather than restating the arithmetic.
 
+## The README recordings
+
+The two GIFs in the README are generated rather than screen-captured.
+`demo/` holds the tape files that drive them along with the cluster fixtures they run against, and `task demo:record` produces them.
+
+Recording is headless and needs no window or keyboard, but it does need a cluster, since what it records is a real migration.
+A demo assembled from invented output would go stale the same way a hand-made capture does, with nothing to catch it.
+
+Things worth knowing before changing them:
+
+- Both tapes source `demo/common.tape`, so the two recordings cannot drift apart in size or colour. The dimensions there are twice what the README displays, because GitHub renders the image at about half that width and the spare pixels are what keep the text sharp.
+- A tape waits for the shell prompt to come back rather than for a phrase in the output, since the phrase can scroll off screen before the command exits. When a tape ends, VHS kills whatever is still running, which for this tool means a half-installed release left behind on the cluster.
+- The transfer needs to be worth watching. Uniform file sizes keep the progress bar moving at a steady rate, and the destination is emptied first, since rsync copies only what differs and a second run against a full destination is over before the bar moves.
+- Both tapes pin a strategy. Left alone the ladder picks the mount strategy, which copies locally in a second or two and is too fast to see. The failure tape pins mount for the opposite reason, to keep that recording short, and doing so assumes one pod can mount both claims. On a cluster that provisions them in different zones the strategy declines instead, and the recording shows the wrong failure.
+- The workflow runs the same steps as the local task, from the same tapes. Only the recorder differs. CI runs VHS from its own image, whose fonts include the colour emoji this tool prints and which a bare runner may not have.
+
+Regenerate them by hand or by dispatching the workflow, never on a schedule.
+Every run brings its own timestamps and generated names, so a periodic re-record would commit another megabyte of GIF showing nothing new.
+
 ## Building and releasing
 
 `Taskfile.yml` is the entry point and mirrors what CI runs; `task lint` covers Go, chart, shell and the release config.

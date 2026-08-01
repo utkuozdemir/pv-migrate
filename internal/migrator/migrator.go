@@ -47,14 +47,6 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 		request.Writer = io.Discard
 	}
 
-	logger = logger.With("source", request.Source.Namespace+"/"+request.Source.Name,
-		"dest", request.Dest.Namespace+"/"+request.Dest.Name)
-
-	mig, err := m.buildMigration(ctx, request, logger)
-	if err != nil {
-		return err
-	}
-
 	migrationID := request.ID
 	if migrationID == "" {
 		migrationID = opid.Generate()
@@ -62,8 +54,23 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 
 	strategies := dedup(request.Strategies)
 
+	// Stated once, here, before anything can fail. The source and destination do
+	// not change while a run is going, so repeating them on every record adds
+	// nothing and pushes the part that does change off the edge of the terminal.
+	// Anything that needs to group the records can group them by the identifier
+	// they all carry.
+	logger.Info("🔄 Attempting migration",
+		"source", request.Source.Namespace+"/"+request.Source.Name,
+		"dest", request.Dest.Namespace+"/"+request.Dest.Name,
+		"migration_id", migrationID,
+		"strategies", strings.Join(strategies, ","))
+
 	logger = logger.With("migration_id", migrationID)
-	logger.Info("🔄 Attempting migration", "strategies", strings.Join(strategies, ","))
+
+	mig, err := m.buildMigration(ctx, request, logger)
+	if err != nil {
+		return err
+	}
 
 	outcomes := make([]attemptOutcome, 0, len(strategies))
 

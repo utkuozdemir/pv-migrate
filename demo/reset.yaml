@@ -1,0 +1,27 @@
+# Empties the destination claim between recordings.
+#
+# rsync copies only what differs, so a second recording against a destination
+# that still holds the data is over before the progress bar moves.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: demo-reset
+  namespace: demo
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: reset
+          image: busybox:1.36
+          # A failure here has to fail the job: a destination that still holds
+          # the data makes the next recording finish before its bar can move.
+          command: ["find", "/data", "-mindepth", "1", "-delete"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: app-data-new

@@ -144,6 +144,60 @@ tasks:
     cmds:
       - goreleaser build --snapshot --clean --single-target
 
+  # The demo recordings in the README come from the targets below. They are
+  # regenerated on demand and never on a schedule, since each run records a real
+  # migration and a periodic one would commit another megabyte of GIF that shows
+  # nothing new.
+  demo:fixtures:
+    desc: create the demo namespace and its data in the current kube context
+    # Seeding a gigabyte takes minutes, so a cluster that already has it is left
+    # alone and re-recording stays quick. The marker is written only once both
+    # jobs have finished. A bound claim proves storage was allocated and says
+    # nothing about whether anything was written to it.
+    status:
+      - kubectl get configmap demo-fixtures-ready -n demo
+    cmds:
+      - kubectl apply -f demo/fixtures.yaml
+      - kubectl wait --for=condition=complete job/demo-seed job/demo-bind -n demo --timeout=15m
+      - kubectl delete job demo-seed demo-bind -n demo --cascade=foreground
+      - kubectl create configmap demo-fixtures-ready -n demo
+
+  demo:record:
+    desc: re-record the README demo GIFs (needs vhs and a cluster)
+    deps: [demo:fixtures]
+    cmds:
+      - go build -o "{{.DEMO_BIN}}" ./cmd/pv-migrate
+      - task: demo:reset
+      - PATH="$(dirname {{.DEMO_BIN}}):$PATH" {{.VHS}} demo/success.tape
+      - task: demo:reset
+      - PATH="$(dirname {{.DEMO_BIN}}):$PATH" {{.VHS}} demo/failure.tape
+    vars:
+      DEMO_BIN: '{{.ROOT_DIR}}/dist/demo/pv-migrate'
+      # How the recorder is invoked, so that this list of steps stays the only
+      # description of what recording means. CI overrides it with the official
+      # image, whose fonts include the colour emoji the tool prints and which a
+      # bare runner may not have.
+      VHS: '{{.VHS | default "vhs"}}'
+
+  demo:reset:
+    desc: empty the demo destination claim, so the next recording has work to do
+    cmds:
+      # A recording that was cut short leaves its release behind, since the tape
+      # ending kills the CLI before it can clean up after itself.
+      - helm list -n demo -q --filter '^pv-migrate-' | xargs -r helm uninstall -n demo
+      - kubectl delete job demo-reset -n demo --ignore-not-found --cascade=foreground
+      - kubectl apply -f demo/reset.yaml
+      - kubectl wait --for=condition=complete job/demo-reset -n demo --timeout=5m
+      # Deleted in the foreground so that the job's pod goes with it: a completed
+      # pod still counts as a consumer of the claim, which the pre-flight check
+      # reports as a mounted volume.
+      - kubectl delete job demo-reset -n demo --cascade=foreground
+
+  demo:clean:
+    desc: delete the whole demo namespace, fixtures and data included
+    cmds:
+      - kubectl delete namespace demo --ignore-not-found
+
   release:
     desc: release
     vars:
