@@ -10,12 +10,6 @@
 
 Set Shell "bash"
 
-# The recorder's own image sets no locale, and without one the shell mangles
-# anything outside ASCII: the prompt below arrives as ">" rather than "❯", and
-# a tape waiting for it waits forever. Set here rather than in the workflow so
-# that a recording made anywhere is made the same way. LC_ALL alone, since it
-# outranks every other locale variable.
-Env LC_ALL C.UTF-8
 # Named rather than left to the default, because the recorder falls back
 # silently when a font is missing and the recording then wraps at a different
 # column. The workflow's image carries this one; a machine recording by hand
@@ -56,3 +50,15 @@ Set Theme {
   "brightCyan": "#56d4dd",
   "brightWhite": "#ffffff"
 }
+
+# Everything above is a directive that the recorder only honours at the top of
+# the file, before anything else. Env is not one of them, and putting it in
+# between silently turned every setting below it into a warning nobody read,
+# so the recordings came out at the recorder's own defaults. Keep the settings
+# together, and keep anything that is not a setting after them.
+# The recorder's own image sets no locale, and without one the shell mangles
+# anything outside ASCII: the prompt below arrives as ">" rather than "❯", and
+# a tape waiting for it waits forever. Set here rather than in the workflow so
+# that a recording made anywhere is made the same way. LC_ALL alone, since it
+# outranks every other locale variable.
+Env LC_ALL C.UTF-8

@@ -168,9 +168,11 @@ tasks:
     cmds:
       - go build -o "{{.DEMO_BIN}}" ./cmd/pv-migrate
       - task: demo:reset
-      - PATH="$(dirname {{.DEMO_BIN}}):$PATH" {{.VHS}} demo/success.tape
+      - task: demo:record-tape
+        vars: {TAPE: demo/success.tape, DEMO_BIN: '{{.DEMO_BIN}}', VHS: '{{.VHS}}'}
       - task: demo:reset
-      - PATH="$(dirname {{.DEMO_BIN}}):$PATH" {{.VHS}} demo/failure.tape
+      - task: demo:record-tape
+        vars: {TAPE: demo/failure.tape, DEMO_BIN: '{{.DEMO_BIN}}', VHS: '{{.VHS}}'}
     vars:
       DEMO_BIN: '{{.ROOT_DIR}}/dist/demo/pv-migrate'
       # How the recorder is invoked, so that this list of steps stays the only
@@ -178,6 +180,55 @@ tasks:
       # image, whose fonts include the colour emoji the tool prints and which a
       # bare runner may not have.
       VHS: '{{.VHS | default "vhs"}}'
+
+  demo:record-tape:
+    internal: true
+    cmds:
+      # Two things have to be true afterwards, and neither is obvious from a
+      # zero exit code. The recorder honours a setting only where nothing
+      # precedes it and otherwise warns and carries on with its own default, and
+      # a run that records nothing at all leaves the previous recording in place
+      # looking like a fresh one. Both have reached a pull request already.
+      - |
+        set -eu
+
+        marker="$(mktemp)"
+        trap 'rm -f "$marker"' EXIT
+
+        output="$(awk '$1 == "Output" { print $2; exit }' "{{.TAPE}}")"
+        want="$(awk '$1 == "Set" && $2 == "Width" { w = $3 }
+                     $1 == "Set" && $2 == "Height" { h = $3 }
+                     END { printf "%dx%d", w, h }' demo/common.tape)"
+
+        status=0
+        recorded="$(PATH="$(dirname "{{.DEMO_BIN}}"):$PATH" {{.VHS}} "{{.TAPE}}" 2>&1)" || status=$?
+        printf '%s\n' "$recorded"
+
+        if [ "$status" -ne 0 ]; then
+          echo "==> {{.TAPE}}: the recorder failed, see its output above" >&2
+          exit "$status"
+        fi
+
+        case "$recorded" in
+          *"has been ignored"*)
+            echo "==> {{.TAPE}}: the recorder ignored a directive, so this recording is not what the tape asked for" >&2
+            exit 1
+            ;;
+        esac
+
+        if [ ! "$output" -nt "$marker" ]; then
+          echo "==> {{.TAPE}}: $output was not written, so whatever is there now is older than this run" >&2
+          exit 1
+        fi
+
+        # The size lives in the GIF's own header, which needs no tools beyond
+        # the ones every shell has: width and height are two little-endian pairs
+        # starting at the seventh byte.
+        got="$(od -An -tu1 -j6 -N4 "$output" | awk '{ printf "%dx%d", $1 + $2 * 256, $3 + $4 * 256 }')"
+        if [ "$got" != "$want" ]; then
+          echo "==> $output came out $got where the tape asks for $want" >&2
+          exit 1
+        fi
 
   demo:reset:
     desc: empty the demo destination claim, so the next recording has work to do
