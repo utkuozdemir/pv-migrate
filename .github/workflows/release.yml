@@ -44,9 +44,26 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PRIVATE_ACCESS_TOKEN: ${{ secrets.PRIVATE_ACCESS_TOKEN }}
+  # Its own job rather than a step after the release, because it can only run
+  # once the release exists and it fails for reasons of its own. As a step, the
+  # only way to retry it was to run the release again, which refuses to upload
+  # archives that are already there and so never reached this. As a job it is
+  # re-run on its own.
+  krew:
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7.0.1
       - name: Update new version in krew-index
-        if: ${{ !contains(github.ref_name, '-') }}
         uses: rajatjindal/krew-release-bot@v0.0.51
+        env:
+          # Undocumented, and the difference between sixty requests an hour
+          # shared with every other job on the runner's address and the token's
+          # own budget. Without it the bot reads the release anonymously, which
+          # is what ran out mid-release.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release-images:
     runs-on: ubuntu-24.04
