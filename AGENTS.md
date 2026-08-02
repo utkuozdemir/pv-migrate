@@ -212,6 +212,10 @@ Things that have bitten before:
 - goreleaser already strips binaries and stamps the version by default. Setting `ldflags` at all silently replaces those defaults, so the binary would report version `dev`, and the image tag and chart version are derived from that string.
 - A snapshot or dev build deliberately produces an *empty* image tag rather than a wrong one, which makes the chart fall back to its own default. That is why the version string is inspected rather than used directly.
 - CI runs a goreleaser snapshot on every change, which validates the packaging inputs before release day rather than during it.
+- A release that fails after its archives are uploaded is finished by tagging the next patch version, never by re-running it over the top.
+  The package managers pin the archives by checksum, and the archives are not built reproducibly, so replacing one silently invalidates a hash somebody has already recorded.
+  This is why a published release is left exactly as it went out, even when a later stage of the same run failed.
+- The package manager updates are the last stage, after the release and the images, so a credential that lapsed since the previous release takes down only those, and it does so on a release that otherwise looks complete.
 
 ## Conventions
 
