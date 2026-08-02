@@ -241,9 +241,9 @@ func getMergedHelmValues(
 	merged := loader.MergeMaps(baseValues, userValues)
 
 	if request.ImageTag != "" {
-		logger.Info("🏷️ Using image tag", "tag", request.ImageTag)
+		logger.Info("🔖 Using image tag", "tag", request.ImageTag)
 	} else {
-		logger.Info("🏷️ Using chart default image tags")
+		logger.Info("🔖 Using chart default image tags")
 	}
 
 	return merged, nil
