@@ -191,9 +191,12 @@ Things worth knowing before changing them:
 - The workflow runs the same steps as the local task, from the same tapes. Only the recorder differs. CI runs VHS from its own image, whose fonts include the colour emoji this tool prints and which a bare runner may not have.
 - The recorder honours a setting only where nothing precedes it, and otherwise warns and carries on with its own defaults, so a tape can record at the wrong size and colours while reporting success. The settings therefore come first in every tape, anything that is not a setting comes after them, and `task demo:record` fails on that warning rather than leaving it to be noticed.
 - That image also brings its own locale and fonts, and both matter. Without a UTF-8 locale the shell mangles the prompt the tapes wait for, and a missing font is substituted silently, which moves every wrap point. The tapes therefore set the locale and name the font instead of relying on the recorder's defaults, and recording by hand on a machine without that font produces a picture that wraps differently.
+- The font weight is carried in the family name, because the recorder sets a family and a size and nothing else. Matching what GitHub renders is not available: its stack resolves to a font that ships with macOS and not with the recorder's image, and the one member of that stack the image does carry is lighter still.
 
 Regenerate them by hand or by dispatching the workflow, never on a schedule.
 Every run brings its own timestamps and generated names, so a periodic re-record would commit another megabyte of GIF showing nothing new.
+Dispatching it against a branch rather than the default one records from that branch's code and proposes the recordings back into it, which is how a change to a tape arrives together with the picture it produces.
+Doing that on a change to how the recordings are made is deliberate rather than automatic: recording on every push would spend a cluster on each intermediate attempt, and the commit it pushed back would land without checks and race the next push.
 
 ## Building and releasing
 

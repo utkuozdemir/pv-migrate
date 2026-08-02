@@ -14,7 +14,14 @@ Set Shell "bash"
 # silently when a font is missing and the recording then wraps at a different
 # column. The workflow's image carries this one; a machine recording by hand
 # needs it installed to produce the same picture.
-Set FontFamily "JetBrains Mono"
+#
+# The weight is part of the family name because the recorder has no setting for
+# it, only a family and a size. At the regular weight the text came out thin
+# against the dark background, and matching what GitHub itself renders is not an
+# option: its font stack resolves to SF Mono on a Mac, which does not exist in
+# the recorder's image, and the one member of that stack the image does carry
+# paints even less ink than this family does.
+Set FontFamily "JetBrains Mono SemiBold"
 Set FontSize 36
 Set Width 2800
 Set Height 1240
