@@ -1,7 +1,10 @@
 # A migration between two claims, over the strategy most people end up on.
-Output img/demo.gif
-
+#
+# The settings come first: the recorder ignores any Set directive that is
+# not at the top of the file, and says so in a warning that is easy to miss.
 Source demo/common.tape
+
+Output img/demo.gif
 
 # A prompt of one plain character. An escape sequence in it would be counted as
 # visible width by the shell's line editor, which then wraps the typed command
