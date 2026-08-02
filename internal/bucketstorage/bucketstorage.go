@@ -501,9 +501,9 @@ func mergeHelmValues(baseValues map[string]any, req *Request, logger *slog.Logge
 	merged := loader.MergeMaps(baseValues, userValues)
 
 	if req.ImageTag != "" {
-		logger.Info("🏷️ Using image tag", "tag", req.ImageTag)
+		logger.Info("🔖 Using image tag", "tag", req.ImageTag)
 	} else {
-		logger.Info("🏷️ Using chart default image tags")
+		logger.Info("🔖 Using chart default image tags")
 	}
 
 	return merged, nil

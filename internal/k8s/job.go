@@ -382,7 +382,7 @@ func writeFailureTail(
 	}
 
 	if structuredLogs {
-		logger.Warn("🗒 Last log lines of the failed job pod", "pod", pod.Namespace+"/"+pod.Name, "tail", tail)
+		logger.Warn("📝 Last log lines of the failed job pod", "pod", pod.Namespace+"/"+pod.Name, "tail", tail)
 
 		return
 	}

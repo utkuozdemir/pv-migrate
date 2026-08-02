@@ -221,6 +221,8 @@ Things that have bitten before:
   A signature does not survive the rebase or squash that lands a change here, so requiring one buys nothing and puts a hardware key in the way of routine work.
   Do not add `-S`, and do not leave a pull request in draft on account of a commit being unsigned.
 - Nothing carries AI attribution: no "generated with" lines, no AI co-author trailers, in commits, pull requests or anywhere else.
+- Log messages open with an emoji, and it has to be one a terminal gives two columns to, which is not every emoji that looks like one.
+  A test walks the source and rejects the narrow ones, with the reasoning in its comment; warnings all use the same marker, so pick that one rather than a new shade of orange.
 - Linting is `golangci-lint` with linters enabled by default and a short, individually-justified disable list.
   New code is expected to satisfy it rather than accumulate suppressions, and a complexity finding is usually telling you to extract a function.
 - Dependencies are updated by Renovate; `.renovaterc.json` is the authority on what qualifies.

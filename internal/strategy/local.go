@@ -35,7 +35,7 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	}
 
 	if hasHelmOverrides(req) {
-		logger.Warn("⚠️  Local strategy does not deploy an rsync Job; " +
+		logger.Warn("🔶 Local strategy does not deploy an rsync Job; " +
 			"rsync-related Helm values (e.g. rsync.*) will have no effect")
 	}
 
