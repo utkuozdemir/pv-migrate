@@ -249,16 +249,42 @@ tasks:
     cmds:
       - kubectl delete namespace demo --ignore-not-found
 
+  # Pushing the tag is what starts the release, so both checks below happen
+  # before anything leaves this machine.
   release:
-    desc: release
+    desc: tag the next version and push it, or VERSION when one is given
     vars:
       NUM_LAST_TAGS: 3
       LAST_TAGS:
         sh: git tag --sort=-version:refname | head -n {{.NUM_LAST_TAGS}} | xargs echo
+      # svu proposes a version only when a commit since the last tag calls for
+      # one, and otherwise answers with the version that is already released.
       NEXT_TAG:
         sh: svu next
+      TAG: '{{.VERSION | default .NEXT_TAG}}'
     cmds:
-      - "echo Last {{.NUM_LAST_TAGS}} tags: {{.LAST_TAGS}}"
-      - "echo Next tag: {{.NEXT_TAG}}"
-      - git tag -a {{.NEXT_TAG}} -m "{{.NEXT_TAG}}"
-      - git push origin {{.NEXT_TAG}}
+      - |
+        set -eu
+
+        echo "Last {{.NUM_LAST_TAGS}} tags: {{.LAST_TAGS}}"
+        echo "Releasing:      {{.TAG}}"
+
+        # The release only runs for tags of this shape, so a version of any
+        # other one is tagged and then silently never released.
+        case '{{.TAG}}' in
+          v[0-9]*.[0-9]*.[0-9]*) ;;
+          *)
+            echo "==> {{.TAG}} is not a vX.Y.Z version, and nothing else starts a release" >&2
+            exit 1
+            ;;
+        esac
+
+        if git rev-parse -q --verify 'refs/tags/{{.TAG}}' >/dev/null; then
+          echo "==> {{.TAG}} is already released" >&2
+          echo "==> Nothing since it calls for a new version, so that is what svu answered with" >&2
+          echo "==> Name one to release it anyway, for example: task release VERSION=vX.Y.Z" >&2
+          exit 1
+        fi
+
+        git tag -a '{{.TAG}}' -m '{{.TAG}}'
+        git push origin '{{.TAG}}'
