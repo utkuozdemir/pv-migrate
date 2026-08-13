@@ -153,11 +153,11 @@ See [docs/usage.md](docs/usage.md) for usage guides and command references:
 
 ## Star history
 
-<a href="https://star-history.com/#utkuozdemir/pv-migrate&Date">
+<a href="https://star-history.dera.page/#utkuozdemir/pv-migrate&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=utkuozdemir/pv-migrate&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=utkuozdemir/pv-migrate&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=utkuozdemir/pv-migrate&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://star-history.dera.page/svg?repos=utkuozdemir/pv-migrate&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://star-history.dera.page/svg?repos=utkuozdemir/pv-migrate&type=Date" />
+   <img alt="Star History Chart" src="https://star-history.dera.page/svg?repos=utkuozdemir/pv-migrate&type=Date" />
  </picture>
 </a>
 
