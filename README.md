@@ -153,13 +153,14 @@ See [docs/usage.md](docs/usage.md) for usage guides and command references:
 
 ## Star history
 
-<a href="https://star-history.com/#utkuozdemir/pv-migrate&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=utkuozdemir/pv-migrate&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=utkuozdemir/pv-migrate&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=utkuozdemir/pv-migrate&type=Date" />
- </picture>
+<!-- markdownlint-disable no-inline-html -->
+<a href="https://github.com/utkuozdemir/pv-migrate/stargazers">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/utkuozdemir/star-charts/main/charts/utkuozdemir/pv-migrate/dark.svg" />
+    <img alt="Star history of utkuozdemir/pv-migrate" src="https://raw.githubusercontent.com/utkuozdemir/star-charts/main/charts/utkuozdemir/pv-migrate/light.svg" />
+  </picture>
 </a>
+<!-- markdownlint-enable no-inline-html -->
 
 ## Contributing
 
