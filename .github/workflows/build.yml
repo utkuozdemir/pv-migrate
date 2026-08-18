@@ -46,7 +46,7 @@ jobs:
         uses: arduino/setup-task@v3.0.0
         with:
           # renovate: depName=go-task/task datasource=github-releases
-          version: 3.52.0
+          version: 3.53.1
       - name: Tidy go.mod
         run: go mod tidy
       - name: Run unit tests
