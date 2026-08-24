@@ -35,11 +35,24 @@ jobs:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # the goreleaser version is declared once, in hack/dev.Dockerfile, so the
+      # version that validates the release config in lint is the version that
+      # performs the release. Fail loudly rather than guessing if that
+      # declaration ever stops being exactly one line.
+      - name: Resolve goreleaser version
+        id: goreleaser_version
+        run: |
+          found="$(grep -E '^ARG GORELEASER_VERSION=v[0-9]+\.[0-9]+\.[0-9]+$' hack/dev.Dockerfile || true)"
+          count="$(printf '%s' "${found}" | grep -c . || true)"
+          if [ "${count}" != "1" ]; then
+            echo "expected exactly one ARG GORELEASER_VERSION in hack/dev.Dockerfile, found ${count}" >&2
+            exit 1
+          fi
+          echo "version=${found#ARG GORELEASER_VERSION=}" >>"${GITHUB_OUTPUT}"
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v7.2.3
         with:
-          # renovate: depName=goreleaser/goreleaser datasource=github-releases
-          version: v2.17.1
+          version: ${{ steps.goreleaser_version.outputs.version }}
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

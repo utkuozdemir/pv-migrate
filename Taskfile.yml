@@ -17,16 +17,56 @@ vars:
   # its tags select, so without these it silently skips those suites, while
   # golangci-lint reads the same list from its own config and does not.
   BUILD_TAGS: integration,integration_cloud
+  # Every check runs in the toolchain image built from hack/dev.Dockerfile, so
+  # the host needs only docker, buildx and task, and CI runs the exact same tool
+  # versions. Targets that write into the working tree (the formatters, the
+  # generators, the fuzz corpus, the snapshot build) bind-mount it instead of
+  # running as a stage, because a stage has no way to hand its output back.
+  #
+  # The container runs as the invoking user so nothing comes back root-owned,
+  # and a named volume keeps the Go and linter caches between runs.
+  TOOLS: >-
+    docker run --rm -u "$(id -u):$(id -g)"
+    -e GOFLAGS=-mod=mod -e HOME=/tmp
+    -e GOCACHE=/tmp/go-build -e GOMODCACHE=/tmp/go-mod
+    -e GOLANGCI_LINT_CACHE=/tmp/golangci-lint
+    -v pv-migrate-tools-cache:/tmp
+    -v "$PWD":/src -w /src pv-migrate-tools:local
 
 tasks:
+  # builds the bind-mount image the write-in-place targets share
+  tools-image:
+    internal: true
+    cmds:
+      - >-
+        docker buildx build -f hack/dev.Dockerfile
+        --build-arg GO_VERSION="$(sed -n 's/^go //p' go.mod)"
+        --target fmt --load --tag pv-migrate-tools:local .
+
+  # runs one check as its own buildx stage
+  stage:
+    internal: true
+    cmds:
+      - >-
+        docker buildx build -f hack/dev.Dockerfile
+        --build-arg GO_VERSION="$(sed -n 's/^go //p' go.mod)"
+        --target {{.TARGET}} .
+
   fmt:
     desc: format code and shell scripts
     cmds:
-      - go mod tidy
-      - go fix -tags {{.BUILD_TAGS}} ./...
-      - golangci-lint run --fix ./...
-      - golangci-lint fmt ./...
-      - '{{.SHELL_FILES}} | xargs -0 -r shfmt -l -w {{.SHFMT_FLAGS}}'
+      - task: tools-image
+      - "{{.TOOLS}} go mod tidy"
+      # embedlit is disabled because it corrupts code in Go 1.27.0: where an
+      # embedded type's opening brace shares a line with its first field it
+      # drops that field, sometimes leaving the file unparseable and sometimes
+      # leaving it compiling with the field silently gone, which in a test
+      # fixture removes an assertion's subject without failing anything. Fixed
+      # upstream for 1.27.1 (golang/go#80993), so drop the flag then.
+      - "{{.TOOLS}} go fix -embedlit=false -tags {{.BUILD_TAGS}} ./..."
+      - "{{.TOOLS}} golangci-lint run --fix --issues-exit-code 0 ./..."
+      - "{{.TOOLS}} golangci-lint fmt ./..."
+      - '{{.SHELL_FILES}} | xargs -0 -r {{.TOOLS}} shfmt -l -w {{.SHFMT_FLAGS}}'
 
   # Split into named checks so that a failure names the check that failed. Run as
   # one list of commands, `task` could only report the whole thing as exit status 1.
@@ -41,23 +81,23 @@ tasks:
   lint:go:
     desc: lint go code and module tidiness
     cmds:
-      - |
-        if ! go mod tidy --diff; then
-          echo "==> go.mod/go.sum are not tidy. Run: task fmt" >&2
-          exit 1
-        fi
-      - golangci-lint run ./...
+      - task: stage
+        vars: {TARGET: lint-go-mod-tidy}
+      - task: stage
+        vars: {TARGET: lint-golangci-lint}
 
   lint:chart:
     desc: lint the embedded helm chart
     cmds:
-      - helm lint internal/helm/pv-migrate
+      - task: stage
+        vars: {TARGET: lint-chart}
 
   lint:shell:
     desc: check shell script formatting
     cmds:
+      - task: tools-image
       - |
-        if ! {{.SHELL_FILES}} | xargs -0 -r shfmt -d {{.SHFMT_FLAGS}}; then
+        if ! {{.SHELL_FILES}} | xargs -0 -r {{.TOOLS}} shfmt -d {{.SHFMT_FLAGS}}; then
           echo "==> the shell scripts above are not formatted. Run: task fmt" >&2
           exit 1
         fi
@@ -65,12 +105,18 @@ tasks:
   lint:release:
     desc: validate the release configuration
     cmds:
-      - goreleaser check
+      - task: stage
+        vars: {TARGET: lint-release}
 
   test:
     desc: run the unit tests
     cmds:
-      - go test ./...
+      # bind-mounted rather than staged: one test lists the repository's tracked
+      # files through git, and .git is deliberately kept out of the build
+      # context because it changes on every commit and would invalidate every
+      # stage that copies the tree.
+      - task: tools-image
+      - "{{.TOOLS}} go test ./..."
 
   test:integration:
     desc: run the migration integration tests against the current kube context
@@ -86,15 +132,20 @@ tasks:
     vars:
       FUZZTIME: '{{.FUZZTIME | default "30s"}}'
     cmds:
+      # bind-mounted rather than staged: a discovered failure is written to the
+      # package's testdata/fuzz directory and has to survive into the tree,
+      # which a stage that copies the sources cannot do. The cache volume also
+      # keeps the generated corpus between runs.
+      - task: tools-image
       - |
         set -eu
-        for pkg in $(go list ./...); do
+        for pkg in $({{.TOOLS}} go list ./...); do
           # a listing failure means the package does not compile, which has to
           # surface rather than read as "no fuzz targets here"
-          listed="$(go test -list 'Fuzz' "$pkg")"
+          listed="$({{.TOOLS}} go test -list 'Fuzz' "$pkg")"
           for target in $(printf '%s\n' "$listed" | grep '^Fuzz' || true); do
             echo "==> $pkg $target ({{.FUZZTIME}})"
-            go test "$pkg" -run '^$' -fuzz "^${target}\$" -fuzztime '{{.FUZZTIME}}'
+            {{.TOOLS}} go test "$pkg" -run '^$' -fuzz "^${target}\$" -fuzztime '{{.FUZZTIME}}'
           done
         done
 
@@ -111,42 +162,32 @@ tasks:
 
   generate-cli-reference:
     desc: update generated CLI reference docs
-    env:
-      ROOT_USAGE:
-        sh: go run ./cmd/pv-migrate --help
-      BACKUP_USAGE:
-        sh: go run ./cmd/pv-migrate backup --help
-      RESTORE_USAGE:
-        sh: go run ./cmd/pv-migrate restore --help
-      STATUS_USAGE:
-        sh: go run ./cmd/pv-migrate status --help
-      CLEANUP_USAGE:
-        sh: go run ./cmd/pv-migrate cleanup --help
-      COMPLETION_USAGE:
-        sh: go run ./cmd/pv-migrate completion --help
     cmds:
-      - mkdir -p {{.ROOT_DIR}}/docs
+      # one container for the whole job: the help text is produced by the same
+      # toolchain that renders it, and a single invocation avoids paying the
+      # container and link cost once per command.
+      - task: tools-image
       - >-
-        docker run --rm -v {{.ROOT_DIR}}:/project
-        -e ROOT_USAGE -e BACKUP_USAGE -e RESTORE_USAGE -e STATUS_USAGE -e CLEANUP_USAGE -e COMPLETION_USAGE
-        hairyhenderson/gomplate:stable
-        --file /project/docs/cli-reference.md.gotmpl
-        --out /project/docs/cli-reference.md
+        {{.TOOLS}} sh -c '
+        export ROOT_USAGE="$(go run ./cmd/pv-migrate --help)"
+        BACKUP_USAGE="$(go run ./cmd/pv-migrate backup --help)"
+        RESTORE_USAGE="$(go run ./cmd/pv-migrate restore --help)"
+        STATUS_USAGE="$(go run ./cmd/pv-migrate status --help)"
+        CLEANUP_USAGE="$(go run ./cmd/pv-migrate cleanup --help)"
+        COMPLETION_USAGE="$(go run ./cmd/pv-migrate completion --help)"
+        && go run ./hack/gen-cli-reference'
 
   generate-helm-chart-docs:
     desc: update generated helm chart docs
-    vars:
-      # renovate: depName=norwoodj/helm-docs datasource=github-releases
-      HELM_DOCS_VERSION: v1.14.2
-    cmd: >-
-        docker run --rm -v {{.ROOT_DIR}}:/helm-docs
-        jnorwood/helm-docs:{{.HELM_DOCS_VERSION}}
-        --chart-search-root /helm-docs/internal/helm
+    cmds:
+      - task: tools-image
+      - "{{.TOOLS}} helm-docs --chart-search-root internal/helm"
 
   build:
     desc: build
     cmds:
-      - goreleaser build --snapshot --clean --single-target
+      - task: tools-image
+      - "{{.TOOLS}} goreleaser build --snapshot --clean --single-target"
 
   # The demo recordings in the README come from the targets below. They are
   # regenerated on demand and never on a schedule, since each run records a real
@@ -263,8 +304,14 @@ tasks:
         sh: git tag --sort=-version:refname | head -n {{.NUM_LAST_TAGS}} | xargs echo
       # svu proposes a version only when a commit since the last tag calls for
       # one, and otherwise answers with the version that is already released.
+      # Pinned like every other tool: a different svu can choose a different
+      # version from the same history, and this is the one calculation whose
+      # answer cannot be taken back once it has been tagged and pushed.
       NEXT_TAG:
-        sh: svu next
+        # renovate: depName=caarlos0/svu datasource=docker
+        # run from the primary checkout: a linked worktree's .git points at a
+        # common directory outside this mount
+        sh: docker run --rm -v "$PWD":/src -w /src caarlos0/svu:3.4.1 next
       TAG: '{{.VERSION | default .NEXT_TAG}}'
     cmds:
       - |

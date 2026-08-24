@@ -28,7 +28,7 @@ runs:
       with:
         cluster_name: ${{ inputs.cluster_name }}
         # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-        version: v0.31.0
+        version: v0.32.0
         config: test/kind-config.yaml
 
     - name: Load local images
