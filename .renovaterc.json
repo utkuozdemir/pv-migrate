@@ -35,9 +35,11 @@
   "customManagers": [
     {
       "customType": "regex",
-      "fileMatch": [
-        "\\.github\\/workflows\\/.*",
-        "Taskfile\\.yml"
+      "managerFilePatterns": [
+        "/\\.github\\/workflows\\/.*/",
+        "/\\.github\\/actions\\/.*/",
+        "/Taskfile\\.yml/",
+        "/hack\\/dev\\.Dockerfile/"
       ],
       "matchStrings": [
         "# renovate: depName=(?<depName>[^\\s]+)( datasource=(?<datasource>[^\\s]+))?( registryUrl=(?<registryUrl>\\S+))?\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+\\.\\d+(-[\\S]+)?)"
@@ -47,9 +49,11 @@
     },
     {
       "customType": "regex",
-      "fileMatch": [
-        "go.mod",
-        "\\.github\\/workflows\\/.*"
+      "managerFilePatterns": [
+        "/go.mod/",
+        "/\\.github\\/workflows\\/.*/",
+        "/\\.github\\/actions\\/.*/",
+        "/hack\\/dev\\.Dockerfile/"
       ],
       "matchStrings": [
         "(#|\\/\\/) renovate: go\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+(\\.\\d+(-[\\S]+)?)?)"
