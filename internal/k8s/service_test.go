@@ -6,7 +6,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -118,7 +117,7 @@ func TestGetNodeIP(t *testing.T) {
 
 	fakeClient := fake.NewClientset(
 		&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+			Name: "node1",
 			Status: corev1.NodeStatus{
 				Addresses: []corev1.NodeAddress{
 					{Type: corev1.NodeInternalIP, Address: "192.168.1.100"},
@@ -126,7 +125,7 @@ func TestGetNodeIP(t *testing.T) {
 			},
 		},
 		&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: "node2"},
+			Name: "node2",
 			Status: corev1.NodeStatus{
 				Addresses: []corev1.NodeAddress{
 					{Type: corev1.NodeHostName, Address: "worker-node2"},
@@ -161,7 +160,7 @@ func TestGetAnyNodeIP(t *testing.T) {
 	// Mixed nodes — should find the one with a usable IP
 	mixed := fake.NewClientset(
 		&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: "node1"},
+			Name: "node1",
 			Status: corev1.NodeStatus{
 				Addresses: []corev1.NodeAddress{
 					{Type: corev1.NodeHostName, Address: "worker-node1"},
@@ -169,7 +168,7 @@ func TestGetAnyNodeIP(t *testing.T) {
 			},
 		},
 		&corev1.Node{
-			ObjectMeta: metav1.ObjectMeta{Name: "node2"},
+			Name: "node2",
 			Status: corev1.NodeStatus{
 				Addresses: []corev1.NodeAddress{
 					{Type: corev1.NodeExternalIP, Address: "10.0.0.1"},
