@@ -25,12 +25,21 @@ vars:
   #
   # The container runs as the invoking user so nothing comes back root-owned,
   # and a named volume keeps the Go and linter caches between runs.
+  #
+  # The git directory is mounted at its own absolute host path as well as inside
+  # the tree. In a linked worktree the checkout's .git is a file naming a common
+  # directory that lives outside the checkout, so without that second mount git
+  # inside the container reports the tree is not a repository. Two targets read
+  # the repository through git, the tracked-file test and the snapshot build, and
+  # both would fail in a worktree. For a primary checkout the mount is redundant
+  # and harmless.
   TOOLS: >-
     docker run --rm -u "$(id -u):$(id -g)"
     -e GOFLAGS=-mod=mod -e HOME=/tmp
     -e GOCACHE=/tmp/go-build -e GOMODCACHE=/tmp/go-mod
     -e GOLANGCI_LINT_CACHE=/tmp/golangci-lint
     -v pv-migrate-tools-cache:/tmp
+    -v "$(git rev-parse --path-format=absolute --git-common-dir)":"$(git rev-parse --path-format=absolute --git-common-dir)"
     -v "$PWD":/src -w /src pv-migrate-tools:local
 
 tasks:
@@ -168,14 +177,15 @@ tasks:
       # container and link cost once per command.
       - task: tools-image
       - >-
-        {{.TOOLS}} sh -c '
-        export ROOT_USAGE="$(go run ./cmd/pv-migrate --help)"
-        BACKUP_USAGE="$(go run ./cmd/pv-migrate backup --help)"
-        RESTORE_USAGE="$(go run ./cmd/pv-migrate restore --help)"
-        STATUS_USAGE="$(go run ./cmd/pv-migrate status --help)"
-        CLEANUP_USAGE="$(go run ./cmd/pv-migrate cleanup --help)"
-        COMPLETION_USAGE="$(go run ./cmd/pv-migrate completion --help)"
-        && go run ./hack/gen-cli-reference'
+        {{.TOOLS}} sh -c 'set -eu;
+        ROOT_USAGE="$(go run ./cmd/pv-migrate --help)";
+        BACKUP_USAGE="$(go run ./cmd/pv-migrate backup --help)";
+        RESTORE_USAGE="$(go run ./cmd/pv-migrate restore --help)";
+        STATUS_USAGE="$(go run ./cmd/pv-migrate status --help)";
+        CLEANUP_USAGE="$(go run ./cmd/pv-migrate cleanup --help)";
+        COMPLETION_USAGE="$(go run ./cmd/pv-migrate completion --help)";
+        export ROOT_USAGE BACKUP_USAGE RESTORE_USAGE STATUS_USAGE CLEANUP_USAGE COMPLETION_USAGE;
+        go run ./hack/gen-cli-reference'
 
   generate-helm-chart-docs:
     desc: update generated helm chart docs

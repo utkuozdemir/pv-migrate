@@ -61,13 +61,18 @@ jobs:
       - name: Resolve goreleaser version
         id: goreleaser_version
         run: |
-          found="$(grep -E '^ARG GORELEASER_VERSION=v[0-9]+\.[0-9]+\.[0-9]+$' hack/dev.Dockerfile || true)"
+          found="$(grep -E '^ARG GORELEASER_VERSION=' hack/dev.Dockerfile || true)"
           count="$(printf '%s' "${found}" | grep -c . || true)"
           if [ "${count}" != "1" ]; then
             echo "expected exactly one ARG GORELEASER_VERSION in hack/dev.Dockerfile, found ${count}" >&2
             exit 1
           fi
-          echo "version=${found#ARG GORELEASER_VERSION=}" >>"${GITHUB_OUTPUT}"
+          version="${found#ARG GORELEASER_VERSION=}"
+          if ! printf '%s' "${version}" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "ARG GORELEASER_VERSION is not a pinned version: ${version}" >&2
+            exit 1
+          fi
+          echo "version=${version}" >>"${GITHUB_OUTPUT}"
       - name: Build with Goreleaser
         if: ${{ always() }}
         uses: goreleaser/goreleaser-action@v7.2.3

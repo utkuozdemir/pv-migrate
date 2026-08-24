@@ -25,6 +25,17 @@ const (
 	outputPath   = "docs/cli-reference.md"
 )
 
+// the help outputs the template interpolates, every one of which must be present
+// and non-empty for the rendered document to be complete.
+var requiredVars = []string{
+	"ROOT_USAGE",
+	"BACKUP_USAGE",
+	"RESTORE_USAGE",
+	"STATUS_USAGE",
+	"CLEANUP_USAGE",
+	"COMPLETION_USAGE",
+}
+
 func main() {
 	if err := render(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -40,6 +51,15 @@ func render() error {
 	for _, entry := range os.Environ() {
 		if key, value, ok := strings.Cut(entry, "="); ok {
 			env[key] = value
+		}
+	}
+
+	// An empty value means its producer printed nothing, which would silently
+	// publish a document with a section missing. missingkey=error below cannot
+	// see this, because the key is present.
+	for _, name := range requiredVars {
+		if strings.TrimSpace(env[name]) == "" {
+			return fmt.Errorf("%s is empty: its help command produced no output", name)
 		}
 	}
 
