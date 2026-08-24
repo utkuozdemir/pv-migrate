@@ -612,10 +612,8 @@ func createVerifyJob(t *testing.T, infra *backupTestInfra, ns, name, cmd string)
 	backoffLimit := int32(0)
 
 	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: ns,
-		},
+		Name:      name,
+		Namespace: ns,
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{

@@ -28,10 +28,8 @@ func TestFindJobPod(t *testing.T) {
 	t.Parallel()
 
 	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-rsync",
-			Namespace: "default",
-		},
+		Name:      "test-rsync",
+		Namespace: "default",
 	}
 
 	tests := []struct {
@@ -49,12 +47,10 @@ func TestFindJobPod(t *testing.T) {
 			name: "single running pod",
 			pods: []corev1.Pod{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-rsync-abc",
-						Namespace: "default",
-						Labels:    map[string]string{"job-name": "test-rsync"},
-					},
-					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+					Name:      "test-rsync-abc",
+					Namespace: "default",
+					Labels:    map[string]string{"job-name": "test-rsync"},
+					Status:    corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 			},
 			wantPod: "test-rsync-abc",
@@ -63,20 +59,16 @@ func TestFindJobPod(t *testing.T) {
 			name: "prefers running over pending",
 			pods: []corev1.Pod{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-rsync-pending",
-						Namespace: "default",
-						Labels:    map[string]string{"job-name": "test-rsync"},
-					},
-					Status: corev1.PodStatus{Phase: corev1.PodPending},
+					Name:      "test-rsync-pending",
+					Namespace: "default",
+					Labels:    map[string]string{"job-name": "test-rsync"},
+					Status:    corev1.PodStatus{Phase: corev1.PodPending},
 				},
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-rsync-running",
-						Namespace: "default",
-						Labels:    map[string]string{"job-name": "test-rsync"},
-					},
-					Status: corev1.PodStatus{Phase: corev1.PodRunning},
+					Name:      "test-rsync-running",
+					Namespace: "default",
+					Labels:    map[string]string{"job-name": "test-rsync"},
+					Status:    corev1.PodStatus{Phase: corev1.PodRunning},
 				},
 			},
 			wantPod: "test-rsync-running",
@@ -85,12 +77,10 @@ func TestFindJobPod(t *testing.T) {
 			name: "falls back to first pod when none running",
 			pods: []corev1.Pod{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-rsync-succeeded",
-						Namespace: "default",
-						Labels:    map[string]string{"job-name": "test-rsync"},
-					},
-					Status: corev1.PodStatus{Phase: corev1.PodSucceeded},
+					Name:      "test-rsync-succeeded",
+					Namespace: "default",
+					Labels:    map[string]string{"job-name": "test-rsync"},
+					Status:    corev1.PodStatus{Phase: corev1.PodSucceeded},
 				},
 			},
 			wantPod: "test-rsync-succeeded",
@@ -129,12 +119,10 @@ func TestWaitForJobCompletion_PodAlreadySucceededDoesNotWatchTermination(t *test
 	cli := fake.NewClientset()
 
 	createPod(t, cli, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-rclone-abc",
-			Namespace: "default",
-			Labels:    map[string]string{"job-name": "test-rclone"},
-		},
-		Status: corev1.PodStatus{Phase: corev1.PodSucceeded},
+		Name:      "test-rclone-abc",
+		Namespace: "default",
+		Labels:    map[string]string{"job-name": "test-rclone"},
+		Status:    corev1.PodStatus{Phase: corev1.PodSucceeded},
 	})
 
 	err := k8s.WaitForJobCompletion(ctx, cli, "default", "test-rclone", false, false, console.Palette{},
@@ -153,11 +141,9 @@ func TestWaitForJobCompletion_PodAlreadyFailedReturnsError(t *testing.T) {
 	cli := fake.NewClientset()
 
 	createPod(t, cli, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-rclone-abc",
-			Namespace: "default",
-			Labels:    map[string]string{"job-name": "test-rclone"},
-		},
+		Name:      "test-rclone-abc",
+		Namespace: "default",
+		Labels:    map[string]string{"job-name": "test-rclone"},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodFailed,
 			ContainerStatuses: []corev1.ContainerStatus{
@@ -189,11 +175,9 @@ func TestWaitForJobCompletion_RendersTerminatedStateAdditively(t *testing.T) {
 	cli := fake.NewClientset()
 
 	createPod(t, cli, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-rsync-abc",
-			Namespace: "default",
-			Labels:    map[string]string{"job-name": "test-rsync"},
-		},
+		Name:      "test-rsync-abc",
+		Namespace: "default",
+		Labels:    map[string]string{"job-name": "test-rsync"},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodFailed,
 			ContainerStatuses: []corev1.ContainerStatus{
@@ -229,11 +213,9 @@ func TestWaitForJobCompletion_PodFailedWithoutContainerStatus(t *testing.T) {
 	cli := fake.NewClientset()
 
 	createPod(t, cli, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-rsync-abc",
-			Namespace: "default",
-			Labels:    map[string]string{"job-name": "test-rsync"},
-		},
+		Name:      "test-rsync-abc",
+		Namespace: "default",
+		Labels:    map[string]string{"job-name": "test-rsync"},
 		Status: corev1.PodStatus{
 			Phase:   corev1.PodFailed,
 			Reason:  "Evicted",
@@ -266,12 +248,10 @@ func TestWaitForJobCompletion_RunningPodThatFails(t *testing.T) {
 
 	cli := fake.NewClientset()
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-rsync-abc",
-			Namespace: "default",
-			Labels:    map[string]string{"job-name": "test-rsync"},
-		},
-		Status: corev1.PodStatus{Phase: corev1.PodRunning},
+		Name:      "test-rsync-abc",
+		Namespace: "default",
+		Labels:    map[string]string{"job-name": "test-rsync"},
+		Status:    corev1.PodStatus{Phase: corev1.PodRunning},
 	}
 
 	createPod(t, cli, pod)
@@ -337,7 +317,7 @@ func TestWaitForJobCompletion_FinishedJobWithoutPods(t *testing.T) {
 	t.Parallel()
 
 	cli := fake.NewClientset(&batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: "test-rsync", Namespace: "default"},
+		Name: "test-rsync", Namespace: "default",
 		Status: batchv1.JobStatus{
 			Failed: 1,
 			Conditions: []batchv1.JobCondition{
@@ -368,11 +348,9 @@ func TestWaitForJobCompletion_PodFailsBeforeRunning(t *testing.T) {
 	cli := fake.NewClientset()
 
 	createPod(t, cli, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-rsync-abc",
-			Namespace: "default",
-			Labels:    map[string]string{"job-name": "test-rsync"},
-		},
+		Name:      "test-rsync-abc",
+		Namespace: "default",
+		Labels:    map[string]string{"job-name": "test-rsync"},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodFailed,
 			ContainerStatuses: []corev1.ContainerStatus{
@@ -401,11 +379,9 @@ func TestWaitForJobCompletion_StructuredLogsKeepTheWriterClean(t *testing.T) {
 	cli := fake.NewClientset()
 
 	createPod(t, cli, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-rsync-abc",
-			Namespace: "default",
-			Labels:    map[string]string{"job-name": "test-rsync"},
-		},
+		Name:      "test-rsync-abc",
+		Namespace: "default",
+		Labels:    map[string]string{"job-name": "test-rsync"},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodFailed,
 			ContainerStatuses: []corev1.ContainerStatus{
@@ -455,11 +431,9 @@ func TestFindDataMoverJob(t *testing.T) {
 			name: "single-release rsync job",
 			jobs: []batchv1.Job{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "pv-migrate-abc12-rsync",
-						Namespace: "default",
-						Labels:    helmLabels,
-					},
+					Name:      "pv-migrate-abc12-rsync",
+					Namespace: "default",
+					Labels:    helmLabels,
 				},
 			},
 			ns:      "default",
@@ -471,11 +445,9 @@ func TestFindDataMoverJob(t *testing.T) {
 			name: "dual-release dest rsync job",
 			jobs: []batchv1.Job{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "pv-migrate-abc12-dest-rsync",
-						Namespace: "ns1",
-						Labels:    helmLabels,
-					},
+					Name:      "pv-migrate-abc12-dest-rsync",
+					Namespace: "ns1",
+					Labels:    helmLabels,
 				},
 			},
 			ns:      "ns1",
@@ -487,11 +459,9 @@ func TestFindDataMoverJob(t *testing.T) {
 			name: "with strategy suffix",
 			jobs: []batchv1.Job{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "pv-migrate-fuzzy-panda-clusterip-rsync",
-						Namespace: "default",
-						Labels:    helmLabels,
-					},
+					Name:      "pv-migrate-fuzzy-panda-clusterip-rsync",
+					Namespace: "default",
+					Labels:    helmLabels,
 				},
 			},
 			ns:      "default",
@@ -503,11 +473,9 @@ func TestFindDataMoverJob(t *testing.T) {
 			name: "does not match prefix collision",
 			jobs: []batchv1.Job{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "pv-migrate-foo2-clusterip-rsync",
-						Namespace: "default",
-						Labels:    helmLabels,
-					},
+					Name:      "pv-migrate-foo2-clusterip-rsync",
+					Namespace: "default",
+					Labels:    helmLabels,
 				},
 			},
 			ns:         "default",
@@ -518,11 +486,9 @@ func TestFindDataMoverJob(t *testing.T) {
 			name: "falls back to all namespaces",
 			jobs: []batchv1.Job{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "pv-migrate-abc12-rsync",
-						Namespace: "other-ns",
-						Labels:    helmLabels,
-					},
+					Name:      "pv-migrate-abc12-rsync",
+					Namespace: "other-ns",
+					Labels:    helmLabels,
 				},
 			},
 			ns:      "wrong-ns",
@@ -534,11 +500,9 @@ func TestFindDataMoverJob(t *testing.T) {
 			name: "ignores non-rsync jobs",
 			jobs: []batchv1.Job{
 				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "pv-migrate-abc12-sshd",
-						Namespace: "default",
-						Labels:    helmLabels,
-					},
+					Name:      "pv-migrate-abc12-sshd",
+					Namespace: "default",
+					Labels:    helmLabels,
 				},
 			},
 			ns:         "",

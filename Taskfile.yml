@@ -13,13 +13,17 @@ vars:
   # in which case it would read stdin instead of checking anything. BSD xargs
   # already behaves that way; GNU needs telling.
   SHFMT_FLAGS: -i 2 -ci -sr
+  # The build tags the integration suites sit behind. `go fix` only sees the files
+  # its tags select, so without these it silently skips those suites, while
+  # golangci-lint reads the same list from its own config and does not.
+  BUILD_TAGS: integration,integration_cloud
 
 tasks:
   fmt:
     desc: format code and shell scripts
     cmds:
       - go mod tidy
-      - go fix ./...
+      - go fix -tags {{.BUILD_TAGS}} ./...
       - golangci-lint run --fix ./...
       - golangci-lint fmt ./...
       - '{{.SHELL_FILES}} | xargs -0 -r shfmt -l -w {{.SHFMT_FLAGS}}'

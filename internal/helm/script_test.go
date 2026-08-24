@@ -64,8 +64,7 @@ func runScript(t *testing.T, script string, env ...string) (int, string) {
 	out, err := cmd.CombinedOutput()
 	t.Log(string(out))
 
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		return exitErr.ExitCode(), string(out)
 	}
 

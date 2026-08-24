@@ -12,7 +12,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
@@ -33,7 +32,7 @@ func diagLabels() map[string]string {
 
 func warningEvent(reason, message string, involved *corev1.ObjectReference, count int32) *corev1.Event {
 	return &corev1.Event{
-		ObjectMeta:     metav1.ObjectMeta{Namespace: diagNS, Name: reason + "-" + involved.Name},
+		Namespace: diagNS, Name: reason + "-" + involved.Name,
 		Type:           corev1.EventTypeWarning,
 		Reason:         reason,
 		Message:        message,
@@ -57,9 +56,7 @@ func TestWriteWorkloadDiagnostics_PendingPodWithSchedulingEvent(t *testing.T) {
 	t.Parallel()
 
 	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: diagNS, Name: diagRelease + "-sshd-abc", Labels: diagLabels(), UID: types.UID("pod-uid"),
-		},
+		Namespace: diagNS, Name: diagRelease + "-sshd-abc", Labels: diagLabels(), UID: types.UID("pod-uid"),
 		Status: corev1.PodStatus{Phase: corev1.PodPending},
 	}
 
@@ -67,7 +64,7 @@ func TestWriteWorkloadDiagnostics_PendingPodWithSchedulingEvent(t *testing.T) {
 		warningEvent("FailedScheduling", "0/1 nodes are available: 1 node(s) didn't match node selector.",
 			&corev1.ObjectReference{Kind: "Pod", Name: pod.Name, UID: pod.UID}, 3),
 		&corev1.Event{
-			ObjectMeta:     metav1.ObjectMeta{Namespace: diagNS, Name: "normal"},
+			Namespace: diagNS, Name: "normal",
 			Type:           corev1.EventTypeNormal,
 			Reason:         "Scheduled",
 			Message:        "nothing to see here",
@@ -86,9 +83,7 @@ func TestWriteWorkloadDiagnostics_ImagePullBackOff(t *testing.T) {
 	t.Parallel()
 
 	out := writeDiagnostics(t.Context(), t, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: diagNS, Name: diagRelease + "-rsync-abc", Labels: diagLabels(), UID: types.UID("pod-uid"),
-		},
+		Namespace: diagNS, Name: diagRelease + "-rsync-abc", Labels: diagLabels(), UID: types.UID("pod-uid"),
 		Status: corev1.PodStatus{
 			Phase: corev1.PodPending,
 			ContainerStatuses: []corev1.ContainerStatus{
@@ -119,9 +114,7 @@ func TestWriteWorkloadDiagnostics_ZeroPodsWithFailedCreate(t *testing.T) {
 	t.Parallel()
 
 	job := &batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: diagNS, Name: diagRelease + "-rsync", Labels: diagLabels(), UID: types.UID("job-uid"),
-		},
+		Namespace: diagNS, Name: diagRelease + "-rsync", Labels: diagLabels(), UID: types.UID("job-uid"),
 	}
 
 	out := writeDiagnostics(t.Context(), t, job,
@@ -140,9 +133,7 @@ func TestWriteWorkloadDiagnostics_EventMatchedByUIDNotName(t *testing.T) {
 	t.Parallel()
 
 	service := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: diagNS, Name: diagRelease + "-sshd", Labels: diagLabels(), UID: types.UID("service-uid"),
-		},
+		Namespace: diagNS, Name: diagRelease + "-sshd", Labels: diagLabels(), UID: types.UID("service-uid"),
 		Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeLoadBalancer},
 	}
 
@@ -159,9 +150,7 @@ func TestWriteWorkloadDiagnostics_LoadBalancerWithAddress(t *testing.T) {
 	t.Parallel()
 
 	out := writeDiagnostics(t.Context(), t, &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: diagNS, Name: diagRelease + "-sshd", Labels: diagLabels(), UID: types.UID("service-uid"),
-		},
+		Namespace: diagNS, Name: diagRelease + "-sshd", Labels: diagLabels(), UID: types.UID("service-uid"),
 		Spec: corev1.ServiceSpec{Type: corev1.ServiceTypeLoadBalancer},
 		Status: corev1.ServiceStatus{
 			LoadBalancer: corev1.LoadBalancerStatus{Ingress: []corev1.LoadBalancerIngress{{IP: "10.0.0.1"}}},
@@ -176,19 +165,15 @@ func TestWriteWorkloadDiagnostics_ReportsOwnerWorkloads(t *testing.T) {
 
 	out := writeDiagnostics(t.Context(), t,
 		&appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: diagNS, Name: diagRelease + "-sshd", Labels: diagLabels(), UID: types.UID("deployment-uid"),
-			},
+			Namespace: diagNS, Name: diagRelease + "-sshd", Labels: diagLabels(), UID: types.UID("deployment-uid"),
 			Status: appsv1.DeploymentStatus{Replicas: 1},
 		},
 		&appsv1.ReplicaSet{
-			ObjectMeta: metav1.ObjectMeta{
-				Namespace: diagNS,
-				Name:      diagRelease + "-sshd-1",
-				Labels:    diagLabels(),
-				UID:       types.UID("replicaset-uid"),
-			},
-			Status: appsv1.ReplicaSetStatus{Replicas: 1},
+			Namespace: diagNS,
+			Name:      diagRelease + "-sshd-1",
+			Labels:    diagLabels(),
+			UID:       types.UID("replicaset-uid"),
+			Status:    appsv1.ReplicaSetStatus{Replicas: 1},
 		})
 
 	assert.Contains(t, out, "deployment "+diagRelease+"-sshd: 0/1 ready")
@@ -205,9 +190,7 @@ func TestWriteWorkloadDiagnostics_CancelledParentContext(t *testing.T) {
 	cancel()
 
 	out := writeDiagnostics(ctx, t, &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: diagNS, Name: diagRelease + "-rsync-abc", Labels: diagLabels(), UID: types.UID("pod-uid"),
-		},
+		Namespace: diagNS, Name: diagRelease + "-rsync-abc", Labels: diagLabels(), UID: types.UID("pod-uid"),
 		Status: corev1.PodStatus{Phase: corev1.PodFailed},
 	})
 

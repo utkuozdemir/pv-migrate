@@ -293,8 +293,7 @@ func finishRsyncSession(
 	waitErr error, vanished bool, tail *lineTail, progressLogger *progresslog.Logger, logger *slog.Logger,
 ) error {
 	if waitErr != nil {
-		var sessionErr *rsyncRunError
-		if errors.As(waitErr, &sessionErr) {
+		if sessionErr, ok := errors.AsType[*rsyncRunError](waitErr); ok {
 			return rsyncSessionError(sessionErr.err, tail.Lines())
 		}
 
@@ -383,8 +382,7 @@ func isVanishedSourceFiles(runErr error) bool {
 func rsyncSessionError(runErr error, recentLines []string) error {
 	err := fmt.Errorf("rsync session failed: %w", runErr)
 
-	var exitErr exitStatusError
-	if errors.As(runErr, &exitErr) {
+	if exitErr, ok := errors.AsType[exitStatusError](runErr); ok {
 		if meaning := rsync.Interpret(exitErr.ExitStatus()); meaning != "" {
 			err = fmt.Errorf("%w (%s)", err, meaning)
 		}

@@ -13,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	storagev1 "k8s.io/api/storage/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 
@@ -183,9 +182,9 @@ func TestProvisioner(t *testing.T) {
 		t.Parallel()
 
 		info := &pvc.Info{Claim: &corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+			Annotations: map[string]string{
 				"volume.kubernetes.io/storage-provisioner": "rancher.io/local-path",
-			}},
+			},
 		}}
 
 		provisioner, err := info.Provisioner(t.Context())
@@ -197,9 +196,9 @@ func TestProvisioner(t *testing.T) {
 		t.Parallel()
 
 		info := &pvc.Info{Claim: &corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{
+			Annotations: map[string]string{
 				"volume.beta.kubernetes.io/storage-provisioner": "k8s.io/minikube-hostpath",
-			}},
+			},
 		}}
 
 		provisioner, err := info.Provisioner(t.Context())
@@ -212,7 +211,7 @@ func TestProvisioner(t *testing.T) {
 
 		storageClassName := "local-path"
 		storageClass := &storagev1.StorageClass{
-			ObjectMeta:  metav1.ObjectMeta{Name: storageClassName},
+			Name:        storageClassName,
 			Provisioner: "rancher.io/local-path",
 		}
 		info := &pvc.Info{
@@ -273,29 +272,23 @@ func buildClusterClient(
 	pvcAccessModes ...corev1.PersistentVolumeAccessMode,
 ) *k8s.ClusterClient {
 	testPVC := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test",
-			Namespace: "testns",
-		},
+		Name:      "test",
+		Namespace: "testns",
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: pvcAccessModes,
 		},
 	}
 
 	pod1 := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pod1",
-			Namespace: "testns",
-		},
+		Name:      "pod1",
+		Namespace: "testns",
 		Spec: corev1.PodSpec{
 			NodeName: "node-1",
 			Volumes: []corev1.Volume{
 				{
 					Name: "something",
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: "something",
-						},
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: "something",
 					},
 				},
 			},
@@ -303,19 +296,15 @@ func buildClusterClient(
 	}
 
 	pod2 := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pod2",
-			Namespace: "testns",
-		},
+		Name:      "pod2",
+		Namespace: "testns",
 		Spec: corev1.PodSpec{
 			NodeName: mountingNode,
 			Volumes: []corev1.Volume{
 				{
 					Name: "something-else",
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: "something-else",
-						},
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: "something-else",
 					},
 				},
 			},
@@ -325,10 +314,8 @@ func buildClusterClient(
 	if mountingNode != "" {
 		pod2.Spec.Volumes = append(pod2.Spec.Volumes, corev1.Volume{
 			Name: "test",
-			VolumeSource: corev1.VolumeSource{
-				PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-					ClaimName: "test",
-				},
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+				ClaimName: "test",
 			},
 		})
 	}

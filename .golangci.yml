@@ -9,6 +9,7 @@ linters:
     - depguard # breaking things: https://github.com/atc0005/go-ci/issues/1024
     - err113 # no need to wrap all errors, too much work
     - exhaustruct # pointless
+    - exhaustruct_v5 # pointless
     - gochecknoglobals # globals are sometimes ok
     - testpackage # todo: consider enabling
     - wsl # deprecated

@@ -515,10 +515,8 @@ func testLoadBalancerDestHostOverride(t *testing.T, te *testEnv) {
 	svcName := "alternative-svc"
 	_, err := te.sourceCli.KubeClient.CoreV1().Services(te.sourceNS).Create(ctx,
 		&corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   svcName,
-				Labels: resourceLabels,
-			},
+			Name:   svcName,
+			Labels: resourceLabels,
 			Spec: corev1.ServiceSpec{
 				Selector: map[string]string{
 					"app.kubernetes.io/component": "sshd",
@@ -732,10 +730,8 @@ func testNodePortDestHostOverride(t *testing.T, te *testEnv) {
 	svcName := "nodeport-override-svc"
 	_, err := te.sourceCli.KubeClient.CoreV1().Services(te.sourceNS).Create(ctx,
 		&corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:   svcName,
-				Labels: resourceLabels,
-			},
+			Name:   svcName,
+			Labels: resourceLabels,
 			Spec: corev1.ServiceSpec{
 				Type: corev1.ServiceTypeNodePort,
 				Selector: map[string]string{
@@ -1040,10 +1036,8 @@ func newTestNS(t *testing.T, cli *k8s.ClusterClient, prefix string) string {
 	name := prefix + "-" + utilrand.String(5)
 
 	_, err := cli.KubeClient.CoreV1().Namespaces().Create(t.Context(), &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: resourceLabels,
-		},
+		Name:   name,
+		Labels: resourceLabels,
 	}, metav1.CreateOptions{})
 	require.NoError(t, err)
 
@@ -1078,11 +1072,9 @@ func provisionPod(ctx context.Context, cli *k8s.ClusterClient, ns, pvcName, podN
 	}
 
 	pvc := corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pvcName,
-			Namespace: ns,
-			Labels:    resourceLabels,
-		},
+		Name:      pvcName,
+		Namespace: ns,
+		Labels:    resourceLabels,
 		Spec: corev1.PersistentVolumeClaimSpec{
 			StorageClassName: storageClassRef,
 			AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
@@ -1104,20 +1096,16 @@ func provisionPod(ctx context.Context, cli *k8s.ClusterClient, ns, pvcName, podN
 	terminationGracePeriodSeconds := int64(0)
 
 	pod := corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: ns,
-			Labels:    resourceLabels,
-		},
+		Name:      podName,
+		Namespace: ns,
+		Labels:    resourceLabels,
 		Spec: corev1.PodSpec{
 			TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 			Volumes: []corev1.Volume{
 				{
 					Name: "volume",
-					VolumeSource: corev1.VolumeSource{
-						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-							ClaimName: pvcName,
-						},
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: pvcName,
 					},
 				},
 			},
