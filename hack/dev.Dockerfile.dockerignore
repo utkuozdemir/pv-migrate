@@ -1,0 +1,18 @@
+# Context rules for hack/dev.Dockerfile only. BuildKit prefers a
+# <dockerfile>.dockerignore over a root one, so keeping these rules here means
+# they cannot reach the release images, whose contexts goreleaser assembles
+# itself and which must keep copying exactly what they copy today.
+#
+# .git is excluded because it changes on every commit and would invalidate every
+# stage that copies the tree. The release-config check synthesizes a repository
+# instead. The unit tests need it, so they bind-mount the tree rather than
+# running as a stage.
+.git
+dist
+_work
+.idea
+.vscode
+.claude
+.DS_Store
+*.patch
+*.diff
