@@ -213,7 +213,7 @@ jobs:
         with:
           cluster_name: backup-test
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
-          version: v0.32.0
+          version: v0.33.0
 
       - name: Load rclone image
         run: kind load docker-image integration-test-rclone:${{ steps.vars.outputs.sha }} --name backup-test
