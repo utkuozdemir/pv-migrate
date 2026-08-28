@@ -24,7 +24,7 @@ ARG GO_VERSION
 # renovate: depName=golangci/golangci-lint datasource=github-releases
 ARG GOLANGCI_LINT_VERSION=2.13.2
 # renovate: depName=mvdan/sh datasource=github-releases
-ARG SHFMT_VERSION=3.13.1
+ARG SHFMT_VERSION=3.14.0
 # the single declaration of the goreleaser version: the workflows read it from
 # here rather than carrying their own, so the version that validates the release
 # config is always the version that performs the release
