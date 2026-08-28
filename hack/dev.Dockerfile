@@ -22,7 +22,7 @@
 
 ARG GO_VERSION
 # renovate: depName=golangci/golangci-lint datasource=github-releases
-ARG GOLANGCI_LINT_VERSION=2.13.1
+ARG GOLANGCI_LINT_VERSION=2.13.2
 # renovate: depName=mvdan/sh datasource=github-releases
 ARG SHFMT_VERSION=3.13.1
 # the single declaration of the goreleaser version: the workflows read it from
