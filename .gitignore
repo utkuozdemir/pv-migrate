@@ -12,6 +12,7 @@
 # Coverage and profiling output
 *.out
 /profile.cov
+/coverage.txt
 
 # Go workspace file
 go.work

@@ -1,28 +1,21 @@
 name: build
 
+# no paths-ignore on purpose: all three jobs here are required checks, so a
+# pull request touching only ignored paths could never merge (the checks would
+# stay pending forever) and needed an admin to bypass the rules. Running the
+# whole suite on a docs change costs some minutes, a bypass costs the rules.
 on:
   workflow_dispatch: {}
   push:
     branches:
       - main
       - renovate/**
-    paths-ignore:
-      - "**.md"
-      - "img/**"
-      - "test/**"
-      - ".gitignore"
-      - "renovate.json"
-      - ".krew.yaml"
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - "**.md"
-      - "img/**"
-      - "test/**"
-      - ".gitignore"
-      - "renovate.json"
-      - ".krew.yaml"
+
+permissions:
+  contents: read
 
 concurrency:
   group: build-${{ github.event.pull_request.number || github.ref }}
@@ -37,13 +30,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install go
-        uses: actions/setup-go@v7.0.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
       - name: Install Task
-        uses: arduino/setup-task@v3.0.0
+        uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52 # v3.0.0
         with:
           # renovate: depName=go-task/task datasource=github-releases
           version: 3.53.1
@@ -52,8 +45,17 @@ jobs:
       # Nothing is installed here, so CI and a workstation cannot drift apart.
       - name: Lint
         run: task lint
+      # with a coverage profile, so the unit suite counts on Codecov next to
+      # the two integration suites below. Each upload carries a flag naming
+      # its suite, and Codecov merges them per commit.
       - name: Run unit tests
-        run: task test
+        run: task test COVERPROFILE=coverage.txt
+      - name: Send coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: coverage.txt
+          flags: unit
+          token: ${{ secrets.CODECOV_TOKEN }}
       # the goreleaser version is declared once, in hack/dev.Dockerfile, so the
       # version that validates the release config in lint is the version that
       # builds the release. Fail loudly rather than guessing if that
@@ -74,8 +76,7 @@ jobs:
           fi
           echo "version=${version}" >>"${GITHUB_OUTPUT}"
       - name: Build with Goreleaser
-        if: ${{ always() }}
-        uses: goreleaser/goreleaser-action@v7.2.3
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
         with:
           version: ${{ steps.goreleaser_version.outputs.version }}
           args: build --snapshot --clean --single-target
@@ -88,11 +89,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Get short SHA
         id: vars
-        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build images
         run: |
@@ -101,11 +102,17 @@ jobs:
           docker build -t integration-test-sshd:$TAG ./docker/sshd/
 
       - name: Install go
-        uses: actions/setup-go@v7.0.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      # a pinned helm rather than the install script from helm's main branch,
+      # so the version is known and the download is not a script piped into a
+      # shell
       - name: Install helm
-        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        uses: Azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          # renovate: depName=helm/helm datasource=github-releases
+          version: v4.2.4
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
@@ -175,41 +182,45 @@ jobs:
 
       - name: Upload cluster diagnostics
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: migrate-cluster-diagnostics
           path: /tmp/cluster-diagnostics
           retention-days: 7
 
       - name: Send coverage
-        uses: codecov/codecov-action@v7.0.0
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           files: coverage.txt
+          flags: migrate
           token: ${{ secrets.CODECOV_TOKEN }}
 
   test-backup:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Get short SHA
         id: vars
-        run: echo "sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+        run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build rclone image
         run: docker build -t integration-test-rclone:${{ steps.vars.outputs.sha }} ./docker/rclone/
 
       - name: Install go
-        uses: actions/setup-go@v7.0.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
       - name: Install helm
-        run: curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+        uses: Azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          # renovate: depName=helm/helm datasource=github-releases
+          version: v4.2.4
 
       - name: Create kind cluster
-        uses: helm/kind-action@v1.14.0
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
           cluster_name: backup-test
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
@@ -247,7 +258,7 @@ jobs:
           CLOUD_TEST_S3_SECRET_KEY: ${{ secrets.CLOUD_TEST_S3_SECRET_KEY }}
           CLOUD_TEST_GCS_SERVICE_ACCOUNT_JSON: ${{ secrets.CLOUD_TEST_GCS_SERVICE_ACCOUNT_JSON }}
           CLOUD_TEST_AZURE_STORAGE_KEY: ${{ secrets.CLOUD_TEST_AZURE_STORAGE_KEY }}
-        run: go test -tags integration,integration_cloud -count=1 -timeout 15m -v ./integration/ -run 'TestBackup|TestCloud'
+        run: go test -tags integration,integration_cloud -count=1 -coverpkg=./... -coverprofile=coverage.txt -covermode=atomic -timeout 15m -v ./integration/ -run 'TestBackup|TestCloud'
 
       - name: Gather cluster diagnostics
         if: failure()
@@ -274,8 +285,15 @@ jobs:
 
       - name: Upload cluster diagnostics
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: backup-cluster-diagnostics
           path: /tmp/cluster-diagnostics
           retention-days: 7
+
+      - name: Send coverage
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          files: coverage.txt
+          flags: backup
+          token: ${{ secrets.CODECOV_TOKEN }}

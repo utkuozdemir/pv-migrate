@@ -1,6 +1,7 @@
 {
   "extends": [
     "config:recommended",
+    "helpers:pinGitHubActionDigests",
     ":automergeBranch",
     ":automergeMinor",
     ":automergeDigest",

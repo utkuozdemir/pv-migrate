@@ -43,7 +43,7 @@ FROM jnorwood/helm-docs:${HELM_DOCS_VERSION} AS helm-docs-bin
 # toolchain build. The downloads are a linear chain: bumping an earlier tool
 # re-fetches the later ones, which is a few seconds and not worth a stage per
 # tool.
-FROM alpine:3 AS tools
+FROM alpine:3@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS tools
 RUN apk add --no-cache curl tar git
 ARG TARGETARCH
 ARG GOLANGCI_LINT_VERSION
