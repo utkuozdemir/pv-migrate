@@ -8,7 +8,7 @@ require (
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/lmittmann/tint v1.2.0
 	github.com/mattn/go-isatty v0.0.24
-	github.com/mattn/go-runewidth v0.0.28
+	github.com/mattn/go-runewidth v0.0.29
 	github.com/neilotoole/slogt/v2 v2.0.0
 	github.com/rivo/uniseg v0.4.7
 	github.com/schollz/progressbar/v3 v3.19.1
