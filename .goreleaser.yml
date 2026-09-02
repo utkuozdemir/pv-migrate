@@ -9,6 +9,19 @@ builds:
   - id: pv-migrate
     main: ./cmd/pv-migrate
     binary: pv-migrate
+    # reproducible: no build paths in the binary, and the commit time as the
+    # file and build timestamp, so the same commit yields the same bytes.
+    # goreleaser's default ldflags are spelled out here because they stamp
+    # the build time into the binary, and setting ldflags at all replaces
+    # them, so the ones the binary reads have to be kept explicitly
+    flags:
+      - -trimpath
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .Commit }}
+      - -X main.date={{ .CommitDate }}
     env:
       - CGO_ENABLED=0
     goos:
@@ -48,13 +61,48 @@ archives:
       - goos: windows
         formats:
           - zip
+    # every entry gets a fixed owner and mode, and the extra files the commit
+    # time: the archive entries would otherwise carry the builder's uid, gid
+    # and user name, the file mode the umask produced, and the checkout time
+    # of the license and the build time of the generated completions, so the
+    # archives would reproduce only on the same machine. The binaries get
+    # their mode (0755) from goreleaser and their time from mod_timestamp
+    builds_info:
+      owner: root
+      group: root
     files:
-      - LICENSE
-      - completions/*
+      - src: LICENSE
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
+      - src: completions/*
+        info:
+          owner: root
+          group: root
+          mode: 0644
+          mtime: "{{ .CommitDate }}"
 
 checksum:
   name_template: checksums.txt
   algorithm: sha256
+
+# One keyless cosign signature over checksums.txt covers every archive, since
+# the file lists their sha256 sums. The bundle carries the signature and the
+# short-lived certificate, which names the release workflow as the signer, so
+# there is no key to store or rotate. Signing is skipped in the snapshot and
+# rebuild jobs, which have no OIDC identity to sign with.
+signs:
+  - id: checksums
+    cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
+    args:
+      - sign-blob
+      - --yes
+      - --bundle=${signature}
+      - ${artifact}
 
 git:
   ignore_tags: # skip prereleases (alpha, beta, rc) on finding previous commit to generate the changelog
@@ -103,6 +151,21 @@ dockers_v2:
       - linux/amd64
       - linux/arm64
       - linux/arm/v7
+    # reproducible image: the commit time as the image and history timestamp
+    # (buildkit reads it from this build argument), and the exporter rewrites
+    # the layer timestamps to it, which the COPY of the binary otherwise
+    # stamps with the build time. The exporter option only applies to the
+    # pushed release image: a snapshot loads a multi-platform build into the
+    # daemon, which cannot carry it, so snapshot images stay non-reproducible.
+    # buildkit's own provenance and SBOM attestations carry wall-clock times
+    # and change the published index digest on every build, so they are off.
+    # The release workflow attaches GitHub's build provenance instead.
+    sbom: false
+    build_args:
+      SOURCE_DATE_EPOCH: "{{ .CommitTimestamp }}"
+    flags:
+      - "{{ if not .IsSnapshot }}--output=type=image,rewrite-timestamp=true,push=true{{ end }}"
+      - "{{ if not .IsSnapshot }}--provenance=false{{ end }}"
 
 release:
   prerelease: auto
