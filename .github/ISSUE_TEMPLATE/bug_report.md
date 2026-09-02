@@ -1,32 +1,35 @@
 ---
 name: Bug report
-about: Create a report to help us improve
+about: Something does not work as documented
 title: ''
 labels: ''
 assignees: ''
 
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+**What happens**
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Run command '...'
-2. See error
+A short description of the behavior.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+**How to reproduce**
 
-**Console output**
-Add the error logs and/or the output to help us diagnose the problem.
+1. Run `pv-migrate ...`
+2. ...
 
-**Version**
- - Source and destination Kubernetes versions [e.g. `v1.17.14-gke.1600`, `v1.21.1+k3s1`]
- - Source and destination container runtimes [e.g. `containerd://1.4.4-k3s2`, `docker://19.3.6`]
- - `pv-migrate` version and architecture [e.g. `v0.5.5 - darwin_x86_64`]
- - Installation method [e.g. `homebrew`, binary download]
- - Source and destination PVC type, size and accessModes [e.g. `ReadWriteMany, 8G, kubernetes.io/gce-pd -> ReadWriteOnce, N/A, rancher.io/local-path` ]
+**What should happen instead**
 
-**Additional context**
-Add any other context about the problem here.
+**Output**
+
+The command output, ideally with `--log-level DEBUG`. Redact anything you do not want public.
+
+**Environment**
+
+- `pv-migrate` version (`pv-migrate --version`), and your OS and architecture, e.g., macOS arm64
+- How it was installed, e.g., Homebrew, krew, release archive
+- Source and destination Kubernetes versions, e.g., `v1.31.4-gke.1183000`, `v1.32.1+k3s1`
+- Source and destination PVC storage class, access modes and size, e.g., `gce-pd ReadWriteOnce 8Gi -> local-path ReadWriteOnce 8Gi`
+- For bucket backup/restore: the backend, e.g., S3-compatible (which provider), Azure Blob, GCS, raw rclone config
+
+**Anything else**
+
+Network policies, restricted pod security, a proxy, anything unusual about the clusters.

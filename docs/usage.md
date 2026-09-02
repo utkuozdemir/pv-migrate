@@ -1,48 +1,47 @@
 # Usage
 
-`pv-migrate` supports:
+`pv-migrate` has two workflows:
 
-- [PVC-to-PVC migration](migrate.md): copy data directly from one Kubernetes `PersistentVolumeClaim` to another using rsync-based strategies.
-- [Bucket backup and restore](backup-restore.md): back up a PVC to object storage, restore it later, or use pv-migrate as the data mover in a scheduled backup `CronJob`.
+- [PVC-to-PVC migration](migrate.md): copy data directly from one Kubernetes `PersistentVolumeClaim` to another, with rsync.
+- [Bucket backup and restore](backup-restore.md): back up a PVC to object storage and restore it later, with rclone. This is also the data mover for a scheduled backup `CronJob`.
 
-See [Installation](install.md) for CLI and kubectl plugin setup.
+See [Installation](install.md) for getting the CLI or the kubectl plugin, and the [CLI reference](cli-reference.md) for every flag and the generated help.
 
-See the [CLI reference](cli-reference.md) for all flags and generated help.
+## Customizing the generated resources
 
-The Kubernetes resources created by pv-migrate are sourced from the embedded [Helm chart](../internal/helm/pv-migrate).
-You can pass raw values to the backing Helm chart using the `--helm-*` flags for further customization:
-container images, resources, service accounts, annotations, labels, affinity, tolerations, and other chart values.
+The Kubernetes resources `pv-migrate` creates come from an embedded [Helm chart](../internal/helm/pv-migrate).
+The `--helm-*` flags pass raw values to that chart: container images, resources, service accounts, annotations, labels, affinity, tolerations, and everything else the chart exposes.
 
 ## Detached operations
 
 Both migration and bucket backup/restore support detach mode.
-Use `--detach` to let the data mover job continue after the CLI exits.
+With `--detach`, the data mover job keeps running in the cluster after the CLI exits, and you check on it later:
 
 ```bash
-$ pv-migrate --source old-pvc --dest new-pvc --detach --id my-migration
-$ pv-migrate status my-migration
-$ pv-migrate status my-migration --follow
-$ pv-migrate cleanup my-migration
+pv-migrate --source old-pvc --dest new-pvc --detach --id my-migration
+pv-migrate status my-migration
+pv-migrate status my-migration --follow
+pv-migrate cleanup my-migration
 ```
 
-For bucket backup/restore, use the same status and cleanup commands:
+The same `status` and `cleanup` commands work for backup and restore:
 
 ```bash
-$ pv-migrate backup --source app-data --backend s3 --bucket backups --name app-data --detach --id app-backup
-$ pv-migrate status app-backup
-$ pv-migrate cleanup app-backup
+pv-migrate backup --source app-data --backend s3 --bucket backups --name app-data --detach --id app-backup
+pv-migrate status app-backup
+pv-migrate cleanup app-backup
 ```
 
 ## Cleanup
 
-By default, pv-migrate cleans up the Helm release after attached operations complete.
-Use `--no-cleanup` or `--no-cleanup-on-failure` when you need to inspect generated resources.
+After an attached operation completes, `pv-migrate` uninstalls the Helm release it created.
+Use `--no-cleanup` or `--no-cleanup-on-failure` when you want to inspect the generated resources.
 
 Detached operations are not cleaned up automatically.
-Use `pv-migrate cleanup <id>` after the job completes.
+Run `pv-migrate cleanup <id>` once the job is done.
 
 ## Where to go next
 
-- Start with [PVC-to-PVC migration](migrate.md) if you are moving data between Kubernetes volumes.
-- Start with [bucket backup and restore](backup-restore.md) if you want a durable object-storage backup or a later restore.
-- Use the [CLI reference](cli-reference.md) when you need exact flag names and defaults.
+- [PVC-to-PVC migration](migrate.md) if you are moving data between Kubernetes volumes.
+- [Bucket backup and restore](backup-restore.md) if you want a backup in object storage or a later restore.
+- [CLI reference](cli-reference.md) for the exact flag names and defaults.

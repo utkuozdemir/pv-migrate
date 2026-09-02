@@ -1,25 +1,24 @@
 # pv-migrate
 
-[![build](https://github.com/utkuozdemir/pv-migrate/actions/workflows/build.yml/badge.svg)](https://github.com/utkuozdemir/pv-migrate/actions/workflows/build.yml)
-[![codecov](https://codecov.io/gh/utkuozdemir/pv-migrate/branch/main/graph/badge.svg?token=41ULBTVG7X)](https://codecov.io/gh/utkuozdemir/pv-migrate)
-[![Go Report Card](https://goreportcard.com/badge/github.com/utkuozdemir/pv-migrate)](https://goreportcard.com/report/github.com/utkuozdemir/pv-migrate)
-![Latest GitHub release](https://img.shields.io/github/release/utkuozdemir/pv-migrate.svg)
-[![GitHub license](https://img.shields.io/github/license/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/blob/main/LICENSE)
-![GitHub stars](https://img.shields.io/github/stars/utkuozdemir/pv-migrate.svg?label=github%20stars)
-[![GitHub forks](https://img.shields.io/github/forks/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/network)
-[![GitHub issues](https://img.shields.io/github/issues/utkuozdemir/pv-migrate)](https://github.com/utkuozdemir/pv-migrate/issues)
-![GitHub all releases](https://img.shields.io/github/downloads/utkuozdemir/pv-migrate/total)
-![Docker Pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate)
-![SSHD Docker Pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-sshd?label=sshd%20-%20docker%20pulls)
-![Rsync Docker Pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-rsync?label=rsync%20-%20docker%20pulls)
+[![build](https://img.shields.io/github/actions/workflow/status/utkuozdemir/pv-migrate/build.yml?branch=main&label=build&style=flat-square)](https://github.com/utkuozdemir/pv-migrate/actions/workflows/build.yml)
+[![coverage](https://img.shields.io/codecov/c/github/utkuozdemir/pv-migrate/main?style=flat-square)](https://codecov.io/gh/utkuozdemir/pv-migrate)
+[![OpenSSF scorecard](https://img.shields.io/ossf-scorecard/github.com/utkuozdemir/pv-migrate?label=openssf%20scorecard&style=flat-square)](https://scorecard.dev/viewer/?uri=github.com/utkuozdemir/pv-migrate)
+<!-- OpenSSF best practices: once the project entry exists on bestpractices.dev, add its numeric id here:
+[![OpenSSF best practices](https://img.shields.io/cii/level/PROJECT_ID?label=openssf%20best%20practices&style=flat-square)](https://www.bestpractices.dev/projects/PROJECT_ID)
+-->
+[![latest release](https://img.shields.io/github/v/release/utkuozdemir/pv-migrate?style=flat-square)](https://github.com/utkuozdemir/pv-migrate/releases)
+[![license](https://img.shields.io/github/license/utkuozdemir/pv-migrate?style=flat-square)](https://github.com/utkuozdemir/pv-migrate/blob/main/LICENSE)
 
-`pv-migrate` is a CLI tool/kubectl plugin for moving Kubernetes
-`PersistentVolumeClaim` data.
+[![release downloads](https://img.shields.io/github/downloads/utkuozdemir/pv-migrate/total?label=release%20downloads&style=flat-square)](https://github.com/utkuozdemir/pv-migrate/releases)
+[![CLI image pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate?label=cli%20image%20pulls&style=flat-square)](https://hub.docker.com/r/utkuozdemir/pv-migrate)
+[![rsync image pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-rsync?label=rsync%20image%20pulls&style=flat-square)](https://hub.docker.com/r/utkuozdemir/pv-migrate-rsync)
+[![sshd image pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-sshd?label=sshd%20image%20pulls&style=flat-square)](https://hub.docker.com/r/utkuozdemir/pv-migrate-sshd)
+[![rclone image pulls](https://img.shields.io/docker/pulls/utkuozdemir/pv-migrate-rclone?label=rclone%20image%20pulls&style=flat-square)](https://hub.docker.com/r/utkuozdemir/pv-migrate-rclone)
+[![krew](https://img.shields.io/badge/dynamic/yaml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fkubernetes-sigs%2Fkrew-index%2Fmaster%2Fplugins%2Fpv-migrate.yaml&query=%24.spec.version&label=krew&style=flat-square)](https://krew.sigs.k8s.io/plugins/#pv-migrate)
 
-Its primary workflow is direct PVC-to-PVC migration, including in-namespace,
-cross-namespace, and cross-cluster copies. It can also back up PVC data to
-bucket storage and restore it later using S3-compatible storage, Azure Blob,
-GCS, or a custom rclone remote.
+`pv-migrate` is a CLI tool and kubectl plugin that moves the data of Kubernetes `PersistentVolumeClaim`s.
+It copies directly from one PVC to another, in the same namespace, across namespaces or across clusters.
+It can also back up a PVC to bucket storage (S3-compatible, Azure Blob, GCS or any rclone remote) and restore it later.
 
 ---
 
@@ -34,118 +33,119 @@ Copying a claim into another one:
 
 ![A pv-migrate run copying one PersistentVolumeClaim into another, with a progress bar](img/demo.gif)
 
-When a migration fails, the output explains why. It gives the exit code the data
-mover returned, with the meaning that mover's own documentation attaches to it,
-the last lines of the failed pod's log, and what the cluster reported about the
-resources involved.
+When a migration fails, the output explains why:
+
+- the exit code the data mover returned, with the meaning that mover's own documentation attaches to it,
+- the last lines of the failed pod's log,
+- what the cluster reported about the resources involved.
 
 ![A pv-migrate run failing, showing the data mover's exit code and what the cluster reported](img/demo-failure.gif)
 
 ## Why this exists
 
-On Kubernetes, renaming a resource like a `Deployment` is usually just a manifest change.
-Create the same object with a new name or namespace, apply it, and move on.
+On Kubernetes, renaming a resource like a `Deployment` is a manifest change.
+You create the same object with a new name or namespace, apply it, and move on.
 
-PVCs are different. The Kubernetes object is only the metadata. The real data
-lives in the storage backend.
+PVCs are different.
+The Kubernetes object is only the metadata.
+The data lives in the storage backend, and there is no built-in way to move it.
 
-`pv-migrate` moves that data. It can copy directly between PVCs, or use bucket
-storage as a backup target or intermediate hop.
+`pv-migrate` moves that data.
+It runs a proven data mover (rsync or rclone) inside the cluster, so nothing is copied through your machine unless you ask for it.
+
+## Quick start
+
+```bash
+pv-migrate --source old-pvc --dest new-pvc
+```
+
+This copies the contents of `old-pvc` into `new-pvc` in the current namespace, trying the cheapest strategy first.
+See [Installation](docs/install.md) for how to get the binary, and [Usage](docs/usage.md) for everything else.
 
 ## Workflows
 
 ### PVC-to-PVC migration
 
-Copy data directly from one PVC to another. This is the core pv-migrate workflow
-and uses rsync-based strategies.
+Copies data directly from one PVC to another with rsync, usually over SSH.
+This is the original workflow.
 
 ```bash
-$ pv-migrate --source old-pvc --dest new-pvc
+pv-migrate --source old-pvc --dest new-pvc
 ```
 
-See [PVC-to-PVC migration](docs/migrate.md) for strategies and examples.
+See [PVC-to-PVC migration](docs/migrate.md) for the strategies and more examples.
 
 ### Bucket backup and restore
 
-Back up a PVC to object storage and restore it later. Use this for backups,
-one-off exports, or moves where direct cluster-to-cluster connectivity is awkward.
+Backs up a PVC to object storage with rclone and restores it later.
+Use it for backups, one-off exports, or moves where direct connectivity between the clusters is not available.
 
 ```bash
-$ pv-migrate backup \
+pv-migrate backup \
   --source app-data \
   --backend s3 \
   --bucket pv-backups \
   --name app-data-2026-04-11
 
-$ pv-migrate restore \
+pv-migrate restore \
   --dest app-data-restore \
   --backend s3 \
   --bucket pv-backups \
   --name app-data-2026-04-11
 ```
 
-See [bucket backup and restore](docs/backup-restore.md) for backend options, object layout,
-raw rclone config mode, and permissions caveats.
+See [Bucket backup and restore](docs/backup-restore.md) for the backends, the object layout, raw rclone config mode and the permission caveats.
 
 ## Use cases
 
-:arrow_right: You have a database that has a PersistentVolumeClaim `db-data` of size `50Gi`.  
-Your DB grew over time, and you need more space for it.  
-You cannot resize the PVC because it doesn't support [volume expansion](https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/).  
-Create a new, bigger PVC `db-data-v2` and use `pv-migrate` to copy data from `db-data` to `db-data-v2`.
-
-
-:arrow_right: You need to move PersistentVolumeClaim `my-pvc`  from namespace `ns-a` to namespace `ns-b`.  
-Create the PVC with the same name and manifest in `ns-b` and use `pv-migrate` to copy its content.
-
-
-:arrow_right: You are moving from one cloud provider to another, 
-and you need to move the data from one Kubernetes cluster to the other.  
-Just use `pv-migrate` to copy the data **securely over the internet**.
-
-:arrow_right: You need to change the `StorageClass` of a volume, for instance,
-from a `ReadWriteOnce` one (like `local-path`) to a `ReadWriteMany` like NFS.
-As the `StorageClass` is not editable, you can use `pv-migrate` to transfer
-the data from the old PVC to the new one with the desired `StorageClass`.
-
-:arrow_right: You need to keep a PVC backup in object storage before a risky operation,
-or to export PVC data out of the cluster for later restore.  
-Use `pv-migrate backup` to copy the volume into S3-compatible storage, Azure Blob, or GCS,
-then `pv-migrate restore` when you need the data back.
-
-:arrow_right: You want scheduled PVC backups using Kubernetes-native building blocks.
-Run `pv-migrate backup` from a `CronJob` and rely on bucket lifecycle rules or separate automation for retention.
-
-:arrow_right: Direct cluster-to-cluster connectivity is awkward, blocked, or temporary.  
-Back up the source PVC to a bucket, then restore from that bucket into the destination cluster.
+- A database has a `50Gi` PVC and needs more space, but the storage class does not support [volume expansion](https://kubernetes.io/blog/2018/07/12/resizing-persistent-volumes-using-kubernetes/).
+  Create a bigger PVC and copy the data over.
+- A PVC has to move from namespace `ns-a` to namespace `ns-b`.
+  Create the PVC with the same manifest in `ns-b` and copy its content.
+- A workload moves from one cloud provider to another, and the data has to follow it to the new cluster.
+  `pv-migrate` copies it over the internet, encrypted with SSH.
+- A volume needs another `StorageClass`, e.g., from a `ReadWriteOnce` one like `local-path` to a `ReadWriteMany` one like NFS.
+  The storage class is not editable, so create the new PVC and copy.
+- A PVC needs a backup in object storage before a risky operation, or its data has to leave the cluster for a later restore.
+  `pv-migrate backup` writes it to a bucket, `pv-migrate restore` brings it back.
+- Scheduled PVC backups with Kubernetes building blocks only.
+  Run `pv-migrate backup` from a `CronJob`, and handle retention with bucket lifecycle rules.
+- Direct cluster-to-cluster connectivity is not available or only temporary.
+  Back up the source PVC to a bucket, then restore from that bucket into the destination cluster.
 
 ## Highlights
 
-- Supports in-namespace, in-cluster, and cross-cluster migrations
-- Uses rsync over SSH with a freshly generated [Ed25519](https://en.wikipedia.org/wiki/EdDSA)
-  or RSA key pair each time to securely migrate the files
-- Supports backing up PVC data to and restoring it from S3-compatible, Azure Blob, or GCS bucket storage
-- Supports custom rclone remotes for backup/restore backends
-- Lets you override rendered manifests, including images, affinity, and other Helm values
-- Supports multiple migration strategies and falls back when needed:
-  - Mount both PVCs in a single pod (mount)
-  - ClusterIP service (clusterip)
-  - LoadBalancer service (loadbalancer)
-  - NodePort service (nodeport, opt-in)
-  - Local port-forward transfer (local, opt-in)
-- Push mode (`--rsync-push`) for when the source side cannot expose a service, e.g., behind a firewall or NAT
-- Detach mode (`--detach`) for large transfers, so the job can keep running after the CLI exits
+- In-namespace, in-cluster and cross-cluster migrations
+- rsync over SSH with a freshly generated [Ed25519](https://en.wikipedia.org/wiki/EdDSA) or RSA key pair for every run
+- Backup to and restore from S3-compatible storage, Azure Blob, GCS, or any custom rclone remote
+- Several migration strategies, tried in order, with fallback:
+  - mount both PVCs in a single pod (`mount`)
+  - `ClusterIP` service (`clusterip`)
+  - `LoadBalancer` service (`loadbalancer`)
+  - `NodePort` service (`nodeport`, opt-in)
+  - port-forward through the local machine (`local`, opt-in)
 - Customizable strategy order
-- Supports arm32v7 (Raspberry Pi, etc.), arm64, and amd64
-- Supports completion for popular shells: bash, zsh, fish, powershell
+- Push mode (`--rsync-push`) for when the source side cannot expose a service, e.g., behind a firewall or NAT
+- Detach mode (`--detach`) for large transfers, so the job keeps running after the CLI exits
+- Overrides for the generated manifests through Helm values: images, affinity, resources and everything else the chart exposes
+- amd64, arm64 and arm32v7 (Raspberry Pi and similar) binaries and images
+- Shell completion for bash, zsh, fish and PowerShell
 
 ## Installation
 
-See [docs/install.md](docs/install.md) for install options and shell completion setup.
+See [docs/install.md](docs/install.md) for the install options (Homebrew, krew, Scoop, release archives, Docker) and shell completion.
+
+The artifacts live here:
+
+- [GitHub releases](https://github.com/utkuozdemir/pv-migrate/releases): archives and checksums for Linux, macOS and Windows
+- [Docker Hub](https://hub.docker.com/r/utkuozdemir/pv-migrate) and [GHCR](https://github.com/utkuozdemir?tab=packages&repo_name=pv-migrate): the CLI image, next to the three data mover images (`pv-migrate-rsync`, `pv-migrate-sshd`, `pv-migrate-rclone`)
+- [krew index](https://krew.sigs.k8s.io/plugins/#pv-migrate), the [Homebrew tap](https://github.com/utkuozdemir/homebrew-pv-migrate) and the [Scoop bucket](https://github.com/utkuozdemir/scoop-pv-migrate)
+
+Releases are signed, and the install guide has the [verification commands](docs/install.md#verifying-what-you-downloaded).
 
 ## Usage
 
-See [docs/usage.md](docs/usage.md) for usage guides and command references:
+See [docs/usage.md](docs/usage.md) for the usage guides and the command reference:
 
 - [PVC-to-PVC migration](docs/migrate.md)
 - [Bucket backup and restore](docs/backup-restore.md)
@@ -164,8 +164,7 @@ See [docs/usage.md](docs/usage.md) for usage guides and command references:
 
 ## Contributing
 
-See [CONTRIBUTING](CONTRIBUTING.md) for details.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the process, [.github/SECURITY.md](.github/SECURITY.md) for reporting a security problem, and [.github/GOVERNANCE.md](.github/GOVERNANCE.md) for how the project is run.
+The [security model](docs/security-model.md) says what the tool promises and where the trust boundaries are, and the [roadmap](docs/roadmap.md) says what is planned and what is deliberately not.
 
-[AGENTS.md](AGENTS.md) is the project guide for humans and AI assistants working
-in this repository: how the pieces fit together, and which invariants are easy to
-break by accident.
+[AGENTS.md](AGENTS.md) is the project guide for humans and AI assistants working in this repository: how the pieces fit together, and which invariants are easy to break by accident.
