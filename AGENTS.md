@@ -28,6 +28,7 @@ It renders an embedded Helm chart, waits, and uninstalls.
 That shape is the reason for most of what follows: everything it needs to say to the cluster has to survive being written into chart values, and everything it learns back it learns by reading pod logs.
 
 `README.md` says what the project is for; `docs/` carries the user-facing reference.
+`docs/security-model.md` says what the tool promises security-wise and where the trust boundaries are, and `docs/roadmap.md` says what is planned and what is deliberately not.
 
 ## The two workflows, and the strategy ladder
 
@@ -155,7 +156,7 @@ When they are needed and missing, the SSH connection simply never establishes, s
 The integration suites are behind build tags and need real clusters, so they run in CI and, deliberately, are not part of the default suite.
 
 - The migration suite wants two clusters, since cross-cluster migration is a first-class case, and it points at the second one through an environment variable.
-- The backup suite wants a bucket, and CI stands up MinIO for it. The cloud-provider tests are additionally gated so they fail rather than skip only when that provider's credentials are present.
+- The backup suite wants a bucket, and CI stands up MinIO for it. The cloud-provider tests additionally fail rather than skip when that provider's credentials are present, and only then.
 - Both suites create and delete namespaces in whatever cluster they are pointed at, so point them at a throwaway one.
 
 ### Fuzzing
@@ -190,10 +191,10 @@ Things worth knowing before changing them:
 - Both tapes pin a strategy. Left alone the ladder picks the mount strategy, which copies locally in a second or two and is too fast to see. The failure tape pins mount for the opposite reason, to keep that recording short, and doing so assumes one pod can mount both claims. On a cluster that provisions them in different zones the strategy declines instead, and the recording shows the wrong failure.
 - The workflow runs the same steps as the local task, from the same tapes. Only the recorder differs. CI runs VHS from its own image, whose fonts include the colour emoji this tool prints and which a bare runner may not have.
 - The recorder honours a setting only where nothing precedes it, and otherwise warns and carries on with its own defaults, so a tape can record at the wrong size and colours while reporting success. The settings therefore come first in every tape, anything that is not a setting comes after them, and `task demo:record` fails on that warning rather than leaving it to be noticed.
-- That image also brings its own locale and fonts, and both matter. Without a UTF-8 locale the shell mangles the prompt the tapes wait for, and a missing font is substituted silently, which moves every wrap point. The tapes therefore set the locale and name the font instead of relying on the recorder's defaults, and recording by hand on a machine without that font produces a picture that wraps differently.
+- That image also brings its own locale and fonts, and both matter. Without a UTF-8 locale the shell mangles the prompt the tapes wait for, and a missing font is substituted silently, which moves every wrap point. The tapes therefore set the locale and name the font instead of relying on the recorder's defaults, and recording manually on a machine without that font produces a picture that wraps differently.
 - The font weight is carried in the family name, because the recorder sets a family and a size and nothing else. Matching what GitHub renders is not available: its stack resolves to a font that ships with macOS and not with the recorder's image, and the one member of that stack the image does carry is lighter still.
 
-Regenerate them by hand or by dispatching the workflow, never on a schedule.
+Regenerate them manually or by dispatching the workflow, never on a schedule.
 Every run brings its own timestamps and generated names, so a periodic re-record would commit another megabyte of GIF showing nothing new.
 Dispatching it against a branch rather than the default one records from that branch's code and proposes the recordings back into it, which is how a change to a tape arrives together with the picture it produces.
 Doing that on a change to how the recordings are made is deliberate rather than automatic: recording on every push would spend a cluster on each intermediate attempt, and the commit it pushed back would land without checks and race the next push.
@@ -202,19 +203,27 @@ Doing that on a change to how the recordings are made is deliberate rather than 
 
 `Taskfile.yml` is the entry point and mirrors what CI runs; `task lint` covers Go, chart, shell and the release config.
 
-Releases are cut by pushing a version tag, which `task release` derives and pushes.
+Releases are cut by pushing a version tag, which `task release` derives, signs and pushes.
+The tag is signed, and the release workflow's first job checks it before anything is built or published.
+It refuses a tag that GitHub does not report as verified, a tag that does not name the release or does not point at the commit being built, and a commit that is not on the main branch.
+A tag ruleset makes release tags immutable (no update, no deletion), so a signature cannot be reused by re-pointing a tag.
+The ruleset does not check the signature itself, the workflow check is the enforcement.
+The publishing jobs run in the `release` environment, which admits only version tags and waits for the maintainer's approval.
+This way, a workflow on any other ref cannot read the publishing secrets.
 The pipeline publishes considerably more than the CLI binary, including the three data mover images the chart pulls, and it does so across several registries and package managers.
 `.goreleaser.yml` and `.github/workflows/release.yml` are the authority on what goes where; do not keep a second list of it.
 
 Things that have bitten before:
 
 - The data mover images are built by a separate job from the CLI, but they carry the same tag, and the CLI stamps that tag into the chart values it installs. A released CLI therefore pulls data mover images of exactly its own version, and a release that publishes one without the other leaves the CLI pulling a tag that does not exist.
-- goreleaser already strips binaries and stamps the version by default. Setting `ldflags` at all silently replaces those defaults, so the binary would report version `dev`, and the image tag and chart version are derived from that string.
+- goreleaser's default `ldflags` are spelled out in the release config rather than relied on, because the defaults stamp the build time into the binary and that breaks reproducibility. Setting `ldflags` at all replaces every default, so each one the binary reads has to stay listed. Dropping the version one makes the binary report version `dev`, and the image tag and chart version are derived from that string.
+- The release files are reproducible: no build paths in the binaries, the commit time as every timestamp, the generated completions in the archives included, and a fixed owner and mode on every archive entry. The owner and mode matter because an archive entry otherwise records the builder's uid, user name and umask. The same commit yields the same bytes on any machine. A workflow checks that on every change by building on two runners, and the release workflow checks it again by rebuilding the published release on a second runner. Both rebuild without the Go cache on purpose. The cache key is only the `go.sum` hash, so a rebuild would otherwise restore the compiled packages of the build it is meant to check and compare only the packaging. Neither check can catch a dependence on the user or the umask, because every runner builds as the same user. Therefore, the fixed owner and mode on the archive entries must not be dropped as redundant. Keep new build steps deterministic. The CLI image is reproducible the same way (commit time as the image timestamp, buildkit's own attestations off, layer timestamps rewritten on push). The data mover images are not: they install packages from the Alpine repositories.
+- Releases are signed keyless with cosign, tied to the release workflow's identity: a signature bundle over the checksums file, which covers every archive, and a signature per image digest. There is no signing key to store or rotate. GitHub build provenance attestations are attached to the archives and the images in separate jobs, after publishing. This way, a failure there never leaves a published release unsigned, and the job can be retried on its own.
 - A snapshot or dev build deliberately produces an *empty* image tag rather than a wrong one, which makes the chart fall back to its own default. That is why the version string is inspected rather than used directly.
 - CI runs a goreleaser snapshot on every change, which validates the packaging inputs before release day rather than during it.
 - A release that fails after its archives are uploaded is finished by tagging the next patch version, never by re-running it over the top.
-  The package managers pin the archives by checksum, and the archives are not built reproducibly, so replacing one silently invalidates a hash somebody has already recorded.
-  This is why a published release is left exactly as it went out, even when a later stage of the same run failed.
+  goreleaser refuses to upload over existing archives, and the release tag cannot be moved anyway.
+  The jobs after publishing (the attestations, the reproducibility check, krew) can be re-run on their own.
 - The package manager updates are the last stage, after the release and the images, so a credential that lapsed since the previous release takes down only those, and it does so on a release that otherwise looks complete.
 
 ## Conventions
@@ -227,6 +236,7 @@ Things that have bitten before:
 - Commits carry a DCO sign-off, and are deliberately not cryptographically signed.
   A signature does not survive the rebase or squash that lands a change here, so requiring one buys nothing and puts a hardware key in the way of routine work.
   Do not add `-S`, and do not leave a pull request in draft on account of a commit being unsigned.
+  Release tags are the exception: they are signed, see the release section.
 - Nothing carries AI attribution: no "generated with" lines, no AI co-author trailers, in commits, pull requests or anywhere else.
 - Log messages open with an emoji, and it has to be one a terminal gives two columns to, which is not every emoji that looks like one.
   A test walks the source and rejects the narrow ones, with the reasoning in its comment; warnings all use the same marker, so pick that one rather than a new shade of orange.
@@ -234,6 +244,18 @@ Things that have bitten before:
   New code is expected to satisfy it rather than accumulate suppressions, and a complexity finding is usually telling you to extract a function.
 - Dependencies are updated by Renovate; `.renovaterc.json` is the authority on what qualifies.
   Pinned tool versions in CI and the Taskfile carry `# renovate:` comments so they are updated too.
+  Actions are pinned by commit and base images by digest, and Renovate keeps both fresh.
+  Renovate merges qualifying updates as branches without opening pull requests.
+  That only works while the main branch has no rule requiring a pull request before merging, so if dependency pull requests start appearing for passing updates, that rule is the thing to look for.
+- The main branch ruleset requires the three build workflow jobs to pass and has no bypass, not even for admins.
+  The build workflow therefore has no `paths-ignore`: a change that skipped the required jobs could never merge.
+  Work lands through pull requests, including the maintainer's.
+- All three test suites upload coverage to Codecov, each under a flag naming the suite, and Codecov merges them per commit.
+  The unit suite alone covers about half of the module, so a coverage number from one suite is not the project's coverage.
+- `.bestpractices.json` at the repository root holds the answers to the OpenSSF Best Practices badge questionnaire.
+  Their site reads it from the default branch and proposes the answers in the form.
+  Therefore, a change to how the project works (tests, releases, reporting) is reflected there, not in the web form.
+  The live entry and this file must be updated together.
 
 ## Reference pointers
 
@@ -244,3 +266,6 @@ Things that have bitten before:
 - `docs/install.md`, `docs/cli-reference.md`: install options, and the generated flag reference.
 - `internal/helm/pv-migrate/README.md`: the chart's values reference.
 - `CONTRIBUTING.md`: the contributor-facing process and the task targets.
+- `.github/SECURITY.md`, `.github/GOVERNANCE.md`: how to report a security problem, and how the project is run.
+- `docs/security-model.md`: what the tool promises, the trust boundaries and how they are checked.
+- `docs/roadmap.md`: what is planned and what is deliberately not.

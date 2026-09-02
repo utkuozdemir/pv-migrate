@@ -1,0 +1,83 @@
+---
+name: reproducibility
+
+# Builds the release files (the archives and the checksums, not the images)
+# twice, on two different runners, and fails if any checksum differs. Two
+# runners have different hostnames and different checkout times, which is what
+# catches a build that depends on either. Runs on every change that can reach
+# a release, including the Renovate branches that merge without a pull
+# request, and weekly, because the runner image moves on its own too.
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "17 6 * * 1"
+  push:
+    branches:
+      - main
+      - renovate/**
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euox pipefail {0}
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        attempt: [first, second]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          # no cache: the point is that the two legs compile from scratch and
+          # share nothing. The cache key is only the go.sum hash, so both legs
+          # would otherwise restore the same compiled packages from an earlier
+          # run and the comparison would only cover the packaging
+          cache: false
+      # the build workflow enforces that this declaration is exactly one line
+      - name: Resolve goreleaser version
+        id: goreleaser_version
+        run: echo "version=$(sed -n 's/^ARG GORELEASER_VERSION=//p' hack/dev.Dockerfile)" >>"${GITHUB_OUTPUT}"
+      # the docker stage is skipped: image reproducibility is a separate story
+      - name: Build the release files
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7.2.3
+        with:
+          version: ${{ steps.goreleaser_version.outputs.version }}
+          args: release --snapshot --clean --skip=publish,sign,sbom,docker,announce
+        env:
+          PRIVATE_ACCESS_TOKEN: placeholder
+      - name: Upload the checksums
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: checksums-${{ matrix.attempt }}
+          path: dist/checksums.txt
+          if-no-files-found: error
+
+  compare:
+    runs-on: ubuntu-24.04
+    needs: build
+    steps:
+      - name: Download both checksum files
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: checksums-*
+      - name: Compare
+        run: |
+          if diff checksums-first/checksums.txt checksums-second/checksums.txt; then
+            echo "every artifact is byte-identical across the two builds"
+          else
+            echo "the artifacts above differ between two builds of the same commit: the release is not reproducible" >&2
+            exit 1
+          fi

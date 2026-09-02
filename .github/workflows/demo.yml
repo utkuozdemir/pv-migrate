@@ -14,29 +14,31 @@ on:
         default: true
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   record:
     name: record
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # push the branch with the recordings
+      pull-requests: write # open the pull request
     steps:
       - name: Checkout
-        uses: actions/checkout@v7.0.1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install go
-        uses: actions/setup-go@v7.0.0
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
 
       - name: Install Task
-        uses: arduino/setup-task@v3.0.0
+        uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52 # v3.0.0
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create cluster
-        uses: helm/kind-action@v1.14.0
+        uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
         with:
           cluster_name: demo
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
@@ -57,7 +59,7 @@ jobs:
           task demo:record VHS="docker run --rm --network host -v ${PWD}:/vhs -v ${PWD}/dist/demo/pv-migrate:/usr/local/bin/pv-migrate -v ${HOME}/.kube:/root/.kube -e KUBECONFIG=/root/.kube/config ${VHS_IMAGE}"
 
       - name: Upload the recordings
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: demo-recordings
           path: img/demo*.gif

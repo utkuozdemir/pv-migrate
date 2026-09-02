@@ -66,13 +66,7 @@ tasks:
     cmds:
       - task: tools-image
       - "{{.TOOLS}} go mod tidy"
-      # embedlit is disabled because it corrupts code in Go 1.27.0: where an
-      # embedded type's opening brace shares a line with its first field it
-      # drops that field, sometimes leaving the file unparseable and sometimes
-      # leaving it compiling with the field silently gone, which in a test
-      # fixture removes an assertion's subject without failing anything. Fixed
-      # upstream for 1.27.1 (golang/go#80993), so drop the flag then.
-      - "{{.TOOLS}} go fix -embedlit=false -tags {{.BUILD_TAGS}} ./..."
+      - "{{.TOOLS}} go fix -tags {{.BUILD_TAGS}} ./..."
       - "{{.TOOLS}} golangci-lint run --fix --issues-exit-code 0 ./..."
       - "{{.TOOLS}} golangci-lint fmt ./..."
       - '{{.SHELL_FILES}} | xargs -0 -r {{.TOOLS}} shfmt -l -w {{.SHFMT_FLAGS}}'
@@ -118,14 +112,17 @@ tasks:
         vars: {TARGET: lint-release}
 
   test:
-    desc: run the unit tests
+    desc: run the unit tests (COVERPROFILE=coverage.txt to also write a coverage profile)
     cmds:
       # bind-mounted rather than staged: one test lists the repository's tracked
       # files through git, and .git is deliberately kept out of the build
       # context because it changes on every commit and would invalidate every
       # stage that copies the tree.
       - task: tools-image
-      - "{{.TOOLS}} go test ./..."
+      # the profile covers the whole module, not only the packages that have
+      # tests, so the number CI reports means the same thing as the one from
+      # the integration suites
+      - "{{.TOOLS}} go test {{if .COVERPROFILE}}-coverpkg=./... -coverprofile={{.COVERPROFILE}} -covermode=atomic {{end}}./..."
 
   test:integration:
     desc: run the migration integration tests against the current kube context
@@ -304,7 +301,7 @@ tasks:
     cmds:
       - kubectl delete namespace demo --ignore-not-found
 
-  # Pushing the tag is what starts the release, so both checks below happen
+  # Pushing the tag is what starts the release, so every check below happens
   # before anything leaves this machine.
   release:
     desc: tag the next version and push it, or VERSION when one is given
@@ -324,6 +321,11 @@ tasks:
         sh: docker run --rm -v "$PWD":/src -w /src caarlos0/svu:3.4.1 next
       TAG: '{{.VERSION | default .NEXT_TAG}}'
     cmds:
+      # releases are cut from the tip of main, with a clean tree. Tags are
+      # fetched too, so the next version is computed against all of them.
+      - git fetch --tags --force origin main
+      - test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" || { echo "HEAD is not the tip of origin/main" >&2; exit 1; }
+      - test -z "$(git status --porcelain)" || { echo "the working tree is not clean (staged or untracked files included)" >&2; exit 1; }
       - |
         set -eu
 
@@ -346,6 +348,23 @@ tasks:
           echo "==> Name one to release it anyway, for example: task release VERSION=vX.Y.Z" >&2
           exit 1
         fi
-
-        git tag -a '{{.TAG}}' -m '{{.TAG}}'
-        git push origin '{{.TAG}}'
+      # prove that signing works and that GitHub verifies it, on a throwaway
+      # tag the release rules do not cover, before a version number is at
+      # stake: a v* tag that fails the check cannot be deleted without
+      # disabling the ruleset first
+      - |
+        set -eu
+        t="sigcheck-$(date +%s)"
+        # removed again whatever happens below, so an aborted check leaves no tag behind
+        trap 'git push -q origin --delete "$t" >/dev/null 2>&1 || true; git tag -d "$t" >/dev/null 2>&1 || true' EXIT
+        git tag -s "$t" -m "$t"
+        git push -q origin "$t"
+        sha="$(gh api "repos/utkuozdemir/pv-migrate/git/ref/tags/$t" -q .object.sha)"
+        verified="$(gh api "repos/utkuozdemir/pv-migrate/git/tags/$sha" -q .verification.verified)"
+        test "$verified" = "true" || { echo "==> GitHub does not verify tags signed here. Is the signing key registered on the GitHub account as a signing key?" >&2; exit 1; }
+      # signed tag: the release workflow refuses a tag GitHub cannot verify,
+      # so this has to be -s. Release tags are immutable by ruleset, so a
+      # tag that fails there is fixed by disabling the ruleset briefly, not by
+      # force-pushing over it.
+      - git tag -s '{{.TAG}}' -m '{{.TAG}}'
+      - git push origin '{{.TAG}}'
