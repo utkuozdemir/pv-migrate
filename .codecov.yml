@@ -7,3 +7,5 @@ coverage:
     project:
       default:
         informational: true
+comment:
+  require_changes: true
