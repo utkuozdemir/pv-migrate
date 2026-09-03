@@ -173,6 +173,8 @@ func TestBuiltCommandArgvThroughShell(t *testing.T) {
 		"/source/~tilde/",
 	}
 
+	rsyncDir := fakeRsync(t)
+
 	for _, srcPath := range paths {
 		t.Run(srcPath, func(t *testing.T) {
 			t.Parallel()
@@ -186,7 +188,7 @@ func TestBuiltCommandArgvThroughShell(t *testing.T) {
 			built, err := cmd.Build()
 			require.NoError(t, err)
 
-			argv := shellArgv(t, built)
+			argv := shellArgv(t, rsyncDir, built)
 
 			require.GreaterOrEqual(t, len(argv), 2)
 			assert.Equal(t, "root@sshd.ns:"+srcPath, argv[len(argv)-2],
@@ -202,9 +204,15 @@ func TestBuiltCommandArgvThroughShell(t *testing.T) {
 	}
 }
 
-// shellArgv runs command through /bin/sh with rsync replaced by a script that
-// prints each argument on its own line, and returns those arguments.
-func shellArgv(t *testing.T, command string) []string {
+// fakeRsync writes a stand-in rsync that prints each argument on its own line,
+// and returns the directory holding it.
+//
+// It is written once, before the subtests fork, and never per subtest. On
+// Linux a forked child inherits every open descriptor of the process until it
+// execs, including a script another goroutine is still writing, and executing
+// that script while the child holds it open fails with ETXTBSY. With each
+// parallel subtest writing its own copy, that window was hit intermittently.
+func fakeRsync(t *testing.T) string {
 	t.Helper()
 
 	dir := t.TempDir()
@@ -214,10 +222,18 @@ func shellArgv(t *testing.T, command string) []string {
 	//nolint:gosec // it has to be executable for the shell to find it
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "rsync"), []byte(printArgs), 0o700))
 
+	return dir
+}
+
+// shellArgv runs command through /bin/sh with rsync replaced by the stand-in in
+// rsyncDir, and returns the arguments it was called with.
+func shellArgv(t *testing.T, rsyncDir, command string) []string {
+	t.Helper()
+
 	// PATH is replaced rather than prepended so the real rsync cannot be reached
 	// even if the built command were to lose its leading word.
 	shell := exec.CommandContext(t.Context(), "/bin/sh", "-c", command)
-	shell.Env = []string{"PATH=" + dir}
+	shell.Env = []string{"PATH=" + rsyncDir}
 
 	out, err := shell.Output()
 	require.NoError(t, err, "the built command is not runnable: %s", command)
