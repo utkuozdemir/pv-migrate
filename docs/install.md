@@ -14,11 +14,13 @@ Pick whichever of the options below fits your machine, they all install the same
 ## Homebrew (macOS and Linux)
 
 ```bash
-brew tap utkuozdemir/pv-migrate
-brew install pv-migrate
+brew install utkuozdemir/pv-migrate/pv-migrate
 ```
 
-The tap installs the binary and the completions for bash, zsh and fish.
+The fully qualified name is required.
+Homebrew loads a cask from a non-official tap only when it is trusted, and installing the cask by its full name trusts exactly this cask.
+
+The cask installs the binary and the completions for bash, zsh and fish.
 Upgrades come with `brew upgrade`.
 
 ## krew
