@@ -134,6 +134,11 @@ See [Bucket backup and restore](docs/backup-restore.md) for the backends, the ob
 ## Installation
 
 See [docs/install.md](docs/install.md) for the install options (Homebrew, krew, Scoop, release archives, Docker) and shell completion.
+The shortest one:
+
+```bash
+brew install utkuozdemir/pv-migrate/pv-migrate
+```
 
 The artifacts live here:
 
