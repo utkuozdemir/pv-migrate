@@ -22,8 +22,43 @@ const (
 	podWatchTimeout = 2 * time.Minute
 )
 
+// WaitForPod waits until a pod matching the selector has left the Pending phase.
 func WaitForPod(
 	ctx context.Context, cli kubernetes.Interface, ns, labelSelector string, logger *slog.Logger,
+) (*corev1.Pod, error) {
+	return waitForPod(ctx, cli, ns, labelSelector, podWatchTimeout, podStarted, logger)
+}
+
+// WaitForPodReady waits until a pod matching the selector reports the Ready
+// condition, within the given budget. It is what a caller uses in place of
+// Helm's own wait for a release, so the budget is the caller's install timeout.
+func WaitForPodReady(
+	ctx context.Context, cli kubernetes.Interface, ns, labelSelector string, timeout time.Duration, logger *slog.Logger,
+) (*corev1.Pod, error) {
+	return waitForPod(ctx, cli, ns, labelSelector, timeout, podReady, logger)
+}
+
+func podStarted(pod *corev1.Pod) bool {
+	return pod.Status.Phase != corev1.PodPending
+}
+
+func podReady(pod *corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+
+	return false
+}
+
+func waitForPod(
+	ctx context.Context,
+	cli kubernetes.Interface,
+	ns, labelSelector string,
+	timeout time.Duration,
+	done func(*corev1.Pod) bool,
+	logger *slog.Logger,
 ) (*corev1.Pod, error) {
 	var result *corev1.Pod
 
@@ -34,7 +69,7 @@ func WaitForPod(
 
 	resCli := cli.CoreV1().Pods(ns)
 
-	ctx, cancel := context.WithTimeout(ctx, podWatchTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
 	listWatch := podLabelListWatch(resCli, labelSelector)
@@ -55,7 +90,7 @@ func WaitForPod(
 			logger.Warn("🔶 Pod is not starting yet", "pod", res.Name, "waiting", waiting)
 		}
 
-		if res.Status.Phase != corev1.PodPending {
+		if done(res) {
 			result = res
 
 			return true, nil
@@ -68,8 +103,8 @@ func WaitForPod(
 		// The bare watch error says "timed out waiting for the condition" and
 		// names neither the wait nor its budget.
 		if ctx.Err() != nil {
-			return nil, fmt.Errorf("timed out after %s waiting for a pod (selector %s) to start: %w",
-				podWatchTimeout, labelSelector, err)
+			return nil, fmt.Errorf("timed out after %s waiting for a pod (selector %s): %w",
+				timeout, labelSelector, err)
 		}
 
 		return nil, fmt.Errorf("failed to wait for pod: %w", err)

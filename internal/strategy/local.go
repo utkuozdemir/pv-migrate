@@ -481,19 +481,22 @@ func buildRsyncCmdLocal(mig *migration.Migration) (string, error) {
 	return cmd, nil
 }
 
+// sshdLabelSelector selects the sshd pod of the named release.
+func sshdLabelSelector(release string) string {
+	return "app.kubernetes.io/component=sshd,app.kubernetes.io/instance=" + release
+}
+
 func getSshdPodForHelmRelease(
 	ctx context.Context,
 	pvcInfo *pvc.Info,
 	name string,
 	logger *slog.Logger,
 ) (*corev1.Pod, error) {
-	labelSelector := "app.kubernetes.io/component=sshd,app.kubernetes.io/instance=" + name
-
 	pod, err := k8s.WaitForPod(
 		ctx,
 		pvcInfo.ClusterClient.KubeClient,
 		pvcInfo.Claim.Namespace,
-		labelSelector,
+		sshdLabelSelector(name),
 		logger,
 	)
 	if err != nil {

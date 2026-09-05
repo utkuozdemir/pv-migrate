@@ -85,7 +85,8 @@ func GetServiceAddress(
 	return result, nil
 }
 
-// GetNodePort waits for a NodePort service to be ready and returns its assigned port.
+// GetNodePort waits for a Service that carries a node port, of type NodePort or
+// LoadBalancer, and returns the port allocated for ssh.
 func GetNodePort(
 	ctx context.Context,
 	cli kubernetes.Interface,
@@ -137,7 +138,7 @@ func GetAnyNodeIP(ctx context.Context, cli kubernetes.Interface) (string, error)
 	return "", errors.New("no node with a usable IP address found")
 }
 
-// waitForNodePortService waits for a NodePort service to be ready.
+// waitForNodePortService waits for a Service that carries a node port.
 func waitForNodePortService(ctx context.Context, cli kubernetes.Interface, ns, name string) (*corev1.Service, error) {
 	resCli := cli.CoreV1().Services(ns)
 	fieldSelector := fields.OneTermEqualSelector(metav1.ObjectNameField, name).String()
@@ -174,8 +175,8 @@ func waitForNodePortService(ctx context.Context, cli kubernetes.Interface, ns, n
 				return false, fmt.Errorf("unexpected type while watching service: %s/%s", ns, name)
 			}
 
-			if svc.Spec.Type != corev1.ServiceTypeNodePort {
-				return false, fmt.Errorf("service %s/%s is not of type NodePort", ns, name)
+			if svc.Spec.Type != corev1.ServiceTypeNodePort && svc.Spec.Type != corev1.ServiceTypeLoadBalancer {
+				return false, fmt.Errorf("service %s/%s is of type %s and has no node port", ns, name, svc.Spec.Type)
 			}
 
 			resultSvc = svc
@@ -188,19 +189,27 @@ func waitForNodePortService(ctx context.Context, cli kubernetes.Interface, ns, n
 	return resultSvc, nil
 }
 
-// findNodePort extracts the NodePort from a service.
+// findNodePort extracts the node port for ssh from a Service, or the first
+// port's. A LoadBalancer Service can be created without node ports, and then
+// there is nothing to connect to.
 func findNodePort(svc *corev1.Service) (int, error) {
 	if len(svc.Spec.Ports) == 0 {
 		return 0, errors.New("service has no ports defined")
 	}
 
-	// First try to find SSH port
-	for _, port := range svc.Spec.Ports {
-		if port.Name == "ssh" || port.Port == 22 {
-			return int(port.NodePort), nil
+	port := svc.Spec.Ports[0]
+
+	for _, candidate := range svc.Spec.Ports {
+		if candidate.Name == "ssh" || candidate.Port == 22 {
+			port = candidate
+
+			break
 		}
 	}
 
-	// Fallback to the first port
-	return int(svc.Spec.Ports[0].NodePort), nil
+	if port.NodePort == 0 {
+		return 0, fmt.Errorf("service %s/%s has no node port allocated", svc.Namespace, svc.Name)
+	}
+
+	return int(port.NodePort), nil
 }

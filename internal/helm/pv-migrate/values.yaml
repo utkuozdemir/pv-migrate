@@ -40,7 +40,7 @@ sshd:
     type: ClusterIP
     # -- SSHD service port
     port: 22
-    # -- SSHD service node port (only used when type is NodePort)
+    # -- SSHD service node port (only used when type is NodePort or LoadBalancer)
     nodePort:
     # -- SSHD service annotations
     annotations: {}

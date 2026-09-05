@@ -337,7 +337,8 @@ func setMigrateCmdFlags(cmd *cobra.Command, options *Options, logLevels, logForm
 		FlagLoadBalancerTimeout,
 		migration.LoadBalancerTimeout,
 		fmt.Sprintf(
-			"Timeout for the load balancer to receive an external IP. Only used by the %s strategy",
+			"Time to wait for the load balancer to receive an address before the %s strategy "+
+				"falls back to the Service's node port",
 			pvmigrate.LoadBalancer,
 		),
 	)

@@ -124,6 +124,11 @@ func TestMigrate(t *testing.T) {
 		te := setupExtraCluster(t, si)
 		testLoadBalancer(t, te)
 	})
+	t.Run("LoadBalancerNodePortFallback", func(t *testing.T) {
+		t.Parallel()
+		te := setupExtraCluster(t, si)
+		testLoadBalancerNodePortFallback(t, te)
+	})
 	t.Run("NoChown", func(t *testing.T) {
 		t.Parallel()
 		te := setupSameNS(t, si)
@@ -717,6 +722,30 @@ func testNodePort(t *testing.T, te *testEnv) {
 	// Verify that the extra file still exists (no deletion)
 	_, err = execInPod(ctx, te.destCli, te.destNS, "dest", checkExtraDataShellCommand)
 	require.NoError(t, err)
+}
+
+// testLoadBalancerNodePortFallback runs the loadbalancer strategy against a
+// Service no load balancer controller will ever pick up, by giving it a load
+// balancer class nothing implements, so the address never arrives and the
+// strategy has to fall back to the Service's node port.
+//
+//nolint:thelper
+func testLoadBalancerNodePortFallback(t *testing.T, te *testEnv) {
+	ctx := t.Context()
+
+	cmd := fmt.Sprintf("%s -K %s -s loadbalancer --loadbalancer-timeout 15s"+
+		" --helm-set sshd.service.loadBalancerClass=pv-migrate.test/none -i -n %s -N %s --source source --dest dest",
+		defaultHelmArgs(t), te.shared.extraKubeconfig, te.sourceNS, te.destNS)
+	require.NoError(t, runCliApp(ctx, t, cmd))
+
+	stdout, err := execInPod(ctx, te.destCli, te.destNS, "dest", printDataUIDGIDContentShellCommand)
+	require.NoError(t, err)
+
+	parts := strings.Split(stdout, "\n")
+	require.Len(t, parts, 3)
+	assert.Equal(t, dataFileUID, parts[0])
+	assert.Equal(t, dataFileGID, parts[1])
+	assert.Equal(t, generateDataContent, parts[2])
 }
 
 // testNodePortDestHostOverride tests the NodePort strategy with a custom destination host override.
