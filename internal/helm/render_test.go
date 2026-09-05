@@ -210,3 +210,22 @@ func component(name string, extra map[string]any) map[string]any {
 
 	return map[string]any{name: section}
 }
+
+// TestNodePortPinAppliesToLoadBalancerService pins that a fixed node port is
+// honored for a LoadBalancer Service as well, since the loadbalancer strategy
+// falls back to that port.
+func TestNodePortPinAppliesToLoadBalancerService(t *testing.T) {
+	t.Parallel()
+
+	rendered := render(t, map[string]any{
+		"sshd": map[string]any{
+			"enabled":   true,
+			"namespace": "default",
+			"publicKey": "ssh-ed25519 AAAA",
+			"pvcMounts": []any{map[string]any{"name": "pvc", "mountPath": "/source"}},
+			"service":   map[string]any{"type": "LoadBalancer", "nodePort": 30555},
+		},
+	})
+
+	assert.Contains(t, rendered["pv-migrate/templates/sshd/service.yaml"], "nodePort: 30555")
+}

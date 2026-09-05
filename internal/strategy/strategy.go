@@ -275,9 +275,7 @@ func installHelmChart(
 	install := action.NewInstall(helmActionConfig)
 	install.Namespace = pvcInfo.Claim.Namespace
 	install.ReleaseName = name
-	install.WaitStrategy = kube.LegacyStrategy
-
-	timeout, timeoutFlag := effectiveInstallTimeout(mig.Request, values)
+	timeout := mig.Request.HelmTimeout
 	install.Timeout = timeout
 
 	applyNonRootValues(values, mig.Request)
@@ -290,6 +288,16 @@ func installHelmChart(
 	vals, err := getMergedHelmValues(values, mig.Request, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get merged helm values: %w", err)
+	}
+
+	// Helm's wait blocks on a LoadBalancer Service until it has an address, and
+	// on a cluster without a load balancer controller that is forever. The
+	// strategy waits for the address itself, with a budget and a fallback, so
+	// that release is not waited on here at all. Decided on the merged values,
+	// since the user's values can change the Service type.
+	install.WaitStrategy = kube.LegacyStrategy
+	if installsLoadBalancer(vals) {
+		install.WaitStrategy = kube.HookOnlyStrategy
 	}
 
 	// A long wait usually means the cluster already knows what is stuck, so at
@@ -305,8 +313,8 @@ func installHelmChart(
 		// headline of every stuck-resource failure.
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf(
-				"timed out after %s waiting for the release's resources to become ready (see %s): %w",
-				timeout, timeoutFlag, err)
+				"timed out after %s waiting for the release's resources to become ready (see --helm-timeout): %w",
+				timeout, err)
 		}
 
 		return fmt.Errorf("failed to install helm chart: %w", err)
@@ -322,20 +330,8 @@ func canCreateNetworkPolicies(pvcInfo *pvc.Info) helm.CanCreateNetworkPoliciesFu
 	}
 }
 
-// effectiveInstallTimeout picks the install wait budget and names the flag it
-// came from. The load balancer timeout only applies when this release actually
-// waits for a load balancer, so a LoadBalancer-only flag cannot silently
-// lengthen every other strategy's install.
-func effectiveInstallTimeout(req *migration.Request, values map[string]any) (time.Duration, string) {
-	if installsLoadBalancer(values) && req.LoadBalancerTimeout > req.HelmTimeout {
-		return req.LoadBalancerTimeout, "--loadbalancer-timeout, which exceeds --helm-timeout"
-	}
-
-	return req.HelmTimeout, "--helm-timeout"
-}
-
 // installsLoadBalancer reports whether the values ask for a LoadBalancer
-// service, which the install wait then waits on.
+// Service, whose address Helm's wait would otherwise block on.
 func installsLoadBalancer(values map[string]any) bool {
 	sshd, ok := values[sshdComponent].(map[string]any)
 	if !ok {

@@ -24,7 +24,7 @@ spec:
       targetPort: {{ .Values.sshd.containerPort }}
       protocol: TCP
       name: ssh
-      {{- if and (eq .Values.sshd.service.type "NodePort") .Values.sshd.service.nodePort }}
+      {{- if and (or (eq .Values.sshd.service.type "NodePort") (eq .Values.sshd.service.type "LoadBalancer")) .Values.sshd.service.nodePort }}
       nodePort: {{ .Values.sshd.service.nodePort }}
       {{- end }}
   selector:
