@@ -20,8 +20,6 @@ The helm chart of pv-migrate
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| fullnameOverride | string | `""` | String to fully override the fullname template with a string |
-| nameOverride | string | `""` | String to partially override the fullname template with a string (will prepend the release name) |
 | rclone.affinity | object | `{}` | Rclone pod affinity |
 | rclone.backoffLimit | int | `0` |  |
 | rclone.command | string | `""` | Full Rclone command |

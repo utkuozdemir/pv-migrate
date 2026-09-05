@@ -1,8 +1,3 @@
-# -- String to partially override the fullname template with a string (will prepend the release name)
-nameOverride: ""
-# -- String to fully override the fullname template with a string
-fullnameOverride: ""
-
 sshd:
   # -- Enable SSHD server deployment
   enabled: false

@@ -1,18 +1,11 @@
-{{- define "pv-migrate.name" -}}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
-{{- end }}
-
+{{- /*
+The tool looks its resources up by name, and the names it uses are derived from
+the release name, which it always sets. So the chart names everything from the
+release name and nothing else: no name overrides, since an override would rename
+the objects without the tool knowing.
+*/ -}}
 {{- define "pv-migrate.fullname" -}}
-{{- if .Values.fullnameOverride }}
-{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
-{{- else }}
-{{- $name := default .Chart.Name .Values.nameOverride }}
-{{- if contains $name .Release.Name }}
-{{- .Release.Name | trunc 63 | trimSuffix "-" }}
-{{- else }}
-{{- printf "%s-%s" .Release.Name $name | trunc 63 | trimSuffix "-" }}
-{{- end }}
-{{- end }}
+{{- .Release.Name }}
 {{- end }}
 
 {{- define "pv-migrate.chart" -}}
@@ -29,7 +22,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{- define "pv-migrate.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "pv-migrate.name" . }}
+app.kubernetes.io/name: {{ .Chart.Name }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
