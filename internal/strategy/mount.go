@@ -58,9 +58,9 @@ func buildMountHelmValues(mig *migration.Migration, rsyncCmd string) map[string]
 					keyMountPath: destMountPath,
 				},
 			},
-			"command":       rsyncCmd,
-			keyAffinity:     sourceInfo.AffinityHelmValues,
-			"networkPolicy": map[string]any{keyEnabled: false},
+			"command":        rsyncCmd,
+			keyAffinity:      sourceInfo.AffinityHelmValues,
+			keyNetworkPolicy: map[string]any{keyEnabled: false},
 		},
 	}
 }

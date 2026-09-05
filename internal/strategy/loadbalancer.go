@@ -9,6 +9,7 @@ import (
 
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
+	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 )
 
@@ -43,10 +44,13 @@ func resolveLBTarget(
 		return sshTarget{}, fmt.Errorf("failed to get service %s/%s: %w", info.Claim.Namespace, svcName, err)
 	}
 
-	logger.Info("⏳ Waiting for the load balancer address", "timeout", req.LoadBalancerTimeout)
+	details := narrate.Detail(logger, 1)
+	details.Info(fmt.Sprintf("⏳ waiting up to %s for the load balancer address", req.LoadBalancerTimeout))
 
 	lbAddress, err := k8s.GetServiceAddress(ctx, cli, info.Claim.Namespace, svcName, req.LoadBalancerTimeout)
 	if err == nil {
+		details.Info("🔗 load balancer address " + lbAddress)
+
 		return sshTarget{host: formatSSHTargetHost(lbAddress)}, nil
 	}
 
@@ -55,10 +59,8 @@ func resolveLBTarget(
 		return sshTarget{}, err
 	}
 
-	logger.Warn("🔶 No load balancer address within --loadbalancer-timeout, falling back to the Service's node port. "+
-		"This is expected on a cluster without a load balancer controller. "+
-		"If yours has one and is just slow, raise the timeout",
-		"timeout", req.LoadBalancerTimeout, "error", err)
+	details.Warn("🔶 no load balancer address within --loadbalancer-timeout, using the Service's node port instead. " +
+		"Expected on a cluster without a load balancer controller. If yours has one and is slow, raise the timeout")
 
 	target, fallbackErr := resolveNodePortTarget(ctx, attempt, topo, sshdRelease, logger)
 	if fallbackErr != nil {

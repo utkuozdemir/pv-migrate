@@ -62,7 +62,7 @@ func TestTwoReleaseValuesFollowNetworkPolicyPermission(t *testing.T) {
 	// on top of the checked ones.
 	req := &migration.Request{HelmValues: []string{"sshd.networkPolicy.enabled=true"}}
 
-	merged, err := getMergedHelmValues(values, req, slogt.New(t))
+	merged, err := getMergedHelmValues(values, req)
 	require.NoError(t, err)
 
 	assert.Equal(t, true, policyEnabled(t, merged, sshdComponent))

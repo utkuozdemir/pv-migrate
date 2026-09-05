@@ -65,6 +65,7 @@ It has its own identity concept, because a backup has to be findable again later
 - `internal/strategy`: the strategies themselves, plus the topology that decides which side runs sshd and which runs rsync.
 - `internal/bucketstorage`: the backup and restore workflow end to end.
 - `internal/rsync`, `internal/rclone`: build the data mover command strings, and the rclone config.
+- `internal/narrate`: the text log's shape, as a `slog` handler. Steps and their indented details, see below.
 - `internal/progresslog`: tails a log stream, parses progress and drives the progress bar, for either data mover.
   `internal/rsync/progress` and `internal/rclone/progress` are just the two line parsers; `internal/jobprogress` picks between them by job name.
 - `internal/helm`: the embedded chart, its loader, and the adjustments to its values that depend on what the cluster allows.
@@ -112,6 +113,31 @@ Helm's is binding, and exceeding it fails partway through the install with a mes
 The length limit lives in `internal/opid`, and `pvmigrate`'s derived-name test composes the worst-case names and hands them to Helm's own validator, so that arithmetic is checked rather than asserted.
 Adding a strategy with a longer name will fail that test rather than a user's migration, because the strategy names come from the code.
 The chart's component suffixes do not: the test spells those out, so a longer one has to be added there too.
+
+## The text output
+
+The text log reads as a story: one step line per record the tool writes, each opening with an emoji, and the details of a step indented under it.
+The text handler draws the shape: a step opens a paragraph, so a blank line goes before every step but the first, and the details of a step stay under it without one, three spaces of indent per level, two levels at most.
+A few blocks are written to the same stream directly rather than as records (the tail of a job's log, the failure summary, the cluster diagnostics, the detach instructions), and each starts with a blank line and sits at the depth of what it belongs to: a job's log tail is indented like the details of the attempt it came from, the summary of a run stays at the margin.
+A block ends without a blank line when a step or another block follows it, since those bring their own, and with one when details follow it, as they do after a log tail.
+Nothing in the shape depends on color, so a log file or a CI log reads the same as a terminal.
+
+A detail is an ordinary info record carrying its depth as an attribute, which the text handler draws as indentation and the JSON handler keeps as a field.
+So `--log-format json` gets the same records with the same attributes, and a detail line costs the caller one wrapped logger.
+Debug records are drawn as details too, so `--log-level debug` deepens the story instead of interleaving another shape with it.
+
+The text handler prints no timestamp and no level word.
+A step is what happened, its details are what that consisted of and why, and a warning is told apart by its marker and its color, not by a label.
+
+How the lines are written, so that they stay one story:
+
+- A step is a capitalized phrase, a detail is a lowercase one, both open with an emoji and both carry their facts in the sentence rather than as attributes. Real names, always: the release, the pod, the node, the address.
+- The logger handed down to a function carries the depth. A function that narrates for the step above it receives a detail logger and does not know it is one, so the waits in `internal/k8s` and the value helpers in `internal/helm` narrate wherever they are called from.
+- What a release put in the cluster is told in one place, right after the install, from the merged values and the objects the cluster created. A strategy adds only what it alone knows: where rsync connects, why it picked a node, what it fell back to.
+- An attempt narrates its own outcome under its own step, before its cleanup, so a decline or a failure sits where it belongs and not under the cleanup that follows.
+- The Kubernetes client is given a detail logger, so what it says is drawn under the step that was running. Helm logs through the default logger, and what it says at the debug level is drawn as dim details for the same reason.
+- Functions in `internal/k8s` and `internal/helm` write their lines in detail case, lowercase after the emoji, because every caller hands them a detail logger. A new caller does the same.
+- A detail logger handed down and wrapped again goes one level deeper, which is what lets a function narrate under whatever its caller was narrating.
 
 ## Progress reporting
 

@@ -55,7 +55,7 @@ func (c *HelmRESTClientGetter) ToRESTMapper() (meta.RESTMapper, error) {
 
 	//nolint:godox
 	expander := restmapper.NewShortcutExpander(mapper, discoveryClient, func(warning string) {
-		c.logger.Debug("warning from shortcut expander", "warning", warning)
+		c.logger.Debug("Warning from the shortcut expander", "warning", warning)
 	})
 
 	return expander, nil

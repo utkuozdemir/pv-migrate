@@ -87,7 +87,7 @@ func waitForPod(
 		if waiting := describePodWaiting(res); waiting != "" && waiting != lastWaiting && logger != nil {
 			lastWaiting = waiting
 
-			logger.Warn("🔶 Pod is not starting yet", "pod", res.Name, "waiting", waiting)
+			logger.Warn(fmt.Sprintf("🔶 pod %s is not starting yet: %s", res.Name, waiting))
 		}
 
 		if done(res) {

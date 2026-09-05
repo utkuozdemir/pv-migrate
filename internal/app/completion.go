@@ -111,14 +111,14 @@ func buildKubeContextCompletionFunc(kubeconfigFlag string) cobra.CompletionFunc 
 
 		srcKubeconfig, err := cmd.Flags().GetString(kubeconfigFlag)
 		if err != nil {
-			logger.Debug("failed to get flag", "flag", kubeconfigFlag, "error", err)
+			logger.Debug("Failed to get the flag", "flag", kubeconfigFlag, "error", err)
 
 			return nil, cobra.ShellCompDirectiveError
 		}
 
 		contexts, err := k8s.GetContexts(srcKubeconfig, logger)
 		if err != nil {
-			logger.Debug("failed to get contexts", "error", err)
+			logger.Debug("Failed to get the contexts", "error", err)
 
 			return nil, cobra.ShellCompDirectiveError
 		}
@@ -136,21 +136,21 @@ func buildKubeNSCompletionFunc(ctx context.Context, kubeconfigFlag, contextFlag 
 
 		srcKubeconfig, err := cmd.Flags().GetString(kubeconfigFlag)
 		if err != nil {
-			logger.Debug("failed to get flag", "flag", kubeconfigFlag, "error", err)
+			logger.Debug("Failed to get the flag", "flag", kubeconfigFlag, "error", err)
 
 			return nil, cobra.ShellCompDirectiveError
 		}
 
 		srcContext, err := cmd.Flags().GetString(contextFlag)
 		if err != nil {
-			logger.Debug("failed to get flag", "flag", contextFlag, "error", err)
+			logger.Debug("Failed to get the flag", "flag", contextFlag, "error", err)
 
 			return nil, cobra.ShellCompDirectiveError
 		}
 
 		contexts, err := k8s.GetNamespaces(ctx, srcKubeconfig, srcContext, logger)
 		if err != nil {
-			logger.Debug("failed to get namespaces", "error", err)
+			logger.Debug("Failed to get the namespaces", "error", err)
 
 			return nil, cobra.ShellCompDirectiveError
 		}
@@ -221,28 +221,28 @@ func buildPVCCompletionFunc(ctx context.Context, isDestPVC bool) cobra.Completio
 
 		kubeconfig, err := cmd.Flags().GetString(kubeconfigFlag)
 		if err != nil {
-			logger.Debug("failed to get flag", "flag", kubeconfigFlag, "error", err)
+			logger.Debug("Failed to get the flag", "flag", kubeconfigFlag, "error", err)
 
 			return nil, cobra.ShellCompDirectiveError
 		}
 
 		useContext, err := cmd.Flags().GetString(contextFlag)
 		if err != nil {
-			logger.Debug("failed to get flag", "flag", contextFlag, "error", err)
+			logger.Debug("Failed to get the flag", "flag", contextFlag, "error", err)
 
 			return nil, cobra.ShellCompDirectiveError
 		}
 
 		namespace, err := cmd.Flags().GetString(namespaceFlag)
 		if err != nil {
-			logger.Debug("failed to get flag", "flag", namespaceFlag, "error", err)
+			logger.Debug("Failed to get the flag", "flag", namespaceFlag, "error", err)
 
 			return nil, cobra.ShellCompDirectiveError
 		}
 
 		pvcs, err := k8s.GetPVCs(ctx, kubeconfig, useContext, namespace, logger)
 		if err != nil {
-			logger.Debug("failed to get PVCs", "error", err)
+			logger.Debug("Failed to get the PVCs", "error", err)
 
 			return nil, cobra.ShellCompDirectiveError
 		}

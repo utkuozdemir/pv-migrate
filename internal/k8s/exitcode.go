@@ -182,10 +182,9 @@ func WriteJobFailureEvidence(
 		return
 	}
 
-	fmt.Fprintf(writer, "%s\n\n  %s (namespace %s):\n",
+	fmt.Fprintf(writer, "\n%s\n\n  %s (namespace %s):\n",
 		palette.Bold("What the cluster reported:"), release, job.Namespace)
 	WriteWorkloadDiagnostics(ctx, cli, job.Namespace, InstanceLabelSelector(release), palette, writer, logger)
-	fmt.Fprintln(writer)
 }
 
 // dataMoverContainer is the container the chart names after the data mover it

@@ -20,7 +20,7 @@ func (r *ClusterIP) Run(ctx context.Context, attempt *migration.Attempt, logger 
 	releaseName := attempt.HelmReleaseNamePrefix
 	attempt.ReleaseNames = []string{releaseName}
 
-	helmVals, err := buildClusterIPHelmVals(mig, topo, releaseName, logger)
+	helmVals, sshTargetHost, err := buildClusterIPHelmVals(mig, topo, releaseName, logger)
 	if err != nil {
 		return fmt.Errorf("failed to build helm values: %w", err)
 	}
@@ -28,6 +28,8 @@ func (r *ClusterIP) Run(ctx context.Context, attempt *migration.Attempt, logger 
 	if err = installHelmChart(ctx, attempt, mig.DestInfo, releaseName, helmVals, logger); err != nil {
 		return err
 	}
+
+	narrateConnection(logger, topo.push, sshTargetHost, 0)
 
 	// This one release spans two namespaces when source and destination differ:
 	// the rsync job lands in the destination's, sshd in the source's. The install
@@ -58,10 +60,10 @@ func buildClusterIPHelmVals(
 	topo topology,
 	helmReleaseName string,
 	logger *slog.Logger,
-) (map[string]any, error) {
+) (map[string]any, string, error) {
 	publicKey, privateKey, privateKeyMountPath, err := generateSSHKeys(mig.Request.KeyAlgorithm, logger)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	sshTargetHost := helmReleaseName + "-sshd." + topo.sshd.info.Claim.Namespace
@@ -71,11 +73,11 @@ func buildClusterIPHelmVals(
 
 	rsyncCmdStr, err := buildRsyncCmdString(mig.Request, topo.push, sshTargetHost, 0)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	return map[string]any{
 		rsyncComponent: buildRsyncHelmValues(topo.rsync, rsyncCmdStr, privateKey, privateKeyMountPath),
 		sshdComponent:  buildSshdHelmValues(topo.sshd, publicKey),
-	}, nil
+	}, sshTargetHost, nil
 }

@@ -99,8 +99,6 @@ func runBackup(cmd *cobra.Command, backup *pvmigrate.Backup, logger *slog.Logger
 	applyBucketStorageEnvDefaults(&backup.AccessKey, &backup.SecretKey,
 		&backup.StorageAccount, &backup.StorageKey, &backup.GCSServiceAccountJSON)
 
-	logger.Info("📦 Starting backup")
-
 	return pvmigrate.RunBackup(ctx, *backup)
 }
 
@@ -163,8 +161,6 @@ func runRestore(cmd *cobra.Command, restore *pvmigrate.Restore, logger *slog.Log
 
 	applyBucketStorageEnvDefaults(&restore.AccessKey, &restore.SecretKey,
 		&restore.StorageAccount, &restore.StorageKey, &restore.GCSServiceAccountJSON)
-
-	logger.Info("📥 Starting restore")
 
 	return pvmigrate.RunRestore(ctx, *restore)
 }

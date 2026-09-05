@@ -3,6 +3,7 @@ package pvc
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -80,6 +81,32 @@ func New(
 		SupportsROX:        supportsROX,
 		SupportsRWX:        supportsRWX,
 	}, nil
+}
+
+// Describe says what the claim is in one line: where it is, how big, which
+// access modes, and whether a pod has it mounted.
+func (i *Info) Describe() string {
+	claim := i.Claim
+	line := claim.Namespace + "/" + claim.Name
+
+	if size := i.Size(); !size.IsZero() {
+		line += ", " + size.String()
+	}
+
+	modes := make([]string, 0, len(claim.Spec.AccessModes))
+	for _, mode := range claim.Spec.AccessModes {
+		modes = append(modes, string(mode))
+	}
+
+	if len(modes) > 0 {
+		line += ", " + strings.Join(modes, "+")
+	}
+
+	if i.MountedNode != "" {
+		return line + ", mounted on node " + i.MountedNode
+	}
+
+	return line + ", not mounted"
 }
 
 // Size returns the storage capacity of the PVC. It prefers the actual capacity

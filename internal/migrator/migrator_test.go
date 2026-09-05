@@ -227,32 +227,32 @@ func TestRunStatesItsIdentityOnce(t *testing.T) {
 
 	require.NoError(t, migrator.Run(t.Context(), req, slog.New(slog.NewJSONHandler(&buf, nil))))
 
-	announcements, identified, total := 0, 0, 0
+	announcements, identified := 0, 0
 
 	for line := range strings.Lines(buf.String()) {
 		var record map[string]any
 
 		require.NoError(t, json.Unmarshal([]byte(line), &record))
 
-		total++
+		msg, _ := record["msg"].(string)
 
-		if _, ok := record["migration_id"]; ok {
+		if strings.Contains(msg, "migration id ") {
 			identified++
+
+			assert.InDelta(t, 1.0, record["indent"], 0, "the identifier is a detail of the opening step")
 		}
 
-		if _, ok := record["source"]; !ok {
+		if !strings.HasPrefix(msg, "🚀 Migrating ") {
 			continue
 		}
 
 		announcements++
 
-		assert.Equal(t, sourceNS+"/"+sourcePVC, record["source"])
-		assert.Equal(t, destNS+"/"+destPVC, record["dest"])
-		assert.NotEmpty(t, record["migration_id"])
+		assert.Contains(t, msg, sourceNS+"/"+sourcePVC+" to "+destNS+"/"+destPVC)
 	}
 
-	assert.Equal(t, 1, announcements, "the source and destination are said once")
-	assert.Equal(t, total, identified, "every record carries the identifier")
+	assert.Equal(t, 1, announcements, "the source and destination are said once, in the opening step")
+	assert.Equal(t, 1, identified, "the identifier is said once, for status and cleanup")
 }
 
 func buildMigration(ignoreMounted bool) *migration.Request {

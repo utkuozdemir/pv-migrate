@@ -55,7 +55,7 @@ const (
 
 var jobSuffixes = []string{rsyncJobSuffix, rcloneJobSuffix}
 
-// FindDataMoverJob finds the data-mover job (rsync or rclone) for a migration by listing
+// FindDataMoverJob finds the data mover job (rsync or rclone) for a migration by listing
 // all Helm-managed jobs and matching by the release name prefix plus a known suffix.
 // If nothing is found in the given namespace, it retries across all namespaces.
 func FindDataMoverJob(
@@ -86,7 +86,7 @@ func FindDataMoverJob(
 
 	if ns != "" {
 		if logger != nil {
-			logger.Warn("No data-mover job found in namespace, retrying across all namespaces",
+			logger.Warn("🔶 No data mover job in the namespace, looking in all namespaces",
 				"namespace", ns, "release_prefix", releasePrefix)
 		}
 
@@ -96,6 +96,17 @@ func FindDataMoverJob(
 	return nil, fmt.Errorf("no job found for migration %s", releasePrefix)
 }
 
+// JobImage is the image the job's first container runs, or "unknown" when the
+// job cannot be read. It is narration, so it does not fail anything.
+func JobImage(ctx context.Context, cli kubernetes.Interface, ns, name string) string {
+	job, err := cli.BatchV1().Jobs(ns).Get(ctx, name, metav1.GetOptions{})
+	if err != nil || len(job.Spec.Template.Spec.Containers) == 0 {
+		return "unknown"
+	}
+
+	return job.Spec.Template.Spec.Containers[0].Image
+}
+
 // WaitForJobStart waits until the job's pod transitions out of the Pending phase.
 // It returns the pod object once the pod is running (or has already terminated).
 func WaitForJobStart(ctx context.Context, cli kubernetes.Interface,
@@ -103,7 +114,7 @@ func WaitForJobStart(ctx context.Context, cli kubernetes.Interface,
 ) (*corev1.Pod, error) {
 	labelSelector := "job-name=" + name
 
-	logger.Info("⏳ Waiting for job pod to start", "job", name)
+	logger.Info(fmt.Sprintf("⏳ waiting for the pod of job %s to start", name))
 
 	pod, err := WaitForPod(ctx, cli, ns, labelSelector, logger)
 	if err != nil {
@@ -112,14 +123,14 @@ func WaitForJobStart(ctx context.Context, cli kubernetes.Interface,
 
 	switch pod.Status.Phase { //nolint:exhaustive
 	case corev1.PodRunning:
-		logger.Info("🏃 Job pod is running", "pod", pod.Name)
+		logger.Info(fmt.Sprintf("🏃 pod %s is running on node %s", pod.Name, pod.Spec.NodeName))
 	case corev1.PodSucceeded:
-		logger.Info("🏁 Job pod has already completed", "pod", pod.Name)
+		logger.Info(fmt.Sprintf("🏁 pod %s had already finished", pod.Name))
 	case corev1.PodFailed:
 		// Not "completed": on a skim that reads as success.
-		logger.Warn("🔶 Job pod already terminated with a failure", "pod", pod.Name)
+		logger.Warn(fmt.Sprintf("🔶 pod %s had already failed", pod.Name))
 	default:
-		logger.Info("✅ Job pod has started", "pod", pod.Name, "phase", pod.Status.Phase)
+		logger.Info(fmt.Sprintf("✅ pod %s started, in phase %s", pod.Name, pod.Status.Phase))
 	}
 
 	return pod, nil
@@ -336,7 +347,9 @@ func finishedJobWithoutPods(ctx context.Context, cli kubernetes.Interface, ns, n
 }
 
 // finishTerminalPod handles a job pod that was already done when it was found.
-// There is no follower running here, so the log tail can go straight out.
+// There is no follower running here, so on a failure the log tail can go
+// straight out. On a success nothing is printed: the tail is a failure aid, and
+// a transfer that was followed shows none either.
 func finishTerminalPod(
 	ctx context.Context,
 	cli kubernetes.Interface,
@@ -353,12 +366,7 @@ func finishTerminalPod(
 		return failedPodError(ctx, cli, jobName, pod)
 	}
 
-	tail := recentPodLogs(ctx, cli, pod, logger)
-	if !structuredLogs {
-		writeTail(pod, jobName, tail, palette, writer, logger)
-	}
-
-	warnIfSourceFilesVanished(tail, logger)
+	warnIfSourceFilesVanished(recentPodLogs(ctx, cli, pod, logger), logger)
 
 	return nil
 }
@@ -382,7 +390,7 @@ func writeFailureTail(
 	}
 
 	if structuredLogs {
-		logger.Warn("📝 Last log lines of the failed job pod", "pod", pod.Namespace+"/"+pod.Name, "tail", tail)
+		logger.Warn("📝 last log lines of the failed job pod", "pod", pod.Namespace+"/"+pod.Name, "tail", tail)
 
 		return
 	}
@@ -430,7 +438,7 @@ func warnIfSourceFilesVanished(tail string, logger *slog.Logger) {
 		return
 	}
 
-	const msg = "🔶 Completed with a warning: some source files vanished during the transfer and were skipped. " +
+	const msg = "🔶 completed with a warning: some source files vanished during the transfer and were skipped. " +
 		"Re-run the migration, or copy from a source that is not being written to"
 
 	if count := strings.Count(tail, "file has vanished:"); count > 0 {
@@ -444,7 +452,9 @@ func warnIfSourceFilesVanished(tail string, logger *slog.Logger) {
 
 // writeTail puts a fetched log tail on the writer as a labelled, indented
 // quotation, so a reader can tell where the tool stops talking and the pod's
-// own output starts.
+// own output starts. The tail belongs to the attempt that was running, so it
+// sits at the depth of a detail, set apart by a blank line on both sides
+// because the attempt's own details follow it.
 func writeTail(pod *corev1.Pod, jobName, tail string, palette console.Palette, writer io.Writer, logger *slog.Logger) {
 	if tail == "" || writer == nil {
 		return
@@ -452,17 +462,17 @@ func writeTail(pod *corev1.Pod, jobName, tail string, palette console.Palette, w
 
 	var rendered strings.Builder
 
-	fmt.Fprintf(&rendered, "\n%s\n",
+	fmt.Fprintf(&rendered, "\n   %s\n",
 		palette.Dim(fmt.Sprintf("Last log lines of pod %s/%s:", pod.Namespace, pod.Name)))
 
 	for line := range strings.SplitSeq(strings.TrimRight(renderTail(jobName, tail), "\n"), "\n") {
-		rendered.WriteString("  " + line + "\n")
+		rendered.WriteString("     " + line + "\n")
 	}
 
 	rendered.WriteString("\n")
 
 	if _, err := io.WriteString(writer, rendered.String()); err != nil {
-		logger.Debug("failed to write terminal job pod logs", "pod", pod.Namespace+"/"+pod.Name, "error", err)
+		logger.Debug("Failed to write the finished job pod's logs", "pod", pod.Namespace+"/"+pod.Name, "error", err)
 	}
 }
 
@@ -546,21 +556,21 @@ func recentPodLogs(
 	stream, err := cli.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name,
 		&corev1.PodLogOptions{TailLines: &tailLines}).Stream(ctx)
 	if err != nil {
-		logger.Debug("failed to read terminal job pod logs", "pod", pod.Namespace+"/"+pod.Name, "error", err)
+		logger.Debug("Failed to read the finished job pod's logs", "pod", pod.Namespace+"/"+pod.Name, "error", err)
 
 		return ""
 	}
 
 	defer func() {
 		if closeErr := stream.Close(); closeErr != nil {
-			logger.Debug("failed to close terminal job pod log stream", "pod", pod.Namespace+"/"+pod.Name,
+			logger.Debug("Failed to close the finished job pod's log stream", "pod", pod.Namespace+"/"+pod.Name,
 				"error", closeErr)
 		}
 	}()
 
 	data, err := io.ReadAll(stream)
 	if err != nil {
-		logger.Debug("failed to read terminal job pod logs", "pod", pod.Namespace+"/"+pod.Name, "error", err)
+		logger.Debug("Failed to read the finished job pod's logs", "pod", pod.Namespace+"/"+pod.Name, "error", err)
 
 		return ""
 	}

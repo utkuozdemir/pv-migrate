@@ -16,6 +16,7 @@ import (
 
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
+	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
@@ -35,8 +36,8 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 	}
 
 	if hasHelmOverrides(req) {
-		logger.Warn("🔶 Local strategy does not deploy an rsync Job; " +
-			"rsync-related Helm values (e.g. rsync.*) will have no effect")
+		narrate.Detail(logger, 1).Warn(
+			"🔶 the local strategy runs no rsync Job, so the rsync.* Helm values have no effect")
 	}
 
 	publicKey, privateKey, privateKeyMountPath, err := generateSSHKeys(req.KeyAlgorithm, logger)
@@ -155,6 +156,13 @@ func waitAndRunRsync(
 		return fmt.Errorf("waiting for dest port-forward: %w", timeoutCtx.Err())
 	case destFwdPort = <-destPortCh:
 	}
+
+	narrate.Detail(logger, 1).Info(fmt.Sprintf(
+		"🔌 port-forwarding through the API servers: source sshd on localhost:%d, destination sshd on localhost:%d",
+		srcFwdPort, destFwdPort))
+	narrate.Detail(logger, 1).Info(fmt.Sprintf(
+		"🔗 rsync runs in the source pod and reaches the destination through a tunnel on its port %d, via this machine",
+		attempt.Migration.Request.SSHReverseTunnelPort))
 
 	return runRsyncOverSSH(ctx, attempt, privateKey, srcFwdPort, destFwdPort, logger)
 }
@@ -423,7 +431,7 @@ func proxyConn(ctx context.Context, src net.Conn, destPort int, logger *slog.Log
 
 	dst, err := (&net.Dialer{}).DialContext(ctx, "tcp", fmt.Sprintf("localhost:%d", destPort))
 	if err != nil {
-		logger.Debug("tunnel: failed to dial dest", "port", destPort, "error", err)
+		logger.Debug("Tunnel failed to dial the destination", "port", destPort, "error", err)
 
 		return
 	}
@@ -449,7 +457,7 @@ func proxyConn(ctx context.Context, src net.Conn, destPort int, logger *slog.Log
 	})
 
 	if copyErr := eg.Wait(); copyErr != nil {
-		logger.Debug("tunnel connection closed", "error", copyErr)
+		logger.Debug("Tunnel connection closed", "error", copyErr)
 	}
 }
 

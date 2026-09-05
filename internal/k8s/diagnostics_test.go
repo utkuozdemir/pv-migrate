@@ -218,5 +218,5 @@ func TestWriteWorkloadDiagnostics_UnreadableCluster(t *testing.T) {
 	k8s.WriteWorkloadDiagnostics(t.Context(), cli, diagNS,
 		k8s.InstanceLabelSelector(diagRelease), console.Palette{}, &buf, slog.New(slog.DiscardHandler))
 
-	assert.Equal(t, "    could not read the cluster's resources\n", buf.String())
+	assert.Equal(t, "    Could not read the cluster's resources\n", buf.String())
 }
