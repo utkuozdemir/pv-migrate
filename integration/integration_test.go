@@ -489,10 +489,12 @@ func testFailWithoutNetworkPolicies(t *testing.T, te *testEnv) {
 	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
+	// The policies are on by default, so they are switched off explicitly here.
 	// Force a single strategy, zero retries, and a short helm timeout to fail fast -- we only
 	// need to confirm that the migration fails without NetworkPolicies.
 	cmd := fmt.Sprintf(
 		"%s --no-cleanup-on-failure --helm-set rsync.ttlSecondsAfterFinished=3600"+
+			" --helm-set rsync.networkPolicy.enabled=false --helm-set sshd.networkPolicy.enabled=false"+
 			" --helm-set rsync.maxRetries=0 --helm-timeout 30s --log-level debug --log-format json"+
 			" -s clusterip -i -n %s -N %s --source source --dest dest",
 		imageHelmArgs(t),
@@ -1378,8 +1380,6 @@ func defaultHelmArgs(t *testing.T) string {
 	t.Helper()
 
 	return "--no-cleanup-on-failure " +
-		"--helm-set rsync.networkPolicy.enabled=true " +
-		"--helm-set sshd.networkPolicy.enabled=true " +
 		"--helm-set rsync.ttlSecondsAfterFinished=3600 " +
 		imageHelmArgs(t)
 }

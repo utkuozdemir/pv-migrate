@@ -63,7 +63,7 @@ It has its own identity concept, because a backup has to be findable again later
 - `internal/rsync`, `internal/rclone`: build the data mover command strings, and the rclone config.
 - `internal/progresslog`: tails a log stream, parses progress and drives the progress bar, for either data mover.
   `internal/rsync/progress` and `internal/rclone/progress` are just the two line parsers; `internal/jobprogress` picks between them by job name.
-- `internal/helm`: the embedded chart and its loader.
+- `internal/helm`: the embedded chart, its loader, and the adjustments to its values that depend on what the cluster allows.
 - `internal/k8s`: client construction, and the waiting: for a pod, a job, a service address, a port-forward.
 - `internal/pvc`: resolves a claim into what the strategies need to know about it.
 - `internal/opid`: the operation identifier, generated and validated in one place.
@@ -147,8 +147,12 @@ The chart README is generated from the comments in `values.yaml` by helm-docs an
 `docs/cli-reference.md` is likewise generated, from the commands' own help output.
 `task generate-all` regenerates both, and CI runs it and fails on a dirty tree, so a change that touches either has to be regenerated in the same commit.
 
-Network policies are off by default and opt-in per component, because most clusters do not need them.
-When they are needed and missing, the SSH connection simply never establishes, so the strategy fails and the ladder moves on, and what the user sees is every strategy having failed rather than anything about network policy.
+Each component that uses the network gets an allow-all network policy selecting only its own pod, on by default.
+Where no other policy exists it changes nothing, and in a namespace isolated with Kubernetes network policies it is the difference between a transfer and every network strategy failing with a connection timeout that names nothing about network policy.
+A deny rule in a CNI's own policy type still wins, as it should, so the claim in the docs is limited to Kubernetes network policies.
+The permission to create them is checked with a `SelfSubjectAccessReview` before the install, and an account that is not allowed, or whose check cannot be answered, gets the release without the policies and a warning, rather than a failed install over an object that would have been a no-op for most.
+The check only ever removes a policy from the tool's own values, so a policy the user asks for explicitly is still attempted, and the install then reports the real permission problem.
+The `mount` strategy's pod opens no connection, so its values switch the policy off and the check has nothing to ask.
 
 ## Testing
 

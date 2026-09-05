@@ -17,22 +17,36 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 		return Declined(reason)
 	}
 
-	sourceInfo := attempt.Migration.SourceInfo
-	destInfo := attempt.Migration.DestInfo
-	namespace := sourceInfo.Claim.Namespace
-
-	node := determineTargetNode(mig)
-
 	rsyncCmd, err := buildRsyncCmdMount(mig)
 	if err != nil {
 		return fmt.Errorf("failed to build rsync command: %w", err)
 	}
 
-	vals := map[string]any{
+	sourceInfo := mig.SourceInfo
+	vals := buildMountHelmValues(mig, rsyncCmd)
+
+	releaseName := attempt.HelmReleaseNamePrefix
+	attempt.ReleaseNames = []string{releaseName}
+
+	if err = installHelmChart(ctx, attempt, sourceInfo, releaseName, vals, logger); err != nil {
+		return err
+	}
+
+	return waitForRsyncJob(ctx, attempt, sourceInfo, releaseName, logger)
+}
+
+// buildMountHelmValues builds the values for the one rsync pod that mounts both
+// volumes. It copies between two filesystems and opens no connection, so it gets
+// no network policy: one object less, and no permission to check for it.
+func buildMountHelmValues(mig *migration.Migration, rsyncCmd string) map[string]any {
+	sourceInfo := mig.SourceInfo
+	destInfo := mig.DestInfo
+
+	return map[string]any{
 		rsyncComponent: map[string]any{
 			keyEnabled:   true,
-			keyNamespace: namespace,
-			"nodeName":   node,
+			keyNamespace: sourceInfo.Claim.Namespace,
+			"nodeName":   determineTargetNode(mig),
 			keyPVCMounts: []map[string]any{
 				{
 					keyName:      sourceInfo.Claim.Name,
@@ -44,19 +58,11 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 					keyMountPath: destMountPath,
 				},
 			},
-			"command":   rsyncCmd,
-			keyAffinity: sourceInfo.AffinityHelmValues,
+			"command":       rsyncCmd,
+			keyAffinity:     sourceInfo.AffinityHelmValues,
+			"networkPolicy": map[string]any{keyEnabled: false},
 		},
 	}
-
-	releaseName := attempt.HelmReleaseNamePrefix
-	attempt.ReleaseNames = []string{releaseName}
-
-	if err = installHelmChart(ctx, attempt, sourceInfo, releaseName, vals, logger); err != nil {
-		return err
-	}
-
-	return waitForRsyncJob(ctx, attempt, sourceInfo, releaseName, logger)
 }
 
 func (r *Mount) cannotDoReason(t *migration.Migration) string {
