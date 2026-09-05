@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"unicode"
+	"unicode/utf8"
 
 	// load all auth plugins - needed for gcp, azure etc.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -50,16 +52,27 @@ func run() int {
 
 	rootCmd, err := app.BuildMigrateCmd(ctx, version, commit, date, nil)
 	if err != nil {
-		slog.Default().Error("❌ Failed to build command", "error", err.Error())
+		slog.Default().Error("❌ Failed to build the command: " + err.Error())
 
 		return 1
 	}
 
 	if err = rootCmd.ExecuteContext(ctx); err != nil {
-		slog.Default().Error("❌ Failed to run", "error", err.Error())
+		slog.Default().Error("❌ " + capitalized(err.Error()))
 
 		return 1
 	}
 
 	return 0
+}
+
+// capitalized makes an error's message read as a sentence on the last line,
+// since errors start in lowercase and the steps around them do not.
+func capitalized(text string) string {
+	first, size := utf8.DecodeRuneInString(text)
+	if first == utf8.RuneError {
+		return text
+	}
+
+	return string(unicode.ToUpper(first)) + text[size:]
 }

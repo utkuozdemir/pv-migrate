@@ -27,6 +27,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/helm"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 	"github.com/utkuozdemir/pv-migrate/internal/opid"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rclone"
@@ -116,8 +117,6 @@ func Run(ctx context.Context, req *Request) error {
 		operationID = opid.Generate()
 	}
 
-	logger = logger.With("id", operationID, "direction", req.Direction)
-
 	rcloneConf, err := buildRcloneConfig(req)
 	if err != nil {
 		return fmt.Errorf("failed to build rclone config: %w", err)
@@ -153,8 +152,22 @@ func Run(ctx context.Context, req *Request) error {
 		return fmt.Errorf("failed to get PVC info: %w", err)
 	}
 
-	if err = handleMounted(pvcInfo, req.IgnoreMounted, logger); err != nil {
+	if req.Direction == rclone.DirectionBackup {
+		logger.Info(fmt.Sprintf("📦 Backing up %s/%s to %s", ns, req.PVCName, remotePath))
+	} else {
+		logger.Info(fmt.Sprintf("📥 Restoring %s to %s/%s", remotePath, ns, req.PVCName))
+	}
+
+	details := narrate.Detail(logger, 1)
+	details.Info(fmt.Sprintf("🆔 operation id %s, for status and cleanup", operationID))
+	details.Info("📌 claim " + pvcInfo.Describe())
+
+	if err = handleMounted(pvcInfo, req.IgnoreMounted, details); err != nil {
 		return err
+	}
+
+	if req.DeleteExtraneousFiles {
+		details.Info("❕ files missing on the source will be deleted from the destination")
 	}
 
 	rcloneCmd := rclone.Cmd{
@@ -192,9 +205,6 @@ func Run(ctx context.Context, req *Request) error {
 	helmVals := buildHelmValues(ns, req, pvcInfo, rcloneConf, cmdStr, readOnly, metadataBase64, metadataRemotePath)
 
 	releaseName := opid.ReleasePrefix + operationID + "-" + req.Direction
-
-	logger = logger.With("release", releaseName)
-	logger.Info("📦 Installing Helm chart")
 
 	if err = installHelmChart(ctx, helmChart, pvcInfo, releaseName, helmVals, req, logger); err != nil {
 		// A timed-out install means resources that are stuck rather than absent,
@@ -476,9 +486,9 @@ func installHelmChart(
 		return k8s.CanCreateNetworkPolicies(ctx, pvcInfo.ClusterClient.KubeClient, namespace)
 	}
 
-	helm.DisableNetworkPoliciesWhereForbidden(ctx, baseValues, canCreate, logger)
+	helm.DisableNetworkPoliciesWhereForbidden(ctx, baseValues, canCreate, narrate.Detail(logger, 1))
 
-	merged, err := mergeHelmValues(baseValues, req, logger)
+	merged, err := mergeHelmValues(baseValues, req)
 	if err != nil {
 		return err
 	}
@@ -487,10 +497,31 @@ func installHelmChart(
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
+	details := narrate.Detail(logger, 1)
+	deeper := narrate.Detail(logger, 2)
+
+	details.Info("📦 created release " + releaseName)
+
+	if rcloneVals, ok := helm.EnabledComponent(merged, "rclone"); ok {
+		namespace := helm.ComponentNamespace(rcloneVals)
+
+		deeper.Info(fmt.Sprintf(
+			"🚚 rclone job %s-rclone in namespace %s, image %s, %s",
+			releaseName,
+			namespace,
+			k8s.JobImage(ctx, pvcInfo.ClusterClient.KubeClient, namespace, releaseName+"-rclone"),
+			helm.DescribeMounts(rcloneVals),
+		))
+
+		if helm.NetworkPolicyOn(rcloneVals) {
+			deeper.Info("🔒 network policy for the rclone pod, so a default-deny namespace does not block it")
+		}
+	}
+
 	return nil
 }
 
-func mergeHelmValues(baseValues map[string]any, req *Request, logger *slog.Logger) (map[string]any, error) {
+func mergeHelmValues(baseValues map[string]any, req *Request) (map[string]any, error) {
 	helmValues := req.HelmValues
 	if tag := req.ImageTag; tag != "" {
 		helmValues = append([]string{"rclone.image.tag=" + tag}, req.HelmValues...)
@@ -508,15 +539,7 @@ func mergeHelmValues(baseValues map[string]any, req *Request, logger *slog.Logge
 		return nil, fmt.Errorf("failed to merge helm values: %w", err)
 	}
 
-	merged := loader.MergeMaps(baseValues, userValues)
-
-	if req.ImageTag != "" {
-		logger.Info("🔖 Using image tag", "tag", req.ImageTag)
-	} else {
-		logger.Info("🔖 Using chart default image tags")
-	}
-
-	return merged, nil
+	return loader.MergeMaps(baseValues, userValues), nil
 }
 
 func handleJobCompletion(
@@ -531,13 +554,14 @@ func handleJobCompletion(
 
 	defer func() {
 		if req.NoCleanup {
-			logger.Info("🧹 Cleanup skipped")
+			narrate.Detail(logger, 1).Info("🧹 cleanup skipped, the resources stay in the cluster")
 
 			return
 		}
 
 		if req.NoCleanupOnFailure && retErr != nil {
-			logger.Info("🧹 Cleanup skipped (operation failed, resources left for inspection)")
+			narrate.Detail(logger, 1).
+				Info("🧹 cleanup skipped since the operation failed, the resources stay for inspection")
 
 			return
 		}
@@ -546,15 +570,19 @@ func handleJobCompletion(
 			return
 		}
 
+		details := narrate.Detail(logger, 1)
+
 		if cleanupErr := cleanupRelease(pvcInfo, releaseName, req.HelmTimeout); cleanupErr != nil {
-			logger.Warn("🔶 Cleanup failed, you might want to clean up manually", "error", cleanupErr)
+			details.Warn("🔶 cleanup failed, clean up with pv-migrate cleanup: " + cleanupErr.Error())
 		} else {
-			logger.Info("✨ Cleanup done")
+			details.Info(fmt.Sprintf("🧹 removed release %s from namespace %s", releaseName, namespace))
 		}
 	}()
 
+	started := time.Now()
+
 	if req.Detach {
-		if _, err := k8s.WaitForJobStart(ctx, kubeClient, namespace, jobName, logger); err != nil {
+		if _, err := k8s.WaitForJobStart(ctx, kubeClient, namespace, jobName, narrate.Detail(logger, 1)); err != nil {
 			return fmt.Errorf("failed to wait for job to start: %w", err)
 		}
 
@@ -565,7 +593,7 @@ func handleJobCompletion(
 
 	if err := k8s.WaitForJobCompletion(ctx, kubeClient, namespace, jobName,
 		shouldShowProgressBar(req.Writer), req.StructuredLogs,
-		console.Palette{Enabled: req.ColorOutput}, req.Writer, logger); err != nil {
+		console.Palette{Enabled: req.ColorOutput}, req.Writer, narrate.Detail(logger, 1)); err != nil {
 		// Before the deferred cleanup removes the resources this is about.
 		writeFailure(ctx, req, kubeClient, namespace, releaseName, err, logger)
 
@@ -575,7 +603,8 @@ func handleJobCompletion(
 		return err //nolint:wrapcheck
 	}
 
-	logger.Info("✅ Operation succeeded")
+	logger.Info(fmt.Sprintf("✅ %s succeeded in %s", capitalizedDirection(req.Direction),
+		time.Since(started).Round(time.Second)))
 
 	return nil
 }
@@ -606,7 +635,7 @@ func writeFailure(
 
 	palette := console.Palette{Enabled: req.ColorOutput}
 
-	fmt.Fprintf(req.Writer, "%s\n", palette.Failure(capitalizedDirection(req.Direction)+" failed."))
+	fmt.Fprintf(req.Writer, "\n%s\n", palette.Failure(capitalizedDirection(req.Direction)+" failed."))
 
 	if cause != nil {
 		for line := range strings.SplitSeq(cause.Error(), "\n") {
@@ -618,7 +647,6 @@ func writeFailure(
 		palette.Bold("What the cluster reported:"), releaseName, namespace)
 	k8s.WriteWorkloadDiagnostics(ctx, kubeClient, namespace,
 		k8s.InstanceLabelSelector(releaseName), palette, req.Writer, logger)
-	fmt.Fprintln(req.Writer)
 }
 
 func capitalizedDirection(direction string) string {
@@ -655,8 +683,8 @@ func handleMounted(info *pvc.Info, ignoreMounted bool, logger *slog.Logger) erro
 	}
 
 	if ignoreMounted {
-		logger.Info("💡 PVC is mounted to a node, but --ignore-mounted is requested, ignoring...",
-			"pvc", info.Claim.Namespace+"/"+info.Claim.Name, "mounted_node", info.MountedNode)
+		logger.Info(fmt.Sprintf("💡 %s/%s is mounted on node %s, continuing because --ignore-mounted is set",
+			info.Claim.Namespace, info.Claim.Name, info.MountedNode))
 
 		return nil
 	}
@@ -680,7 +708,8 @@ func validateSubpath(p string) error {
 }
 
 func printDetachMessage(req *Request, operationID string, logger *slog.Logger) {
-	logger.Info("🚀 Operation detached", "id", operationID, "direction", req.Direction)
+	logger.Info(fmt.Sprintf("🚀 %s detached, the rclone job keeps running in the cluster",
+		capitalizedDirection(req.Direction)))
 
 	fmt.Fprintln(req.Writer)
 	fmt.Fprintf(req.Writer, "%s %s detached. The rclone job is running in the cluster.\n",
@@ -691,7 +720,6 @@ func printDetachMessage(req *Request, operationID string, logger *slog.Logger) {
 	fmt.Fprintln(req.Writer)
 	fmt.Fprintln(req.Writer, "To clean up after completion:")
 	fmt.Fprintf(req.Writer, "  pv-migrate cleanup %s\n", operationID)
-	fmt.Fprintln(req.Writer)
 }
 
 func shouldShowProgressBar(w io.Writer) bool {

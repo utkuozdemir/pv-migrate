@@ -8,12 +8,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/lmittmann/tint"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
 
 	"github.com/utkuozdemir/pv-migrate/internal/console"
+	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 	"github.com/utkuozdemir/pv-migrate/internal/util"
 	"github.com/utkuozdemir/pv-migrate/pvmigrate"
 )
@@ -400,12 +400,6 @@ func runMigration(cmd *cobra.Command, options *Options, writer io.Writer, logger
 	options.Migration.StructuredLogs = options.LogFormat == logFormatJSON
 	options.Migration.ColorOutput = colorOutputWanted(cmd, writer)
 
-	logger.Info("🚀 Starting migration")
-
-	if options.Migration.DeleteExtraneousFiles {
-		logger.Info("❕ Extraneous files will be deleted from the destination")
-	}
-
 	// The public API already prefixes the error with "migration failed"; wrapping
 	// it again here only doubled the prefix in the one line the user reads.
 	return pvmigrate.Run(ctx, options.Migration)
@@ -432,9 +426,9 @@ func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*sl
 			out = console.EraseLineBefore(writer)
 		}
 
-		handler = tint.NewTextHandler(out, &tint.Options{
-			Level:   level,
-			NoColor: !isATTY || os.Getenv("NO_COLOR") != "",
+		handler = narrate.NewHandler(out, narrate.Options{
+			Level: level,
+			Color: console.ForTerminal(isATTY, false),
 		})
 	default:
 		return nil, fmt.Errorf("unknown log format: %s", logFormat)
@@ -444,7 +438,9 @@ func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*sl
 
 	slog.SetLogLoggerLevel(level)
 	slog.SetDefault(logger)
-	klog.SetSlogLogger(logger)
+	// What the Kubernetes client and Helm have to say is drawn under the step
+	// that was running, as details: it is about that step, and it is not ours.
+	klog.SetSlogLogger(narrate.Detail(logger, 1))
 
 	return logger, nil
 }

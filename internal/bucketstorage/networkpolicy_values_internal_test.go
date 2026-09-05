@@ -38,8 +38,7 @@ func TestRcloneValuesFollowNetworkPolicyPermission(t *testing.T) {
 	assert.Equal(t, false, policy["enabled"])
 
 	// A policy the user asks for is still attempted.
-	merged, err := mergeHelmValues(values, &Request{HelmValues: []string{"rclone.networkPolicy.enabled=true"}},
-		slogt.New(t))
+	merged, err := mergeHelmValues(values, &Request{HelmValues: []string{"rclone.networkPolicy.enabled=true"}})
 	require.NoError(t, err)
 
 	mergedRclone, ok := merged["rclone"].(map[string]any)

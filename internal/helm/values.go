@@ -2,9 +2,11 @@ package helm
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"maps"
 	"slices"
+	"strings"
 )
 
 const (
@@ -12,6 +14,70 @@ const (
 	keyNamespace     = "namespace"
 	keyNetworkPolicy = "networkPolicy"
 )
+
+// EnabledComponent returns the component's section when it is part of the release.
+func EnabledComponent(values map[string]any, component string) (map[string]any, bool) {
+	section, ok := values[component].(map[string]any)
+	if !ok || section[keyEnabled] != true {
+		return nil, false
+	}
+
+	return section, true
+}
+
+// ComponentNamespace is where the component's pod runs, which is not always the
+// release namespace: one release can span two.
+func ComponentNamespace(section map[string]any) string {
+	namespace, _ := section[keyNamespace].(string)
+
+	return namespace
+}
+
+// DescribeMounts says which claims the component's pod mounts, and how. The
+// list comes as typed maps from the tool's own values and as plain values once
+// a user's --helm-set has touched it, so both shapes are read.
+func DescribeMounts(section map[string]any) string {
+	mounts := mountList(section["pvcMounts"])
+	parts := make([]string, 0, len(mounts))
+
+	for _, mount := range mounts {
+		part := fmt.Sprintf("mounts %v at %v", mount["name"], mount["mountPath"])
+		if mount["readOnly"] == true {
+			part += " read-only"
+		}
+
+		parts = append(parts, part)
+	}
+
+	return strings.Join(parts, ", ")
+}
+
+func mountList(value any) []map[string]any {
+	switch mounts := value.(type) {
+	case []map[string]any:
+		return mounts
+	case []any:
+		typed := make([]map[string]any, 0, len(mounts))
+
+		for _, mount := range mounts {
+			if m, ok := mount.(map[string]any); ok {
+				typed = append(typed, m)
+			}
+		}
+
+		return typed
+	default:
+		return nil
+	}
+}
+
+// NetworkPolicyOn reports whether the component gets its allow-all network
+// policy: on unless the section switched it off.
+func NetworkPolicyOn(section map[string]any) bool {
+	policy, ok := section[keyNetworkPolicy].(map[string]any)
+
+	return !ok || policy[keyEnabled] != false
+}
 
 // CanCreateNetworkPoliciesFunc reports whether NetworkPolicy objects may be
 // created in the namespace.
@@ -96,16 +162,16 @@ func networkPoliciesAllowed(
 ) bool {
 	allowed, err := canCreate(ctx, namespace)
 	if err != nil {
-		logger.Warn("🔶 Could not check whether network policies can be created, continuing without them. "+
-			"A transfer that uses the network will not connect in a namespace with default-deny policies",
+		logger.Warn("🔶 could not check whether network policies can be created, continuing without them. "+
+			"A transfer over the network will not connect in a default-deny namespace",
 			"namespace", namespace, "error", err)
 
 		return false
 	}
 
 	if !allowed {
-		logger.Warn("🔶 Not allowed to create network policies in the namespace, continuing without them. "+
-			"A transfer that uses the network will not connect in a namespace with default-deny policies",
+		logger.Warn("🔶 not allowed to create network policies in the namespace, continuing without them. "+
+			"A transfer over the network will not connect in a default-deny namespace",
 			"namespace", namespace)
 	}
 

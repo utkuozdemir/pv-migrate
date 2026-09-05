@@ -20,6 +20,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/jobprogress"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 	"github.com/utkuozdemir/pv-migrate/internal/opid"
 )
 
@@ -127,13 +128,13 @@ func runStatus(
 func followJobProgress(
 	ctx context.Context, cli kubernetes.Interface, job *batchv1.Job, structuredLogs bool, logger *slog.Logger,
 ) error {
-	logger.Info("Following job progress", "job", job.Name, "type", jobprogress.Description(job.Name))
+	logger.Info(fmt.Sprintf("👀 Following job %s, %s", job.Name, jobprogress.Description(job.Name)))
 
 	palette := console.Palette{Enabled: console.ForTerminal(isatty.IsTerminal(os.Stderr.Fd()), structuredLogs)}
 
 	if err := k8s.WaitForJobCompletion(ctx, cli, job.Namespace, job.Name,
 		isatty.IsTerminal(os.Stderr.Fd()), structuredLogs,
-		palette, os.Stderr, logger); err != nil {
+		palette, os.Stderr, narrate.Detail(logger, 1)); err != nil {
 		return fmt.Errorf("failed to follow progress: %w", err)
 	}
 
@@ -143,7 +144,7 @@ func followJobProgress(
 func refreshJob(ctx context.Context, cli kubernetes.Interface, job *batchv1.Job, logger *slog.Logger) *batchv1.Job {
 	refreshed, err := cli.BatchV1().Jobs(job.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
 	if err != nil {
-		logger.Debug("failed to refresh job status", "job", job.Namespace+"/"+job.Name, "error", err)
+		logger.Debug("Failed to refresh the job status", "job", job.Namespace+"/"+job.Name, "error", err)
 
 		return job
 	}
@@ -177,11 +178,8 @@ func printJobProgress(ctx context.Context, cli kubernetes.Interface, job *batchv
 		return
 	}
 
-	logger.Info("Operation progress",
-		"percentage", fmt.Sprintf("%d%%", latest.Percentage),
-		"transferred", formatBytes(latest.Transferred),
-		"total", formatBytes(latest.Total),
-	)
+	narrate.Detail(logger, 1).Info(fmt.Sprintf("📊 %d%% done, %s of %s transferred",
+		latest.Percentage, formatBytes(latest.Transferred), formatBytes(latest.Total)))
 }
 
 func printJobStatus(job *batchv1.Job, logger *slog.Logger) {
@@ -211,12 +209,10 @@ func printJobStatus(job *batchv1.Job, logger *slog.Logger) {
 		logFn = logger.Warn
 	}
 
-	logFn("Operation status",
-		"job", job.Name,
-		"namespace", job.Namespace,
-		"status", status,
-		"elapsed", elapsed,
-	)
+	emoji := map[string]string{"Succeeded": "✅", "Failed": "❌", "Running": "🏃", "Pending": "⏳"}[status]
+
+	logFn(fmt.Sprintf("%s Job %s in namespace %s is %s, %s", emoji, job.Name, job.Namespace,
+		strings.ToLower(status), elapsed))
 }
 
 // jobElapsed reports how long the job ran. A failed job has no completion

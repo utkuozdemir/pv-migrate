@@ -18,6 +18,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 	"github.com/utkuozdemir/pv-migrate/internal/opid"
 )
 
@@ -106,7 +107,7 @@ func runCleanup(
 
 	if len(releases) == 0 {
 		if all {
-			logger.Info("No pv-migrate releases found")
+			logger.Info("🧹 No pv-migrate releases found")
 
 			return nil
 		}
@@ -114,7 +115,7 @@ func runCleanup(
 		return fmt.Errorf("no releases found matching %q", filterPrefix)
 	}
 
-	logger.Info("Found releases to clean up", "count", len(releases))
+	logger.Info(fmt.Sprintf("🧹 Found %d releases to clean up", len(releases)))
 
 	if !force {
 		if err = checkNoActiveJobs(ctx, client.KubeClient, releases, logger); err != nil {
@@ -149,7 +150,7 @@ func checkNoActiveJobs(
 		}
 	}
 
-	logger.Info("No active jobs found, proceeding with cleanup")
+	narrate.Detail(logger, 1).Info("🧹 no job is still running, so every release can go")
 
 	return nil
 }
@@ -161,29 +162,40 @@ func uninstallReleases(releases []release.Releaser, client *k8s.ClusterClient, l
 			continue
 		}
 
-		if err = uninstallRelease(acc.Name(), acc.Namespace(), client); err != nil {
+		removed, err := uninstallRelease(acc.Name(), acc.Namespace(), client)
+		if err != nil {
 			return err
 		}
 
-		logger.Info("Uninstalled release", "release", acc.Name(), "namespace", acc.Namespace())
+		if removed {
+			narrate.Detail(logger, 1).
+				Info(fmt.Sprintf("🧹 removed release %s from namespace %s", acc.Name(), acc.Namespace()))
+		}
 	}
 
 	return nil
 }
 
-func uninstallRelease(name, namespace string, client *k8s.ClusterClient) error {
+// uninstallRelease removes the release and reports whether it was still there,
+// since another cleanup may have won the race.
+func uninstallRelease(name, namespace string, client *k8s.ClusterClient) (bool, error) {
 	ac := new(action.Configuration)
 	if err := ac.Init(client.RESTClientGetter, namespace, os.Getenv("HELM_DRIVER")); err != nil {
-		return fmt.Errorf("failed to initialize helm for namespace %s: %w", namespace, err)
+		return false, fmt.Errorf("failed to initialize helm for namespace %s: %w", namespace, err)
 	}
 
 	uninstall := action.NewUninstall(ac)
 	uninstall.WaitStrategy = kube.LegacyStrategy
 	uninstall.Timeout = 1 * time.Minute
 
-	if _, err := uninstall.Run(name); err != nil && !errors.Is(err, driver.ErrReleaseNotFound) {
-		return fmt.Errorf("failed to uninstall release %s: %w", name, err)
-	}
+	_, err := uninstall.Run(name)
 
-	return nil
+	switch {
+	case err == nil:
+		return true, nil
+	case errors.Is(err, driver.ErrReleaseNotFound):
+		return false, nil
+	default:
+		return false, fmt.Errorf("failed to uninstall release %s: %w", name, err)
+	}
 }

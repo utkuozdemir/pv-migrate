@@ -125,9 +125,13 @@ func TestWaitForJobCompletion_PodAlreadySucceededDoesNotWatchTermination(t *test
 		Status:    corev1.PodStatus{Phase: corev1.PodSucceeded},
 	})
 
+	var out bytes.Buffer
+
 	err := k8s.WaitForJobCompletion(ctx, cli, "default", "test-rclone", false, false, console.Palette{},
-		&bytes.Buffer{}, slog.New(slog.DiscardHandler))
+		&out, slog.New(slog.DiscardHandler))
 	require.NoError(t, err)
+
+	assert.Empty(t, out.String(), "a success prints no log tail, that is a failure aid")
 
 	for _, action := range cli.Actions() {
 		assert.NotEqual(t, "watch", action.GetVerb(), "already-succeeded pod should not start a watch")

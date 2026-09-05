@@ -2,11 +2,13 @@ package strategy
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -17,13 +19,16 @@ import (
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
 	"helm.sh/helm/v4/pkg/storage/driver"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/helm"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
+	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 )
 
@@ -40,14 +45,15 @@ const (
 	rsyncComponent = "rsync"
 	sshdComponent  = "sshd"
 
-	keyEnabled   = "enabled"
-	keyNamespace = "namespace"
-	keyPublicKey = "publicKey"
-	keyPVCMounts = "pvcMounts"
-	keyName      = "name"
-	keyMountPath = "mountPath"
-	keyReadOnly  = "readOnly"
-	keyAffinity  = "affinity"
+	keyEnabled       = "enabled"
+	keyNamespace     = "namespace"
+	keyNetworkPolicy = "networkPolicy"
+	keyPublicKey     = "publicKey"
+	keyPVCMounts     = "pvcMounts"
+	keyName          = "name"
+	keyMountPath     = "mountPath"
+	keyReadOnly      = "readOnly"
+	keyAffinity      = "affinity"
 
 	rootSSHUser    = "root"
 	rootSSHPort    = 22
@@ -55,6 +61,30 @@ const (
 	nonRootSSHPort = 2222
 	nonRootUID     = 10000
 )
+
+// Describe says in one line what a strategy does, for the step that announces
+// the attempt. The direction matters for the ones that run sshd on one side.
+func Describe(name string, push bool) string {
+	side := "sshd next to the source, rsync next to the destination"
+	if push {
+		side = "sshd next to the destination, rsync next to the source"
+	}
+
+	switch name {
+	case mountStrategy:
+		return "one pod mounts both claims and copies locally, no network"
+	case clusterIPStrategy:
+		return side + ", over a ClusterIP service"
+	case loadBalancerStrategy:
+		return side + ", over a LoadBalancer service"
+	case nodePortStrategy:
+		return side + ", over a NodePort service"
+	case localStrategy:
+		return "sshd on both sides, the copy goes through this machine"
+	default:
+		return ""
+	}
+}
 
 var (
 	nameToStrategy = map[string]Strategy{
@@ -116,15 +146,24 @@ func Cleanup(attempt *migration.Attempt, logger *slog.Logger) error {
 	mig := attempt.Migration
 	req := mig.Request
 
-	logger.Info("🧹 Cleaning up")
+	details := narrate.Detail(logger, 1)
 
 	var errs error
 
+	// Every release is tried on both sides, since the attempt does not record
+	// which cluster each one went to. The side that never had it says so
+	// quietly.
 	for _, info := range []*pvc.Info{mig.SourceInfo, mig.DestInfo} {
 		for _, name := range attempt.ReleaseNames {
-			err := cleanupForPVC(name, req.HelmTimeout, info)
+			removed, err := cleanupForPVC(name, req.HelmTimeout, info)
 			if err != nil {
 				errs = multierror.Append(errs, err)
+
+				continue
+			}
+
+			if removed {
+				details.Info(fmt.Sprintf("🧹 removed release %s from namespace %s", name, info.Claim.Namespace))
 			}
 		}
 	}
@@ -132,22 +171,28 @@ func Cleanup(attempt *migration.Attempt, logger *slog.Logger) error {
 	return errs
 }
 
-func cleanupForPVC(helmReleaseName string, helmUninstallTimeout time.Duration, pvcInfo *pvc.Info) error {
+// cleanupForPVC uninstalls the release from the claim's cluster, and reports
+// whether there was one to remove.
+func cleanupForPVC(helmReleaseName string, helmUninstallTimeout time.Duration, pvcInfo *pvc.Info) (bool, error) {
 	ac, err := initHelmActionConfig(pvcInfo)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	uninstall := action.NewUninstall(ac)
 	uninstall.WaitStrategy = kube.LegacyStrategy
 	uninstall.Timeout = helmUninstallTimeout
-	_, err = uninstall.Run(helmReleaseName)
 
-	if err != nil && !errors.Is(err, driver.ErrReleaseNotFound) && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("failed to uninstall helm release %s: %w", helmReleaseName, err)
+	_, err = uninstall.Run(helmReleaseName)
+	if err == nil {
+		return true, nil
 	}
 
-	return nil
+	if errors.Is(err, driver.ErrReleaseNotFound) || apierrors.IsNotFound(err) {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("failed to uninstall helm release %s: %w", helmReleaseName, err)
 }
 
 func initHelmActionConfig(pvcInfo *pvc.Info) (*action.Configuration, error) {
@@ -212,7 +257,6 @@ func applyNonRootValues(vals map[string]any, req *migration.Request) {
 func getMergedHelmValues(
 	baseValues map[string]any,
 	request *migration.Request,
-	logger *slog.Logger,
 ) (map[string]any, error) {
 	// If an image tag is set, inject it as the lowest-priority --set values
 	// so user overrides via --helm-set take precedence.
@@ -240,15 +284,7 @@ func getMergedHelmValues(
 	}
 
 	// Merge using Helm's own MergeMaps: user values override base values.
-	merged := loader.MergeMaps(baseValues, userValues)
-
-	if request.ImageTag != "" {
-		logger.Info("🔖 Using image tag", "tag", request.ImageTag)
-	} else {
-		logger.Info("🔖 Using chart default image tags")
-	}
-
-	return merged, nil
+	return loader.MergeMaps(baseValues, userValues), nil
 }
 
 func installHelmChart(
@@ -284,9 +320,9 @@ func installHelmChart(
 	// Before the user's values are merged on top, so that an explicit request
 	// for a policy is still honored, and the install then reports the real
 	// permission problem.
-	helm.DisableNetworkPoliciesWhereForbidden(ctx, values, canCreateNetworkPolicies(pvcInfo), logger)
+	helm.DisableNetworkPoliciesWhereForbidden(ctx, values, canCreateNetworkPolicies(pvcInfo), narrate.Detail(logger, 1))
 
-	vals, err := getMergedHelmValues(values, mig.Request, logger)
+	vals, err := getMergedHelmValues(values, mig.Request)
 	if err != nil {
 		return fmt.Errorf("failed to get merged helm values: %w", err)
 	}
@@ -324,28 +360,113 @@ func installHelmChart(
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
-	if !waitForSshd {
-		return nil
-	}
-
-	return waitForSshdReady(ctx, pvcInfo.ClusterClient.KubeClient, sshdNamespace(vals), name, timeout, logger)
+	return describeRelease(ctx, pvcInfo.ClusterClient.KubeClient, name, vals, timeout, logger)
 }
 
-// waitForSshdReady stands in for Helm's wait on a release Helm was told not to
-// wait for, see installHelmChart. Ready rather than started, since that is what
-// Helm's wait would have established.
-func waitForSshdReady(
+// describeRelease tells what the release put in the cluster, with the names a
+// reader can look up, and waits for the sshd pod on the way: for a release Helm
+// was told not to wait for that is the readiness gate, and for the others the
+// pod is ready already and the wait returns at once.
+func describeRelease(
 	ctx context.Context,
 	cli kubernetes.Interface,
-	namespace, release string,
+	release string,
+	vals map[string]any,
 	timeout time.Duration,
 	logger *slog.Logger,
 ) error {
-	if _, err := k8s.WaitForPodReady(ctx, cli, namespace, sshdLabelSelector(release), timeout, logger); err != nil {
-		return fmt.Errorf("failed to wait for the sshd pod to become ready (see --helm-timeout): %w", err)
+	details := narrate.Detail(logger, 1)
+	deeper := narrate.Detail(logger, 2)
+
+	details.Info("📦 created release " + release)
+
+	if sshd, ok := helm.EnabledComponent(vals, sshdComponent); ok {
+		namespace := helm.ComponentNamespace(sshd)
+
+		pod, err := k8s.WaitForPodReady(ctx, cli, namespace, sshdLabelSelector(release), timeout, deeper)
+		if err != nil {
+			return fmt.Errorf("failed to wait for the sshd pod to become ready (see --helm-timeout): %w", err)
+		}
+
+		deeper.Info(fmt.Sprintf("🏃 sshd pod %s in namespace %s, on node %s, image %s, %s",
+			pod.Name, namespace, pod.Spec.NodeName, podImage(pod), helm.DescribeMounts(sshd)))
+		describeService(ctx, cli, namespace, release+"-sshd", deeper)
+		describeNetworkPolicy(sshd, "sshd", deeper)
+	}
+
+	if rsync, ok := helm.EnabledComponent(vals, rsyncComponent); ok {
+		namespace := helm.ComponentNamespace(rsync)
+
+		deeper.Info(fmt.Sprintf("🚚 rsync job %s-rsync in namespace %s, image %s, %s",
+			release, namespace, k8s.JobImage(ctx, cli, namespace, release+"-rsync"), helm.DescribeMounts(rsync)))
+		describeNetworkPolicy(rsync, "rsync", deeper)
 	}
 
 	return nil
+}
+
+// podImage is the image the pod's first container runs, which is the data mover.
+func podImage(pod *corev1.Pod) string {
+	if len(pod.Spec.Containers) == 0 {
+		return "unknown"
+	}
+
+	return pod.Spec.Containers[0].Image
+}
+
+// narrateConnection says which side rsync connects to and where, under the
+// release it belongs to.
+func narrateConnection(logger *slog.Logger, push bool, host string, port int) {
+	verb := "pulls from"
+	if push {
+		verb = "pushes to"
+	}
+
+	address := host
+	if port != 0 {
+		address = fmt.Sprintf("%s:%d", host, port)
+	}
+
+	narrate.Detail(logger, 2).Info(fmt.Sprintf("🔗 %s sshd at %s", verb, address))
+}
+
+// describeService tells how the sshd Service can be reached, from the object
+// the cluster created rather than from what was asked for.
+func describeService(ctx context.Context, cli kubernetes.Interface, namespace, name string, logger *slog.Logger) {
+	svc, err := cli.CoreV1().Services(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil || len(svc.Spec.Ports) == 0 {
+		return
+	}
+
+	port := svc.Spec.Ports[0]
+	line := fmt.Sprintf("🔌 service %s, type %s, cluster address %s:%d",
+		name, svc.Spec.Type, svc.Spec.ClusterIP, port.Port)
+
+	if port.NodePort != 0 {
+		line += fmt.Sprintf(", node port %d", port.NodePort)
+	}
+
+	if svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
+		line += ", load balancer address pending"
+
+		if ingress := svc.Status.LoadBalancer.Ingress; len(ingress) > 0 {
+			line = strings.TrimSuffix(line, " pending") + " " + cmp.Or(ingress[0].Hostname, ingress[0].IP)
+		}
+	}
+
+	logger.Info(line)
+}
+
+// describeNetworkPolicy says whether the component's pod got its allow-all
+// policy. The denied case has its own warning by then.
+func describeNetworkPolicy(section map[string]any, component string, logger *slog.Logger) {
+	if !helm.NetworkPolicyOn(section) {
+		return
+	}
+
+	logger.Info(
+		fmt.Sprintf("🔒 network policy for the %s pod, so a default-deny namespace does not block it", component),
+	)
 }
 
 // canCreateNetworkPolicies asks the cluster the release goes into.
@@ -371,15 +492,6 @@ func installsLoadBalancer(values map[string]any) bool {
 	}
 
 	return service["type"] == "LoadBalancer"
-}
-
-// sshdNamespace is where the release puts its sshd, which is not always the
-// release namespace: one release can span two namespaces.
-func sshdNamespace(values map[string]any) string {
-	sshd, _ := values[sshdComponent].(map[string]any)
-	namespace, _ := sshd[keyNamespace].(string)
-
-	return namespace
 }
 
 // peekAfter runs the peek once after the delay unless stopped first.
@@ -416,7 +528,7 @@ func writeMidInstallDiagnostics(
 
 		k8s.WriteWorkloadDiagnostics(ctx, cli, ns,
 			k8s.InstanceLabelSelector(release), console.Palette{}, &buf, logger)
-		logger.Warn("🔶 Still waiting for the release's resources; what the cluster reports so far",
+		logger.Warn("🔶 Still waiting for the release's resources. What the cluster reports so far",
 			"release", release, "namespace", ns, "diagnostics", buf.String())
 
 		return
@@ -425,8 +537,10 @@ func writeMidInstallDiagnostics(
 	palette := console.Palette{Enabled: req.ColorOutput}
 
 	fmt.Fprintf(req.Writer, "\n%s\n\n  %s (namespace %s):\n",
-		palette.Bold("Still waiting; what the cluster reports so far:"), release, ns)
+		palette.Bold("Still waiting. What the cluster reports so far:"), release, ns)
 	k8s.WriteWorkloadDiagnostics(ctx, cli, ns,
 		k8s.InstanceLabelSelector(release), palette, req.Writer, logger)
+	// The wait goes on narrating under its step after this, so the block closes
+	// with a blank line rather than letting a detail follow the diagnostics directly.
 	fmt.Fprintln(req.Writer)
 }

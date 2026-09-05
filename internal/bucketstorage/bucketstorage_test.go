@@ -1,7 +1,6 @@
 package bucketstorage_test
 
 import (
-	"log/slog"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -151,8 +150,7 @@ func TestMergeHelmValues_ImageTagInjected(t *testing.T) {
 		},
 	}
 
-	got, err := bucketstorage.MergeHelmValues(baseValues, &bucketstorage.Request{ImageTag: "v1.2.3"},
-		slog.New(slog.DiscardHandler))
+	got, err := bucketstorage.MergeHelmValues(baseValues, &bucketstorage.Request{ImageTag: "v1.2.3"})
 	require.NoError(t, err)
 	assert.Equal(t, "v1.2.3", rcloneImageTag(t, got))
 }
@@ -174,7 +172,7 @@ func TestMergeHelmValues_HelmSetOverridesImageTag(t *testing.T) {
 		HelmValues: []string{"rclone.image.tag=custom"},
 	}
 
-	got, err := bucketstorage.MergeHelmValues(baseValues, req, slog.New(slog.DiscardHandler))
+	got, err := bucketstorage.MergeHelmValues(baseValues, req)
 	require.NoError(t, err)
 	assert.Equal(t, "custom", rcloneImageTag(t, got))
 }

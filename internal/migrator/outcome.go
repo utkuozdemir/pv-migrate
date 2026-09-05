@@ -156,8 +156,6 @@ func writeSummary(writer io.Writer, outcomes []attemptOutcome, palette console.P
 		}
 	}
 
-	fmt.Fprintln(writer)
-
 	writeDiagnosticsBlocks(writer, outcomes, palette)
 }
 
@@ -178,6 +176,7 @@ func writeDiagnosticsBlocks(writer io.Writer, outcomes []attemptOutcome, palette
 		}
 
 		if !printed {
+			fmt.Fprintln(writer)
 			fmt.Fprintln(writer, palette.Bold("What the cluster reported:"))
 			fmt.Fprintln(writer)
 
@@ -185,9 +184,5 @@ func writeDiagnosticsBlocks(writer io.Writer, outcomes []attemptOutcome, palette
 		}
 
 		fmt.Fprint(writer, outcome.diagnostics)
-	}
-
-	if printed {
-		fmt.Fprintln(writer)
 	}
 }

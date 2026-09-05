@@ -8,6 +8,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
+	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 	"github.com/utkuozdemir/pv-migrate/internal/ssh"
@@ -66,12 +67,13 @@ func (t topology) releaseNames(prefix string) [2]string {
 }
 
 func generateSSHKeys(keyAlgorithm string, logger *slog.Logger) (string, string, string, error) {
-	logger.Info("🔑 Generating SSH key pair", "algorithm", keyAlgorithm)
-
 	publicKey, privateKey, err := ssh.CreateSSHKeyPair(keyAlgorithm)
 	if err != nil {
 		return "", "", "", fmt.Errorf("failed to create ssh key pair: %w", err)
 	}
+
+	narrate.Detail(logger, 1).Info(fmt.Sprintf("🔑 generated an %s SSH key pair for this transfer, thrown away with it",
+		keyAlgorithm))
 
 	return publicKey, privateKey, "/tmp/id_" + keyAlgorithm, nil
 }
@@ -237,8 +239,14 @@ func installRsyncJob(
 		rsyncVals["sshRemotePort"] = sshPort
 	}
 
-	return installHelmChart(
-		ctx, attempt, topo.rsync.info, releaseName, map[string]any{rsyncComponent: rsyncVals}, logger)
+	if err = installHelmChart(
+		ctx, attempt, topo.rsync.info, releaseName, map[string]any{rsyncComponent: rsyncVals}, logger); err != nil {
+		return err
+	}
+
+	narrateConnection(logger, topo.push, sshHost, sshPort)
+
+	return nil
 }
 
 func waitForRsyncJob(
@@ -254,7 +262,7 @@ func waitForRsyncJob(
 	jobName := rsyncRelease + "-rsync"
 
 	if mig.Request.Detach {
-		if _, err := k8s.WaitForJobStart(ctx, kubeClient, namespace, jobName, logger); err != nil {
+		if _, err := k8s.WaitForJobStart(ctx, kubeClient, namespace, jobName, narrate.Detail(logger, 1)); err != nil {
 			return fmt.Errorf("failed to wait for job to start: %w", err)
 		}
 
@@ -271,6 +279,6 @@ func waitForRsyncJob(
 	return k8s.WaitForJobCompletion(
 		ctx, kubeClient, namespace, jobName,
 		mig.Request.ShowProgressBar, mig.Request.StructuredLogs,
-		console.Palette{Enabled: mig.Request.ColorOutput}, mig.Request.Writer, logger,
+		console.Palette{Enabled: mig.Request.ColorOutput}, mig.Request.Writer, narrate.Detail(logger, 1),
 	)
 }

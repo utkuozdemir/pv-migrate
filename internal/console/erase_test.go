@@ -7,12 +7,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lmittmann/tint"
 	"github.com/schollz/progressbar/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/utkuozdemir/pv-migrate/internal/console"
+	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 )
 
 // TestRecordDoesNotLandOnTheProgressBar is issue 449 as a test. It paints a real
@@ -48,7 +48,7 @@ func TestRecordDoesNotLandOnTheProgressBar(t *testing.T) {
 				records = console.EraseLineBefore(&transcript)
 			}
 
-			logger := slog.New(tint.NewTextHandler(records, &tint.Options{NoColor: true}))
+			logger := slog.New(narrate.NewHandler(records, narrate.Options{}))
 
 			require.NoError(t, bar.Set64(8))
 			logger.Warn("Pod is not starting yet")
@@ -80,7 +80,7 @@ func TestEachRecordIsOneWrite(t *testing.T) {
 	t.Parallel()
 
 	counter := &countingWriter{}
-	logger := slog.New(tint.NewTextHandler(console.EraseLineBefore(counter), &tint.Options{NoColor: true}))
+	logger := slog.New(narrate.NewHandler(console.EraseLineBefore(counter), narrate.Options{}))
 
 	logger.Info("one")
 	logger.Info("two", "with", strings.Repeat("a long attribute value ", 200))

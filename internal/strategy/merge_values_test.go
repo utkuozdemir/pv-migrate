@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/neilotoole/slogt/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -38,9 +37,8 @@ func TestGetMergedHelmValues_BaseOnly(t *testing.T) {
 	}
 
 	req := &migration.Request{}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(base, req, logger)
+	got, err := getMergedHelmValues(base, req)
 	require.NoError(t, err)
 
 	gotSSHD, ok := got["sshd"].(map[string]any)
@@ -67,9 +65,8 @@ func TestGetMergedHelmValues_ImageTagInjected(t *testing.T) {
 	}
 
 	req := &migration.Request{ImageTag: "v2.0.0"}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(base, req, logger)
+	got, err := getMergedHelmValues(base, req)
 	require.NoError(t, err)
 
 	gotSSHD, ok := got["sshd"].(map[string]any)
@@ -102,9 +99,8 @@ func TestGetMergedHelmValues_HelmSetOverridesBase(t *testing.T) {
 	req := &migration.Request{
 		HelmValues: []string{"sshd.namespace=overridden-ns"},
 	}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(base, req, logger)
+	got, err := getMergedHelmValues(base, req)
 	require.NoError(t, err)
 
 	gotSSHD, ok := got["sshd"].(map[string]any)
@@ -126,9 +122,8 @@ func TestGetMergedHelmValues_HelmSetOverridesImageTag(t *testing.T) {
 		ImageTag:   "v2.0.0",
 		HelmValues: []string{"sshd.image.tag=custom-tag"},
 	}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(base, req, logger)
+	got, err := getMergedHelmValues(base, req)
 	require.NoError(t, err)
 
 	gotSSHD, ok := got["sshd"].(map[string]any)
@@ -176,9 +171,8 @@ sshd:
 	req := &migration.Request{
 		HelmValuesFiles: []string{valuesFile},
 	}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(base, req, logger)
+	got, err := getMergedHelmValues(base, req)
 	require.NoError(t, err)
 
 	gotSSHD, ok := got["sshd"].(map[string]any)
@@ -226,9 +220,8 @@ sshd:
 		HelmValuesFiles: []string{valuesFile},
 		HelmValues:      []string{"sshd.publicKey=set-key"},
 	}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(base, req, logger)
+	got, err := getMergedHelmValues(base, req)
 	require.NoError(t, err)
 
 	gotSSHD, ok := got["sshd"].(map[string]any)
@@ -268,9 +261,8 @@ func TestGetMergedHelmValues_RealisticRsyncValues(t *testing.T) {
 	t.Parallel()
 
 	req := &migration.Request{ImageTag: "v2.2.1"}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(realisticClusterIPBase(), req, logger)
+	got, err := getMergedHelmValues(realisticClusterIPBase(), req)
 	require.NoError(t, err)
 
 	gotRsync, ok := got["rsync"].(map[string]any)
@@ -291,9 +283,8 @@ func TestGetMergedHelmValues_RealisticSSHDValues(t *testing.T) {
 	t.Parallel()
 
 	req := &migration.Request{ImageTag: "v2.2.1"}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(realisticClusterIPBase(), req, logger)
+	got, err := getMergedHelmValues(realisticClusterIPBase(), req)
 	require.NoError(t, err)
 
 	gotSSHD, ok := got["sshd"].(map[string]any)
@@ -324,9 +315,8 @@ func TestGetMergedHelmValues_EmptyBase(t *testing.T) {
 	req := &migration.Request{
 		HelmValues: []string{"sshd.enabled=true"},
 	}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(map[string]any{}, req, logger)
+	got, err := getMergedHelmValues(map[string]any{}, req)
 	require.NoError(t, err)
 
 	gotSSHD, ok := got["sshd"].(map[string]any)
@@ -348,9 +338,8 @@ func TestGetMergedHelmValues_StringValuesOverride(t *testing.T) {
 		// --set-string always produces string values
 		HelmStringValues: []string{"sshd.namespace=string-ns"},
 	}
-	logger := slogt.New(t)
 
-	got, err := getMergedHelmValues(base, req, logger)
+	got, err := getMergedHelmValues(base, req)
 	require.NoError(t, err)
 
 	gotSSHD, ok := got["sshd"].(map[string]any)

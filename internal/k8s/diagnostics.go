@@ -80,7 +80,7 @@ func WriteWorkloadDiagnostics(
 	// was actually read. Refused or failed lists reported as absence would tell
 	// a user on a locked-down cluster that the release created nothing.
 	if !listedAny {
-		fmt.Fprintln(writer, "    "+palette.Warn("could not read the cluster's resources"))
+		fmt.Fprintln(writer, "    "+palette.Warn("Could not read the cluster's resources"))
 
 		return
 	}
@@ -223,7 +223,7 @@ func listOwnerWorkloads(
 }
 
 func logDiagnosticsError(logger *slog.Logger, kind, ns string, err error) {
-	logger.Debug("failed to list resources for diagnostics", "kind", kind, "namespace", ns, "error", err)
+	logger.Debug("Failed to list the resources for diagnostics", "kind", kind, "namespace", ns, "error", err)
 }
 
 func podFacts(pod *corev1.Pod, palette console.Palette) workloadFacts {

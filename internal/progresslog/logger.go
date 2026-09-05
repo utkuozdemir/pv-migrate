@@ -91,9 +91,9 @@ func (l *Logger) Start(ctx context.Context, logger *slog.Logger) error {
 		}
 
 		if errors.Is(err, io.EOF) {
-			logger.Debug("log stream ended, retrying", "retry_delay", retryDelay)
+			logger.Debug("Log stream ended, retrying", "retry_delay", retryDelay)
 		} else {
-			logger.Debug("log tail failed, retrying", "error", err, "retry_delay", retryDelay)
+			logger.Debug("Log tail failed, retrying", "error", err, "retry_delay", retryDelay)
 		}
 
 		select {
@@ -140,7 +140,7 @@ func (l *Logger) FinishBar(logger *slog.Logger) {
 	l.barFinished = true
 
 	if err := l.progressBar.Finish(); err != nil {
-		logger.Debug("failed to finish progress bar", "error", err)
+		logger.Debug("Failed to finish the progress bar", "error", err)
 	}
 }
 
@@ -263,7 +263,7 @@ func (l *Logger) handleLogs(ctx context.Context, logCh <-chan string, logger *sl
 				l.barFinished = true
 
 				if err := progressBar.Finish(); err != nil {
-					logger.Debug("failed to finish progress bar", "error", err)
+					logger.Debug("Failed to finish the progress bar", "error", err)
 				}
 			}
 
