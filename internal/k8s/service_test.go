@@ -2,10 +2,13 @@ package k8s
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
+	clientfeatures "k8s.io/client-go/features"
+	clientfeaturestesting "k8s.io/client-go/features/testing"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -180,4 +183,52 @@ func TestGetAnyNodeIP(t *testing.T) {
 	ip, err := GetAnyNodeIP(ctx, mixed)
 	require.NoError(t, err)
 	assert.Equal(t, "10.0.0.1", ip)
+}
+
+// A LoadBalancer Service carries a node port too, and the loadbalancer strategy
+// falls back to it, so the lookup accepts that type. One created without node
+// ports is an error rather than port zero.
+//
+// Not parallel: the feature gate is process-wide. The streaming list the
+// reflector prefers is not served by the fake clientset.
+//
+//nolint:paralleltest
+func TestGetNodePortOfLoadBalancerService(t *testing.T) {
+	clientfeaturestesting.SetFeatureDuringTest(t, clientfeatures.WatchListClient, false)
+
+	withPort := &corev1.Service{
+		Namespace: "ns", Name: "with-port",
+		Spec: corev1.ServiceSpec{
+			Type:  corev1.ServiceTypeLoadBalancer,
+			Ports: []corev1.ServicePort{{Name: "ssh", Port: 22, NodePort: 31234}},
+		},
+	}
+	withoutPort := &corev1.Service{
+		Namespace: "ns", Name: "without-port",
+		Spec: corev1.ServiceSpec{
+			Type:  corev1.ServiceTypeLoadBalancer,
+			Ports: []corev1.ServicePort{{Name: "ssh", Port: 22}},
+		},
+	}
+	clusterIP := &corev1.Service{
+		Namespace: "ns", Name: "cluster-ip",
+		Spec: corev1.ServiceSpec{
+			Type:  corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{{Name: "ssh", Port: 22}},
+		},
+	}
+
+	// One client per Service: the fake clientset does not apply the field
+	// selector the lookup watches with, so a shared one would deliver them all.
+	port, err := GetNodePort(t.Context(), fake.NewClientset(withPort), "ns", "with-port", time.Second)
+	require.NoError(t, err)
+	assert.Equal(t, 31234, port)
+
+	_, err = GetNodePort(t.Context(), fake.NewClientset(withoutPort), "ns", "without-port", time.Second)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "no node port allocated")
+
+	_, err = GetNodePort(t.Context(), fake.NewClientset(clusterIP), "ns", "cluster-ip", time.Second)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "has no node port")
 }

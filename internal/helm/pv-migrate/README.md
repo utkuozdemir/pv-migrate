@@ -116,7 +116,7 @@ The helm chart of pv-migrate
 | sshd.service.annotations | object | `{}` | SSHD service annotations |
 | sshd.service.loadBalancerClass | string | `""` | SSHD service load balancer class |
 | sshd.service.loadBalancerIP | string | `""` | SSHD service load balancer IP |
-| sshd.service.nodePort | string | `nil` | SSHD service node port (only used when type is NodePort) |
+| sshd.service.nodePort | string | `nil` | SSHD service node port (only used when type is NodePort or LoadBalancer) |
 | sshd.service.port | int | `22` | SSHD service port |
 | sshd.service.type | string | `"ClusterIP"` | SSHD service type |
 | sshd.serviceAccount.annotations | object | `{}` | SSHD service account annotations |

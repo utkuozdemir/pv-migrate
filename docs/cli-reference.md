@@ -38,7 +38,7 @@ Flags:
       --id string                       Custom operation ID (lowercase alphanumeric with optional hyphens, max 24 chars). If not set, a random ID is generated. Used to identify the operation in 'status' and 'cleanup' commands
   -i, --ignore-mounted                  Do not fail if the source or destination PVC is mounted
       --ignore-sizes                    Do not fail if the destination PVC is smaller than the source PVC
-      --loadbalancer-timeout duration   Timeout for the load balancer to receive an external IP. Only used by the loadbalancer strategy (default 2m0s)
+      --loadbalancer-timeout duration   Time to wait for the load balancer to receive an address before the loadbalancer strategy falls back to the Service's node port (default 2m0s)
       --log-format string               Log format, one of text, json (default "text")
       --log-level string                Log level, one of DEBUG, INFO, WARN, ERROR or an slog-parseable level: https://pkg.go.dev/log/slog#Level.UnmarshalText (default "INFO")
   -o, --no-chown                        Omit chown during rsync

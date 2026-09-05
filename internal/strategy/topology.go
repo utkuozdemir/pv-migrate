@@ -201,10 +201,18 @@ func installSshd(
 	releaseName, publicKey, serviceType string,
 	logger *slog.Logger,
 ) error {
-	sshdVals := buildSshdHelmValues(topo.sshd, publicKey)
+	return installHelmChart(ctx, attempt, topo.sshd.info, releaseName,
+		sshdReleaseValues(topo.sshd, publicKey, serviceType), logger)
+}
+
+// sshdReleaseValues builds the values of an sshd release whose Service has the
+// given type. The type is what decides whether Helm waits for the release, see
+// installsLoadBalancer.
+func sshdReleaseValues(side componentSide, publicKey, serviceType string) map[string]any {
+	sshdVals := buildSshdHelmValues(side, publicKey)
 	sshdVals["service"] = map[string]any{"type": serviceType}
 
-	return installHelmChart(ctx, attempt, topo.sshd.info, releaseName, map[string]any{sshdComponent: sshdVals}, logger)
+	return map[string]any{sshdComponent: sshdVals}
 }
 
 func installRsyncJob(
