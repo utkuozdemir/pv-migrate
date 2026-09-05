@@ -196,7 +196,7 @@ func Run(ctx context.Context, req *Request) error {
 	logger = logger.With("release", releaseName)
 	logger.Info("📦 Installing Helm chart")
 
-	if err = installHelmChart(helmChart, pvcInfo, releaseName, helmVals, req, logger); err != nil {
+	if err = installHelmChart(ctx, helmChart, pvcInfo, releaseName, helmVals, req, logger); err != nil {
 		// A timed-out install means resources that are stuck rather than absent,
 		// and this path runs no cleanup, so they are still there to be read.
 		writeFailure(ctx, req, client.KubeClient, ns, releaseName, err, logger)
@@ -447,6 +447,7 @@ func applyNonRootValues(vals map[string]any) {
 }
 
 func installHelmChart(
+	ctx context.Context,
 	helmChart *chart.Chart,
 	pvcInfo *pvc.Info,
 	releaseName string,
@@ -467,6 +468,15 @@ func installHelmChart(
 	install.ReleaseName = releaseName
 	install.WaitStrategy = kube.LegacyStrategy
 	install.Timeout = req.HelmTimeout
+
+	// Before the user's values are merged on top, so that an explicit request
+	// for the policy is still honored, and the install then reports the real
+	// permission problem.
+	canCreate := func(ctx context.Context, namespace string) (bool, error) {
+		return k8s.CanCreateNetworkPolicies(ctx, pvcInfo.ClusterClient.KubeClient, namespace)
+	}
+
+	helm.DisableNetworkPoliciesWhereForbidden(ctx, baseValues, canCreate, logger)
 
 	merged, err := mergeHelmValues(baseValues, req, logger)
 	if err != nil {

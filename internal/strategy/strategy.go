@@ -20,6 +20,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/utkuozdemir/pv-migrate/internal/console"
+	"github.com/utkuozdemir/pv-migrate/internal/helm"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
@@ -281,6 +282,11 @@ func installHelmChart(
 
 	applyNonRootValues(values, mig.Request)
 
+	// Before the user's values are merged on top, so that an explicit request
+	// for a policy is still honored, and the install then reports the real
+	// permission problem.
+	helm.DisableNetworkPoliciesWhereForbidden(ctx, values, canCreateNetworkPolicies(pvcInfo), logger)
+
 	vals, err := getMergedHelmValues(values, mig.Request, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get merged helm values: %w", err)
@@ -307,6 +313,13 @@ func installHelmChart(
 	}
 
 	return nil
+}
+
+// canCreateNetworkPolicies asks the cluster the release goes into.
+func canCreateNetworkPolicies(pvcInfo *pvc.Info) helm.CanCreateNetworkPoliciesFunc {
+	return func(ctx context.Context, namespace string) (bool, error) {
+		return k8s.CanCreateNetworkPolicies(ctx, pvcInfo.ClusterClient.KubeClient, namespace)
+	}
 }
 
 // effectiveInstallTimeout picks the install wait budget and names the flag it

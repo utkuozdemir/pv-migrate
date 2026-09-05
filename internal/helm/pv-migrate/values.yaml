@@ -68,8 +68,8 @@ sshd:
   # -- SSHD pod affinity
   affinity: {}
   networkPolicy:
-    # -- Enable SSHD network policy
-    enabled: false
+    # -- Create an allow-all network policy for the SSHD pod, so that it works in a default-deny namespace. pv-migrate turns this off on its own when it is not allowed to create network policies
+    enabled: true
   # -- SSHD deployment labels
   deploymentLabels: {}
   # -- SSHD deployment annotations
@@ -153,8 +153,8 @@ rsync:
   # -- Seconds to keep the Job and its pod after completion/failure. Unset by default (Kubernetes decides).
   ttlSecondsAfterFinished:
   networkPolicy:
-    # -- Enable Rsync network policy
-    enabled: false
+    # -- Create an allow-all network policy for the Rsync pod, so that it works in a default-deny namespace. pv-migrate turns this off on its own when it is not allowed to create network policies
+    enabled: true
   # -- Rsync job labels
   jobLabels: {}
   # -- Rsync job annotations
@@ -239,8 +239,8 @@ rclone:
   # -- Seconds to keep the Job and its pod after completion/failure. Unset by default (Kubernetes decides).
   ttlSecondsAfterFinished:
   networkPolicy:
-    # -- Enable Rclone network policy
-    enabled: false
+    # -- Create an allow-all network policy for the Rclone pod, so that it works in a default-deny namespace. pv-migrate turns this off on its own when it is not allowed to create network policies
+    enabled: true
   # -- Rclone job labels
   jobLabels: {}
   # -- Rclone job annotations

@@ -40,7 +40,7 @@ The helm chart of pv-migrate
 | rclone.metadataBase64 | string | `""` | Base64-encoded metadata YAML to upload after successful sync (set by pv-migrate) |
 | rclone.metadataRemotePath | string | `""` | Remote path for the metadata file (set by pv-migrate) |
 | rclone.namespace | string | `""` | Namespace to run Rclone pod in |
-| rclone.networkPolicy.enabled | bool | `false` | Enable Rclone network policy |
+| rclone.networkPolicy.enabled | bool | `true` | Create an allow-all network policy for the Rclone pod, so that it works in a default-deny namespace. pv-migrate turns this off on its own when it is not allowed to create network policies |
 | rclone.nodeName | string | `""` | The node name to schedule Rclone pod on |
 | rclone.nodeSelector | object | `{}` | Rclone node selector |
 | rclone.podAnnotations | object | `{}` | Rclone pod annotations |
@@ -69,7 +69,7 @@ The helm chart of pv-migrate
 | rsync.jobLabels | object | `{}` | Rsync job labels |
 | rsync.maxRetries | int | `10` | Number of retries to run rsync command |
 | rsync.namespace | string | `""` | Namespace to run Rsync pod in |
-| rsync.networkPolicy.enabled | bool | `false` | Enable Rsync network policy |
+| rsync.networkPolicy.enabled | bool | `true` | Create an allow-all network policy for the Rsync pod, so that it works in a default-deny namespace. pv-migrate turns this off on its own when it is not allowed to create network policies |
 | rsync.nodeName | string | `""` | The node name to schedule Rsync pod on |
 | rsync.nodeSelector | object | `{}` | Rsync node selector |
 | rsync.podAnnotations | object | `{}` | Rsync pod annotations |
@@ -98,7 +98,7 @@ The helm chart of pv-migrate
 | sshd.image.tag | string | `"latest"` | SSHD image tag (overridden at runtime by pv-migrate to match the CLI version) |
 | sshd.imagePullSecrets | list | `[]` | SSHD image pull secrets |
 | sshd.namespace | string | `""` | Namespace to run SSHD pod in |
-| sshd.networkPolicy.enabled | bool | `false` | Enable SSHD network policy |
+| sshd.networkPolicy.enabled | bool | `true` | Create an allow-all network policy for the SSHD pod, so that it works in a default-deny namespace. pv-migrate turns this off on its own when it is not allowed to create network policies |
 | sshd.nodeName | string | `""` | The node name to schedule SSHD pod on |
 | sshd.nodeSelector | object | `{}` | SSHD node selector |
 | sshd.podAnnotations | object | `{}` | SSHD pod annotations |

@@ -230,7 +230,7 @@
   "input_validation_status": "Met",
   "input_validation_justification": "Flags are validated before anything touches the cluster. User-supplied paths are resolved against the volume mount point and rejected when they leave it. Every value interpolated into the data mover command is quoted as one shell word, and a value the chart cannot carry is rejected with the flag name. The operation identifier is validated for length and character set. The progress parsers refuse an update that is out of bounds. All of the parser-shaped code is fuzzed.",
   "hardening_status": "Met",
-  "hardening_justification": "Static binary with no cgo. The CLI image is built from scratch, with no shell. The data mover containers run as a dedicated non-root user when `--non-root` is set, and the chart lets network policies be enabled per component. Each transfer uses a fresh SSH key pair that is removed with the release.",
+  "hardening_justification": "Static binary with no cgo. The CLI image is built from scratch, with no shell. The data mover containers run as a dedicated non-root user when `--non-root` is set. Each transfer uses a fresh SSH key pair that is removed with the release.",
   "assurance_case_status": "Met",
   "assurance_case_justification": "https://github.com/utkuozdemir/pv-migrate/blob/main/docs/security-model.md: security requirements, trust boundaries, threats with their mitigations, and how each is checked.",
   "general_comments": "This entry is generated from the .bestpractices.json file in the repository. The file and this entry must be updated together."

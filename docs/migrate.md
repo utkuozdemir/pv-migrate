@@ -68,12 +68,15 @@ pv-migrate \
   --dest new-pvc
 ```
 
-Enable network policies on clusters with deny-all traffic rules:
+The chart creates an allow-all network policy for each of its own pods, so a migration works in a namespace isolated with Kubernetes network policies without extra flags.
+A deny rule in a CNI's own policy type, e.g., a Cilium or Calico deny, still applies.
+When the account is not allowed to create network policies, they are skipped with a warning.
+To leave them out on purpose:
 
 ```bash
 pv-migrate \
-  --helm-set sshd.networkPolicy.enabled=true \
-  --helm-set rsync.networkPolicy.enabled=true \
+  --helm-set sshd.networkPolicy.enabled=false \
+  --helm-set rsync.networkPolicy.enabled=false \
   --source-namespace source-ns --source old-pvc \
   --dest-namespace dest-ns --dest new-pvc
 ```

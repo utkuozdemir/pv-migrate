@@ -1,6 +1,8 @@
 package helm_test
 
 import (
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -138,4 +140,73 @@ func containerScript(t *testing.T, files map[string]string, container string) st
 	t.Fatalf("no container named %q found in the rendered chart", container)
 
 	return ""
+}
+
+// TestNetworkPolicyFollowsItsComponent pins the guard on the network policy
+// templates. The policies are on by default, and a release carries only some of
+// the components, so a policy must follow its component rather than its own
+// switch alone. Without the guard a migration release rendered an rclone policy,
+// and a release for one component rendered the policies of the others, without
+// a namespace of their own.
+func TestNetworkPolicyFollowsItsComponent(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name         string
+		values       map[string]any
+		wantPolicies []string
+	}{
+		{
+			name:         "rsync only",
+			values:       component("rsync", map[string]any{"command": "rsync -a '/source/' '/dest/'"}),
+			wantPolicies: []string{"rsync"},
+		},
+		{
+			name:         "sshd only",
+			values:       component("sshd", map[string]any{"publicKey": "ssh-ed25519 AAAA"}),
+			wantPolicies: []string{"sshd"},
+		},
+		{
+			name:         "rclone only",
+			values:       component("rclone", map[string]any{"command": "rclone sync '/data' 'remote:b/'"}),
+			wantPolicies: []string{"rclone"},
+		},
+		{
+			name: "rsync with its policy switched off",
+			values: component("rsync", map[string]any{
+				"command":       "rsync -a '/source/' '/dest/'",
+				"networkPolicy": map[string]any{"enabled": false},
+			}),
+			wantPolicies: nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			rendered := render(t, tc.values)
+
+			for _, name := range []string{"sshd", "rsync", "rclone"} {
+				policy := strings.TrimSpace(rendered["pv-migrate/templates/"+name+"/networkpolicy.yaml"])
+
+				if slices.Contains(tc.wantPolicies, name) {
+					assert.Contains(t, policy, "kind: NetworkPolicy", "%s should get its policy", name)
+				} else {
+					assert.Empty(t, policy, "%s should get no policy", name)
+				}
+			}
+		})
+	}
+}
+
+// component returns values with one enabled component in the release namespace.
+func component(name string, extra map[string]any) map[string]any {
+	section := map[string]any{
+		"enabled":   true,
+		"namespace": "default",
+		"pvcMounts": []any{map[string]any{"name": "pvc", "mountPath": "/data"}},
+	}
+
+	maps.Copy(section, extra)
+
+	return map[string]any{name: section}
 }
