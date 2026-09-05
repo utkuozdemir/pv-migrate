@@ -139,9 +139,10 @@ Some specifics that surprise people:
 ## The embedded chart
 
 The chart lives in `internal/helm/pv-migrate` and is compiled into the binary, so the released CLI and the chart it installs always match.
-Two things follow:
+Therefore:
 
 - The chart is not published for standalone use and is not versioned independently. Its in-repo version is a placeholder that the CLI overwrites with its own at load time.
+- Every resource name derives from the release name, which the CLI sets, and the CLI looks its resources up by names it derives the same way. The chart therefore has no name overrides: a value that renamed the objects would do so without the CLI knowing, and every lookup would wait for a name that does not exist.
 - Changing a template changes the binary, so chart edits are code changes and need the Go tests, not only `helm lint`.
 - The Job scripts decide the container's exit code, and the client reads it back and attaches the data mover's own documented meaning for it.
   So the retry loops capture the code rather than collapsing it, a condition the script decides to treat as a success announces itself with a line the client scans for, and the interpretation tables live next to the command builders they describe.

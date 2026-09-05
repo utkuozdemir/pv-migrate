@@ -229,3 +229,44 @@ func TestNodePortPinAppliesToLoadBalancerService(t *testing.T) {
 
 	assert.Contains(t, rendered["pv-migrate/templates/sshd/service.yaml"], "nodePort: 30555")
 }
+
+// TestResourceNamesDeriveFromTheReleaseName pins the contract the tool's lookups
+// rely on: the Service and the Jobs are named after the release, and nothing in
+// the values can rename them. A leftover name override in the values must be
+// ignored rather than honored, since the tool would not know about it.
+func TestResourceNamesDeriveFromTheReleaseName(t *testing.T) {
+	t.Parallel()
+
+	// The two override keys are the point of the test, not setup: with them, the
+	// old helpers renamed everything, and the assertions below would fail.
+	rendered := render(t, map[string]any{
+		"fullnameOverride": "renamed",
+		"nameOverride":     "renamed",
+		"sshd": map[string]any{
+			"enabled":   true,
+			"namespace": "default",
+			"publicKey": "ssh-ed25519 AAAA",
+			"pvcMounts": []any{map[string]any{"name": "pvc", "mountPath": "/source"}},
+		},
+		"rsync": map[string]any{
+			"enabled":   true,
+			"namespace": "default",
+			"command":   "rsync -a '/source/' '/dest/'",
+			"pvcMounts": []any{map[string]any{"name": "pvc", "mountPath": "/dest"}},
+		},
+		"rclone": map[string]any{
+			"enabled":   true,
+			"namespace": "default",
+			"command":   "rclone sync '/data' 'remote:b/'",
+			"pvcMounts": []any{map[string]any{"name": "pvc", "mountPath": "/data"}},
+		},
+	})
+
+	assert.Contains(t, rendered["pv-migrate/templates/sshd/service.yaml"], "name: pv-migrate-test-sshd")
+	assert.Contains(t, rendered["pv-migrate/templates/rsync/job.yaml"], "name: pv-migrate-test-rsync")
+	assert.Contains(t, rendered["pv-migrate/templates/rclone/job.yaml"], "name: pv-migrate-test-rclone")
+
+	for file, content := range rendered {
+		assert.NotContains(t, content, "renamed", "%s honors a name override the tool does not know about", file)
+	}
+}
