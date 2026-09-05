@@ -42,6 +42,10 @@ So there is a ladder of strategies, tried in order, each of which declines the j
   Adding a strategy therefore means being precise about which of those two a given condition is, because getting it wrong turns a real failure into a silent fallback.
 - Order is the user's, and the default order is cheapest-first.
   Mounting both volumes in one pod needs no network at all, so it comes first; everything after it is rsync over SSH and differs only in how the two sides find each other.
+- A strategy carries its own fallback where the fallback is free.
+  A `LoadBalancer` Service also has a node port, so when no address arrives in time the `loadbalancer` strategy uses that node port instead of failing, and a cluster without a load balancer controller still gets a transfer with the default order.
+  For the same reason Helm is not asked to wait for such a release: its wait blocks on the address, which the strategy waits for itself, with a budget.
+  A release Helm does not wait for has no readiness gate at all, so the install waits for the sshd pod to become ready itself, with the install budget, right where it decides to skip Helm's wait.
 - The SSH key pair is generated per attempt and never reused.
   It exists for one transfer and is thrown away with the release.
 - Two strategies are opt-in because they have costs the others do not: one depends on node reachability, and one routes the whole transfer through the machine running the CLI.

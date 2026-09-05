@@ -18,6 +18,7 @@ import (
 	"helm.sh/helm/v4/pkg/kube"
 	"helm.sh/helm/v4/pkg/storage/driver"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/kubernetes"
 
 	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/helm"
@@ -275,9 +276,7 @@ func installHelmChart(
 	install := action.NewInstall(helmActionConfig)
 	install.Namespace = pvcInfo.Claim.Namespace
 	install.ReleaseName = name
-	install.WaitStrategy = kube.LegacyStrategy
-
-	timeout, timeoutFlag := effectiveInstallTimeout(mig.Request, values)
+	timeout := mig.Request.HelmTimeout
 	install.Timeout = timeout
 
 	applyNonRootValues(values, mig.Request)
@@ -290,6 +289,19 @@ func installHelmChart(
 	vals, err := getMergedHelmValues(values, mig.Request, logger)
 	if err != nil {
 		return fmt.Errorf("failed to get merged helm values: %w", err)
+	}
+
+	// Helm's wait blocks on a LoadBalancer Service until it has an address, and
+	// on a cluster without a load balancer controller that is forever. Such a
+	// release is not waited on by Helm at all. The sshd pod is waited for below
+	// instead, with the same budget, since nothing else would, and the strategy
+	// waits for the address itself, with its own budget and a fallback. Decided
+	// on the merged values, since the user's values can change the Service type.
+	install.WaitStrategy = kube.LegacyStrategy
+	waitForSshd := installsLoadBalancer(vals)
+
+	if waitForSshd {
+		install.WaitStrategy = kube.HookOnlyStrategy
 	}
 
 	// A long wait usually means the cluster already knows what is stuck, so at
@@ -305,11 +317,32 @@ func installHelmChart(
 		// headline of every stuck-resource failure.
 		if errors.Is(err, context.DeadlineExceeded) {
 			return fmt.Errorf(
-				"timed out after %s waiting for the release's resources to become ready (see %s): %w",
-				timeout, timeoutFlag, err)
+				"timed out after %s waiting for the release's resources to become ready (see --helm-timeout): %w",
+				timeout, err)
 		}
 
 		return fmt.Errorf("failed to install helm chart: %w", err)
+	}
+
+	if !waitForSshd {
+		return nil
+	}
+
+	return waitForSshdReady(ctx, pvcInfo.ClusterClient.KubeClient, sshdNamespace(vals), name, timeout, logger)
+}
+
+// waitForSshdReady stands in for Helm's wait on a release Helm was told not to
+// wait for, see installHelmChart. Ready rather than started, since that is what
+// Helm's wait would have established.
+func waitForSshdReady(
+	ctx context.Context,
+	cli kubernetes.Interface,
+	namespace, release string,
+	timeout time.Duration,
+	logger *slog.Logger,
+) error {
+	if _, err := k8s.WaitForPodReady(ctx, cli, namespace, sshdLabelSelector(release), timeout, logger); err != nil {
+		return fmt.Errorf("failed to wait for the sshd pod to become ready (see --helm-timeout): %w", err)
 	}
 
 	return nil
@@ -322,23 +355,13 @@ func canCreateNetworkPolicies(pvcInfo *pvc.Info) helm.CanCreateNetworkPoliciesFu
 	}
 }
 
-// effectiveInstallTimeout picks the install wait budget and names the flag it
-// came from. The load balancer timeout only applies when this release actually
-// waits for a load balancer, so a LoadBalancer-only flag cannot silently
-// lengthen every other strategy's install.
-func effectiveInstallTimeout(req *migration.Request, values map[string]any) (time.Duration, string) {
-	if installsLoadBalancer(values) && req.LoadBalancerTimeout > req.HelmTimeout {
-		return req.LoadBalancerTimeout, "--loadbalancer-timeout, which exceeds --helm-timeout"
-	}
-
-	return req.HelmTimeout, "--helm-timeout"
-}
-
-// installsLoadBalancer reports whether the values ask for a LoadBalancer
-// service, which the install wait then waits on.
+// installsLoadBalancer reports whether the values put an sshd with a
+// LoadBalancer Service into the release, whose address Helm's wait would
+// otherwise block on. A release without sshd renders no Service, whatever the
+// values say about its type.
 func installsLoadBalancer(values map[string]any) bool {
 	sshd, ok := values[sshdComponent].(map[string]any)
-	if !ok {
+	if !ok || sshd[keyEnabled] != true {
 		return false
 	}
 
@@ -348,6 +371,15 @@ func installsLoadBalancer(values map[string]any) bool {
 	}
 
 	return service["type"] == "LoadBalancer"
+}
+
+// sshdNamespace is where the release puts its sshd, which is not always the
+// release namespace: one release can span two namespaces.
+func sshdNamespace(values map[string]any) string {
+	sshd, _ := values[sshdComponent].(map[string]any)
+	namespace, _ := sshd[keyNamespace].(string)
+
+	return namespace
 }
 
 // peekAfter runs the peek once after the delay unless stopped first.

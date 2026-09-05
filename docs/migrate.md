@@ -16,7 +16,7 @@ The default order is cheapest first, and `--strategies` overrides it.
 | --- | --- |
 | `mount` | Mounts both PVCs in a single pod and runs rsync locally, without SSH or networking. Only applies when both PVCs are in the same namespace and can be mounted by one pod. |
 | `clusterip` | rsync over SSH through a `ClusterIP` Service. Only applies when both PVCs are in the same cluster. |
-| `loadbalancer` | rsync over SSH through a `LoadBalancer` Service. Works across clusters when the load balancer address is reachable from the other side. |
+| `loadbalancer` | rsync over SSH through a `LoadBalancer` Service. Works across clusters when the load balancer address is reachable from the other side. When no address arrives within `--loadbalancer-timeout`, e.g., on a cluster without a load balancer controller, it falls back to the Service's node port on the sshd pod's node, which is what the `nodeport` strategy would use, and which needs that node to be reachable from the other side. |
 | `nodeport` | rsync over SSH through a `NodePort` Service. Opt-in, because it depends on the nodes being reachable. The port can be fixed with `--helm-set sshd.service.nodePort=<port>`. |
 | `local` | Runs sshd on both sides and tunnels the traffic through the machine running the CLI, with Kubernetes port-forwarding and an SSH reverse tunnel. Opt-in, for restricted clusters, and recommended for smaller transfers only, since all data goes through your machine. |
 
