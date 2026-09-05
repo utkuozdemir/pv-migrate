@@ -29,7 +29,7 @@ ARG SHFMT_VERSION=3.14.0
 # here rather than carrying their own, so the version that validates the release
 # config is always the version that performs the release
 # renovate: depName=goreleaser/goreleaser datasource=docker
-ARG GORELEASER_VERSION=v2.18.0
+ARG GORELEASER_VERSION=v2.18.1
 # renovate: depName=alpine/helm datasource=docker
 ARG HELM_VERSION=4.2.4
 # renovate: depName=jnorwood/helm-docs datasource=docker
