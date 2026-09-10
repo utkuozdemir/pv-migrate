@@ -31,7 +31,7 @@ ARG SHFMT_VERSION=3.14.1
 # renovate: depName=goreleaser/goreleaser datasource=docker
 ARG GORELEASER_VERSION=v2.18.1
 # renovate: depName=alpine/helm datasource=docker
-ARG HELM_VERSION=4.2.4
+ARG HELM_VERSION=4.3.0
 # renovate: depName=jnorwood/helm-docs datasource=docker
 ARG HELM_DOCS_VERSION=v1.14.2
 
