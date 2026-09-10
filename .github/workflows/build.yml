@@ -112,7 +112,7 @@ jobs:
         uses: Azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           # renovate: depName=helm/helm datasource=github-releases
-          version: v4.2.4
+          version: v4.3.0
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
@@ -217,7 +217,7 @@ jobs:
         uses: Azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           # renovate: depName=helm/helm datasource=github-releases
-          version: v4.2.4
+          version: v4.3.0
 
       - name: Create kind cluster
         uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
