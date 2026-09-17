@@ -51,7 +51,7 @@ jobs:
       - name: Run unit tests
         run: task test COVERPROFILE=coverage.txt
       - name: Send coverage
-        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.txt
           flags: unit
@@ -189,7 +189,7 @@ jobs:
           retention-days: 7
 
       - name: Send coverage
-        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.txt
           flags: migrate
@@ -292,7 +292,7 @@ jobs:
           retention-days: 7
 
       - name: Send coverage
-        uses: codecov/codecov-action@0b35c9ecc4f0529d0eb674914510c22f85b196b4 # v7.1.0
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
         with:
           files: coverage.txt
           flags: backup
