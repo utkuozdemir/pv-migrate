@@ -19,7 +19,7 @@ permissions:
 jobs:
   record:
     name: record
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write # push the branch with the recordings
       pull-requests: write # open the pull request

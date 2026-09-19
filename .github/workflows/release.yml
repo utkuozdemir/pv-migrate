@@ -17,7 +17,7 @@ jobs:
   # Both publishing jobs below wait for this one, so nothing is built or
   # published from a tag that fails these checks.
   verify-tag:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       # the release tag must carry a signature GitHub verifies against the
       # pusher's registered keys (any type: SSH, GPG or S/MIME)
@@ -58,7 +58,7 @@ jobs:
           fi
 
   release:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: verify-tag
     # the release environment holds the publishing secrets. It admits only v*
     # tags and waits for the maintainer's approval, so a workflow on any other
@@ -181,7 +181,7 @@ jobs:
   # attestation store, not pushed to the registries: that is what
   # `gh attestation verify` reads, and GHCR does not serve the referrers API.
   attest:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: release
     # whenever the image was signed, even if the release job then failed at a
     # package manager step
@@ -214,7 +214,7 @@ jobs:
   # reproducible, shown by a second machine. A difference fails this job
   # loudly and leaves the published release alone
   verify-reproducible:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: release
     # also when the release job failed after publishing (e.g. at a package
     # manager step): what is published still gets checked
@@ -282,7 +282,7 @@ jobs:
   krew:
     needs: release
     if: ${{ !contains(github.ref_name, '-') }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -301,7 +301,7 @@ jobs:
   # not exist. Each image is signed and attested in its own matrix job, by
   # digest, which is the same digest on both registries.
   release-images:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs: verify-tag
     environment: release
     permissions:
