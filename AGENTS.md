@@ -285,9 +285,8 @@ Things that have bitten before:
   The Go image of the development containers is pinned by digest, so the tag no longer decides what is pulled, and the image ships with `GOTOOLCHAIN=local`, so a go.mod that declares a newer Go fails the module download instead of fetching a toolchain behind the pin.
   Renovate therefore updates the Go image and the go.mod version in one group: a go.mod bump arriving on its own would stay red until the image caught up.
   Never give a BuildKit platform argument such as `TARGETPLATFORM` or `TARGETARCH` a default: it shadows the value BuildKit injects per platform, and every architecture's image once shipped the amd64 binary because of one.
-  Renovate merges qualifying updates as branches without opening pull requests.
-  That only works while the main branch has no rule requiring a pull request before merging, so if dependency pull requests start appearing for passing updates, that rule is the thing to look for.
-- The main branch ruleset requires the three build workflow jobs to pass and has no bypass, not even for admins.
+  Renovate opens pull requests for qualifying updates, grouped as configured, and merges them itself once the required checks pass.
+- The main branch ruleset requires a pull request and the three build workflow jobs to pass, and has no bypass, not even for admins.
   The build workflow therefore has no `paths-ignore`: a change that skipped the required jobs could never merge.
   Work lands through pull requests, including the maintainer's.
 - All three test suites upload coverage to Codecov, each under a flag naming the suite, and Codecov merges them per commit.
