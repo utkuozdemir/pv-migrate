@@ -3,9 +3,7 @@
 [![build](https://img.shields.io/github/actions/workflow/status/utkuozdemir/pv-migrate/build.yml?branch=main&label=build&style=flat-square)](https://github.com/utkuozdemir/pv-migrate/actions/workflows/build.yml)
 [![coverage](https://img.shields.io/codecov/c/github/utkuozdemir/pv-migrate/main?style=flat-square)](https://codecov.io/gh/utkuozdemir/pv-migrate)
 [![OpenSSF scorecard](https://img.shields.io/ossf-scorecard/github.com/utkuozdemir/pv-migrate?label=openssf%20scorecard&style=flat-square)](https://scorecard.dev/viewer/?uri=github.com/utkuozdemir/pv-migrate)
-<!-- OpenSSF best practices: once the project entry exists on bestpractices.dev, add its numeric id here:
-[![OpenSSF best practices](https://img.shields.io/cii/level/PROJECT_ID?label=openssf%20best%20practices&style=flat-square)](https://www.bestpractices.dev/projects/PROJECT_ID)
--->
+[![OpenSSF best practices](https://img.shields.io/cii/level/14708?label=openssf%20best%20practices&style=flat-square)](https://www.bestpractices.dev/projects/14708)
 [![latest release](https://img.shields.io/github/v/release/utkuozdemir/pv-migrate?style=flat-square)](https://github.com/utkuozdemir/pv-migrate/releases)
 [![license](https://img.shields.io/github/license/utkuozdemir/pv-migrate?style=flat-square)](https://github.com/utkuozdemir/pv-migrate/blob/main/LICENSE)
 
