@@ -17,10 +17,6 @@
 # the module graph is downloaded in a stage that does not sit downstream of the
 # tools, so bumping a linter does not re-download it.
 #
-# GO_VERSION has no default on purpose: the Taskfile passes the version go.mod
-# declares, so the toolchain cannot drift from the module.
-
-ARG GO_VERSION
 # renovate: depName=golangci/golangci-lint datasource=github-releases
 ARG GOLANGCI_LINT_VERSION=2.13.2
 # renovate: depName=mvdan/sh datasource=github-releases
@@ -28,16 +24,11 @@ ARG SHFMT_VERSION=3.14.1
 # the single declaration of the goreleaser version: the workflows read it from
 # here rather than carrying their own, so the version that validates the release
 # config is always the version that performs the release
-# renovate: depName=goreleaser/goreleaser datasource=docker
 ARG GORELEASER_VERSION=v2.18.2
-# renovate: depName=alpine/helm datasource=docker
-ARG HELM_VERSION=4.3.0
-# renovate: depName=jnorwood/helm-docs datasource=docker
-ARG HELM_DOCS_VERSION=v1.14.2
 
-FROM goreleaser/goreleaser:${GORELEASER_VERSION} AS goreleaser-bin
-FROM alpine/helm:${HELM_VERSION} AS helm-bin
-FROM jnorwood/helm-docs:${HELM_DOCS_VERSION} AS helm-docs-bin
+FROM goreleaser/goreleaser:${GORELEASER_VERSION}@sha256:7077423cf5ef643ff56a34b58f93c1364e927e5c3dfa470eeabc44cab1a9c72b AS goreleaser-bin
+FROM alpine/helm:4.3.0@sha256:a6cf54599ccb99d90cf0712b30f03fdb3cab062e6b94e0418cc4db7e8a1464b2 AS helm-bin
+FROM jnorwood/helm-docs:v1.14.2@sha256:7e562b49ab6b1dbc50c3da8f2dd6ffa8a5c6bba327b1c6335cc15ce29267979c AS helm-docs-bin
 
 # released binaries, fetched rather than compiled, so no check waits on a
 # toolchain build. The downloads are a linear chain: bumping an earlier tool
@@ -58,7 +49,9 @@ COPY --from=helm-docs-bin /usr/bin/helm-docs /usr/local/bin/helm-docs
 
 # the Go toolchain and the module graph. Deliberately NOT downstream of `tools`:
 # a linter bump must not re-download the modules.
-FROM golang:${GO_VERSION} AS deps
+# The image ships GOTOOLCHAIN=local, so a go.mod that declares a newer Go fails
+# the download here instead of fetching a toolchain behind the pinned digest.
+FROM golang:1.27.1@sha256:f44f6e88636cfb311f9ebace870ded69d943f227bb3cb27d32ffd84ea18c43ea AS deps
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build,id=pv_migrate/go-build \

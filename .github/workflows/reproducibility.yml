@@ -5,8 +5,7 @@ name: reproducibility
 # twice, on two different runners, and fails if any checksum differs. Two
 # runners have different hostnames and different checkout times, which is what
 # catches a build that depends on either. Runs on every change that can reach
-# a release, including the Renovate branches that merge without a pull
-# request, and weekly, because the runner image moves on its own too.
+# a release, and weekly, because the runner image moves on its own too.
 on:
   workflow_dispatch: {}
   schedule:
@@ -14,7 +13,6 @@ on:
   push:
     branches:
       - main
-      - renovate/**
   pull_request:
     branches:
       - main
