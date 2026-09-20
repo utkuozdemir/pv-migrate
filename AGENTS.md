@@ -277,6 +277,7 @@ Things that have bitten before:
   A test walks the source and rejects the narrow ones, with the reasoning in its comment; warnings all use the same marker, so pick that one rather than a new shade of orange.
 - Linting is `golangci-lint` with linters enabled by default and a short, individually-justified disable list.
   New code is expected to satisfy it rather than accumulate suppressions, and a complexity finding is usually telling you to extract a function.
+  CodeQL analyzes the Go code and the workflows in a workflow of its own, which is deliberately not a required check: its findings go to the security tab, and an analysis outage must not block a merge.
 - Dependencies are updated by Renovate; `.renovaterc.json` is the authority on what qualifies.
   Pinned tool versions in CI and the Taskfile carry `# renovate:` comments so they are updated too.
   Actions are pinned by commit and base images by digest, and Renovate keeps both fresh.
