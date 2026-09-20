@@ -49,7 +49,6 @@ tasks:
     cmds:
       - >-
         docker buildx build -f hack/dev.Dockerfile
-        --build-arg GO_VERSION="$(sed -n 's/^go //p' go.mod)"
         --target fmt --load --tag pv-migrate-tools:local .
 
   # runs one check as its own buildx stage
@@ -58,7 +57,6 @@ tasks:
     cmds:
       - >-
         docker buildx build -f hack/dev.Dockerfile
-        --build-arg GO_VERSION="$(sed -n 's/^go //p' go.mod)"
         --target {{.TARGET}} .
 
   fmt:
