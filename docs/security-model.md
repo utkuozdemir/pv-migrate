@@ -58,6 +58,6 @@ The data itself is moved by rsync or rclone, running inside the cluster.
 - The shell quoting: a table test that runs the quoted strings through a real shell, since a hand-written splitter could share a blind spot with the quoter.
 - The chart's job scripts: the chart is generated in a Go test and the scripts run under a real shell with a stand-in data mover.
 - The end-to-end behavior: the integration suites run real migrations across two kind clusters with Cilium in default-deny mode and the network policies enabled, and real backups against MinIO, on every change.
-- The code: golangci-lint with gosec on every pull request and push to the main branch, plus the race detector in the migration suite.
+- The code: golangci-lint with gosec and CodeQL on every pull request and push to the main branch, plus the race detector in the migration suite.
 - The supply chain: OpenSSF Scorecard scores the repository weekly, from the outside. The README badge links the current score.
 - The releases: the release workflow rebuilds and compares the archives itself. The signature and attestation commands in the install guide are run manually after a release.
