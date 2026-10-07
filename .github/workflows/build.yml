@@ -39,7 +39,7 @@ jobs:
         uses: arduino/setup-task@c0bc642852239c2689f73f4ea6459c29405f3c52 # v3.0.0
         with:
           # renovate: depName=go-task/task datasource=github-releases
-          version: 3.53.1
+          version: 3.54.0
       # every linter and the unit tests at the versions pinned in
       # hack/dev.Dockerfile, in the same containers a developer gets locally.
       # Nothing is installed here, so CI and a workstation cannot drift apart.
@@ -116,7 +116,7 @@ jobs:
       - name: Install cilium-cli
         env:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
-          CILIUM_CLI_VERSION: v0.20.0
+          CILIUM_CLI_VERSION: v0.20.1
         run: |
           wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload cluster diagnostics
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: migrate-cluster-diagnostics
           path: /tmp/cluster-diagnostics
@@ -220,7 +220,7 @@ jobs:
           version: v4.3.0
 
       - name: Create kind cluster
-        uses: helm/kind-action@06c1ae10762d3b9c1644e7fe69596ae519e015a2 # v1.15.0
+        uses: helm/kind-action@1544676c07bb3570fcb70166beaa07c4528fd4aa # v1.15.1
         with:
           cluster_name: backup-test
           # renovate: depName=kubernetes-sigs/kind datasource=github-releases
@@ -285,7 +285,7 @@ jobs:
 
       - name: Upload cluster diagnostics
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: backup-cluster-diagnostics
           path: /tmp/cluster-diagnostics
