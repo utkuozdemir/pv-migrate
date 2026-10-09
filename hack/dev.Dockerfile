@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.27
+# syntax=docker/dockerfile:1.28
 #
 # The development and CI toolchain, one stage per check.
 #
@@ -29,7 +29,7 @@ ARG SHFMT_VERSION=3.14.1
 # here rather than carrying their own, so the version that validates the release
 # config is always the version that performs the release
 # renovate: depName=goreleaser/goreleaser datasource=docker
-ARG GORELEASER_VERSION=v2.18.2
+ARG GORELEASER_VERSION=v2.18.3
 # renovate: depName=alpine/helm datasource=docker
 ARG HELM_VERSION=4.3.0
 # renovate: depName=jnorwood/helm-docs datasource=docker
