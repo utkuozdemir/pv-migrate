@@ -289,6 +289,8 @@ Things that have bitten before:
 - The main branch ruleset requires a pull request and the three build workflow jobs to pass, and has no bypass, not even for admins.
   The build workflow therefore has no `paths-ignore`: a change that skipped the required jobs could never merge.
   Work lands through pull requests, including the maintainer's.
+  The pull request rule asks for no approvals, since the project has one maintainer and GitHub does not let an author approve their own pull request.
+  Its extra approval for unattributed changes is switched off explicitly: GitHub turns it on when a ruleset update leaves it out, and it would hold pull requests for an approval nobody can give.
 - All three test suites upload coverage to Codecov, each under a flag naming the suite, and Codecov merges them per commit.
   The unit suite alone covers about half of the module, so a coverage number from one suite is not the project's coverage.
 - `.bestpractices.json` at the repository root holds the answers to the OpenSSF Best Practices badge questionnaire.
