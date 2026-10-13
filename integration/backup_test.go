@@ -28,13 +28,15 @@ import (
 )
 
 const (
-	minioEndpoint  = "http://minio.pv-migrate-test.svc:9000"
-	minioBucket    = "pv-migrate-test"
-	minioAccessKey = "minioadmin"
-	minioSecretKey = "minioadmin"
+	s3Endpoint  = "http://seaweedfs.pv-migrate-test.svc:8333"
+	s3Bucket    = "pv-migrate-test"
+	s3AccessKey = "pv-migrate"
+	s3SecretKey = "pv-migrate"
 
-	// renovate: depName=quay.io/minio/mc datasource=docker
-	mcImage = "quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z"
+	// verifyImage reads the bucket back. It is upstream rclone rather than the
+	// image under test, so the check does not share that image's mistakes.
+	// renovate: depName=rclone/rclone datasource=docker
+	verifyImage = "docker.io/rclone/rclone:1.75.2"
 
 	backupTestDataContent = "BACKUP_DATA"
 	backupTestDataPath    = "/volume/backup_test.txt"
@@ -140,10 +142,10 @@ func testBackupBasic(t *testing.T, infra *backupTestInfra) {
 			Name:      "test-pvc",
 		},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		IgnoreMounted:      true,
 		NoCleanupOnFailure: true,
@@ -200,10 +202,10 @@ func testRestoreBasic(t *testing.T, infra *backupTestInfra) {
 			Name:      "test-pvc",
 		},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		IgnoreMounted:      true,
 		NoCleanupOnFailure: true,
@@ -227,10 +229,10 @@ func testRestoreBasic(t *testing.T, infra *backupTestInfra) {
 			Name:      "test-pvc",
 		},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		IgnoreMounted:      true,
 		NoCleanupOnFailure: true,
@@ -259,10 +261,10 @@ func testBackupRestoreRoundTrip(t *testing.T, infra *backupTestInfra) {
 			Name:      "test-pvc",
 		},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		IgnoreMounted:      true,
 		NoCleanupOnFailure: true,
@@ -283,10 +285,10 @@ func testBackupRestoreRoundTrip(t *testing.T, infra *backupTestInfra) {
 			Name:      "dest-pvc",
 		},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		IgnoreMounted:      true,
 		NoCleanupOnFailure: true,
@@ -315,10 +317,10 @@ func testBackupCustomPrefix(t *testing.T, infra *backupTestInfra) {
 			Name:      "test-pvc",
 		},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		Prefix:             "custom-prefix",
 		IgnoreMounted:      true,
@@ -346,10 +348,10 @@ func testBackupRcloneExtraArgs(t *testing.T, infra *backupTestInfra) {
 			Name:      "test-pvc",
 		},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		RcloneExtraArgs:    "--dry-run",
 		IgnoreMounted:      true,
@@ -379,10 +381,10 @@ func testBackupDetach(t *testing.T, infra *backupTestInfra) {
 		},
 		ID:                 "detach-test",
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		Detach:             true,
 		IgnoreMounted:      true,
@@ -416,10 +418,10 @@ func testBackupRestoreSubpath(t *testing.T, infra *backupTestInfra) {
 	backup := pvmigrate.Backup{
 		PVC:                pvmigrate.PVC{Namespace: ns, Name: "test-pvc"},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		Path:               "subdir",
 		IgnoreMounted:      true,
@@ -444,10 +446,10 @@ func testBackupRestoreSubpath(t *testing.T, infra *backupTestInfra) {
 	restore := pvmigrate.Restore{
 		PVC:                pvmigrate.PVC{Namespace: ns, Name: "test-pvc"},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		Path:               "subdir",
 		IgnoreMounted:      true,
@@ -479,10 +481,10 @@ func testRestoreDeleteExtraneousFiles(t *testing.T, infra *backupTestInfra) {
 	backup := pvmigrate.Backup{
 		PVC:                pvmigrate.PVC{Namespace: ns, Name: "test-pvc"},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		IgnoreMounted:      true,
 		NoCleanupOnFailure: true,
@@ -500,10 +502,10 @@ func testRestoreDeleteExtraneousFiles(t *testing.T, infra *backupTestInfra) {
 	restore := pvmigrate.Restore{
 		PVC:                pvmigrate.PVC{Namespace: ns, Name: "dest-pvc"},
 		Backend:            "s3",
-		Bucket:             minioBucket,
-		Endpoint:           minioEndpoint,
-		AccessKey:          minioAccessKey,
-		SecretKey:          minioSecretKey,
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
 		Name:               backupName,
 		IgnoreMounted:      true,
 		NoCleanupOnFailure: true,
@@ -530,7 +532,7 @@ func testRestoreDeleteExtraneousFiles(t *testing.T, infra *backupTestInfra) {
 
 // --- Verification helpers ---
 
-// verifyBucketContents runs an mc ls job to check that the backup test file exists in the bucket.
+// verifyBucketContents runs an rclone lsf job to check that the backup test file exists in the bucket.
 func verifyBucketContents(t *testing.T, infra *backupTestInfra, ns, bucketPath string) {
 	t.Helper()
 
@@ -546,35 +548,30 @@ func verifyBucketEmpty(t *testing.T, infra *backupTestInfra, ns, bucketPath stri
 	assert.Empty(t, output, "expected bucket path %s to be empty but got: %s", bucketPath, output)
 }
 
-// listBucketPath returns the mc ls output for the given path in the test bucket.
+// listBucketPath returns the rclone lsf output for the given path in the test bucket.
 func listBucketPath(t *testing.T, infra *backupTestInfra, ns, bucketPath string) string {
 	t.Helper()
 
-	return runMinioVerifyJob(t, infra, ns, fmt.Sprintf(
-		"mc alias set test %s %s %s >/dev/null 2>&1 && mc ls test/%s/%s",
-		minioEndpoint, minioAccessKey, minioSecretKey, minioBucket, bucketPath,
-	))
+	return runBucketVerifyJob(t, infra, ns, "lsf", "test:"+s3Bucket+"/"+bucketPath)
 }
 
 // readBucketFile returns the contents of a file in the test bucket.
 func readBucketFile(t *testing.T, infra *backupTestInfra, ns, bucketPath string) string {
 	t.Helper()
 
-	return runMinioVerifyJob(t, infra, ns, fmt.Sprintf(
-		"mc alias set test %s %s %s >/dev/null 2>&1 && mc cat test/%s/%s",
-		minioEndpoint, minioAccessKey, minioSecretKey, minioBucket, bucketPath,
-	))
+	return runBucketVerifyJob(t, infra, ns, "cat", "test:"+s3Bucket+"/"+bucketPath)
 }
 
-// runMinioVerifyJob creates a job in the given namespace that runs an mc command and returns stdout.
-func runMinioVerifyJob(t *testing.T, infra *backupTestInfra, ns, cmd string) string {
+// runBucketVerifyJob creates a job in the given namespace that runs rclone against the test bucket,
+// configured as the remote "test", and returns its output.
+func runBucketVerifyJob(t *testing.T, infra *backupTestInfra, ns string, args ...string) string {
 	t.Helper()
 
 	ctx := t.Context()
 
 	jobName := "verify-" + randomSuffix()
 
-	job := createVerifyJob(t, infra, ns, jobName, cmd)
+	job := createVerifyJob(t, infra, ns, jobName, args)
 
 	// Wait for job completion
 	err := k8s.WaitForJobCompletion(ctx, infra.cli.KubeClient, ns, job.Name,
@@ -606,7 +603,7 @@ func runMinioVerifyJob(t *testing.T, infra *backupTestInfra, ns, cmd string) str
 	return string(buf)
 }
 
-func createVerifyJob(t *testing.T, infra *backupTestInfra, ns, name, cmd string) *batchv1.Job {
+func createVerifyJob(t *testing.T, infra *backupTestInfra, ns, name string, args []string) *batchv1.Job {
 	t.Helper()
 
 	backoffLimit := int32(0)
@@ -621,9 +618,17 @@ func createVerifyJob(t *testing.T, infra *backupTestInfra, ns, name, cmd string)
 					RestartPolicy: corev1.RestartPolicyNever,
 					Containers: []corev1.Container{
 						{
-							Name:    "mc",
-							Image:   mcImage,
-							Command: []string{"sh", "-c", cmd},
+							Name:  "rclone",
+							Image: verifyImage,
+							// -q keeps rclone's notices out of the output the callers compare
+							Args: append([]string{"-q"}, args...),
+							Env: []corev1.EnvVar{
+								{Name: "RCLONE_CONFIG_TEST_TYPE", Value: "s3"},
+								{Name: "RCLONE_CONFIG_TEST_PROVIDER", Value: "Other"},
+								{Name: "RCLONE_CONFIG_TEST_ENDPOINT", Value: s3Endpoint},
+								{Name: "RCLONE_CONFIG_TEST_ACCESS_KEY_ID", Value: s3AccessKey},
+								{Name: "RCLONE_CONFIG_TEST_SECRET_ACCESS_KEY", Value: s3SecretKey},
+							},
 						},
 					},
 				},

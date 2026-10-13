@@ -70,7 +70,7 @@
   "build_floss_tools_status": "Met",
   "build_floss_tools_justification": "Go, Task, goreleaser and Docker are all FLOSS.",
   "test_status": "Met",
-  "test_justification": "`go test ./...` (or `task test`) runs the unit tests and the fuzz seed corpora, and needs nothing installed. The integration suites are behind build tags and run in CI: migrations within and across two kind clusters, and backup and restore against MinIO in a kind cluster, plus the cloud providers when their credentials are present: https://github.com/utkuozdemir/pv-migrate/blob/main/.github/workflows/build.yml",
+  "test_justification": "`go test ./...` (or `task test`) runs the unit tests and the fuzz seed corpora, and needs nothing installed. The integration suites are behind build tags and run in CI: migrations within and across two kind clusters, and backup and restore against SeaweedFS in a kind cluster, plus the cloud providers when their credentials are present: https://github.com/utkuozdemir/pv-migrate/blob/main/.github/workflows/build.yml",
   "test_invocation_status": "Met",
   "test_invocation_justification": "`go test ./...`, the standard way for Go.",
   "test_most_status": "Met",
