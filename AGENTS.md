@@ -191,7 +191,7 @@ The `mount` strategy's pod opens no connection, so its values switch the policy 
 The integration suites are behind build tags and need real clusters, so they run in CI and, deliberately, are not part of the default suite.
 
 - The migration suite wants two clusters, since cross-cluster migration is a first-class case, and it points at the second one through an environment variable.
-- The backup suite wants a bucket, and CI stands up MinIO for it. The cloud-provider tests additionally fail rather than skip when that provider's credentials are present, and only then.
+- The backup suite wants a bucket, and CI stands up SeaweedFS for it. The cloud-provider tests additionally fail rather than skip when that provider's credentials are present, and only then.
 - Both suites create and delete namespaces in whatever cluster they are pointed at, so point them at a throwaway one.
 
 ### Fuzzing

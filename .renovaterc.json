@@ -40,13 +40,14 @@
         "/\\.github\\/workflows\\/.*/",
         "/\\.github\\/actions\\/.*/",
         "/Taskfile\\.yml/",
-        "/hack\\/dev\\.Dockerfile/"
+        "/hack\\/dev\\.Dockerfile/",
+        "/integration\\/.*\\.go/"
       ],
       "matchStrings": [
-        "# renovate: depName=(?<depName>[^\\s]+)( datasource=(?<datasource>[^\\s]+))?( registryUrl=(?<registryUrl>\\S+))?\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+\\.\\d+(-[\\S]+)?)"
+        "(#|\\/\\/) renovate: depName=(?<depName>[^\\s]+)( datasource=(?<datasource>[^\\s]+))?( registryUrl=(?<registryUrl>\\S+))?( versioning=(?<versioning>\\S+))?\\n[^\\n]*?(?<currentValue>v?\\d+\\.\\d+(\\.\\d+)?(-[\\S]+)?)"
       ],
       "datasourceTemplate": "{{#if datasource}}{{{datasource}}}{{else}}github-tags{{/if}}",
-      "versioningTemplate": "semver"
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}"
     },
     {
       "customType": "regex",
