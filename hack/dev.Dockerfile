@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.27
+# syntax=docker/dockerfile:1.28
 #
 # The development and CI toolchain, one stage per check.
 #
@@ -24,9 +24,9 @@ ARG SHFMT_VERSION=3.14.1
 # the single declaration of the goreleaser version: the workflows read it from
 # here rather than carrying their own, so the version that validates the release
 # config is always the version that performs the release
-ARG GORELEASER_VERSION=v2.18.2
+ARG GORELEASER_VERSION=v2.18.3
 
-FROM goreleaser/goreleaser:${GORELEASER_VERSION}@sha256:7077423cf5ef643ff56a34b58f93c1364e927e5c3dfa470eeabc44cab1a9c72b AS goreleaser-bin
+FROM goreleaser/goreleaser:${GORELEASER_VERSION}@sha256:b61a4eedf5e3b1d283792dade34ee0f8c6cce3e6f1f65851d3b397b8f8a75b6d AS goreleaser-bin
 FROM alpine/helm:4.3.0@sha256:a6cf54599ccb99d90cf0712b30f03fdb3cab062e6b94e0418cc4db7e8a1464b2 AS helm-bin
 FROM jnorwood/helm-docs:v1.14.2@sha256:7e562b49ab6b1dbc50c3da8f2dd6ffa8a5c6bba327b1c6335cc15ce29267979c AS helm-docs-bin
 
