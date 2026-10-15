@@ -27,7 +27,7 @@ ARG SHFMT_VERSION=3.14.1
 ARG GORELEASER_VERSION=v2.18.3
 
 FROM goreleaser/goreleaser:${GORELEASER_VERSION}@sha256:b61a4eedf5e3b1d283792dade34ee0f8c6cce3e6f1f65851d3b397b8f8a75b6d AS goreleaser-bin
-FROM alpine/helm:4.3.0@sha256:a6cf54599ccb99d90cf0712b30f03fdb3cab062e6b94e0418cc4db7e8a1464b2 AS helm-bin
+FROM alpine/helm:4.3.1@sha256:e3f8d5c462d75470fbb1fce79ad5c20063657096d1f98c0fcea869e2600e2e5e AS helm-bin
 FROM jnorwood/helm-docs:v1.14.2@sha256:7e562b49ab6b1dbc50c3da8f2dd6ffa8a5c6bba327b1c6335cc15ce29267979c AS helm-docs-bin
 
 # released binaries, fetched rather than compiled, so no check waits on a
