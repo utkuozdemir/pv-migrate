@@ -69,8 +69,8 @@ github.com/docker/go-events v0.0.0-20250808211157-605354379745 h1:yOn6Ze6IbYI/KA
 github.com/docker/go-events v0.0.0-20250808211157-605354379745/go.mod h1:Uw6UezgYA44ePAFQYUehOuCzmy5zmg/+nl2ZfMWGkpA=
 github.com/docker/go-metrics v0.0.1 h1:AgB/0SvBxihN0X8OR4SjsblXkbMvalQ8cjmtKQ2rQV8=
 github.com/docker/go-metrics v0.0.1/go.mod h1:cG1hvH2utMXtqgqqYE9plW6lDxS3/5ayHzueweSI3Vw=
-github.com/dustinkirkland/golang-petname v0.0.0-20260929120758-6e3915f1a6a8 h1:DC9MUnvV69DbAVUiRYQg+9x+Vq2xlhf8zhjiE/76Tes=
-github.com/dustinkirkland/golang-petname v0.0.0-20260929120758-6e3915f1a6a8/go.mod h1:8AuBTZBRSFqEYBPYULd+NN474/zZBLP+6WeT5S9xlAc=
+github.com/dustinkirkland/golang-petname v0.0.0-20261016130456-fdd95a3d0543 h1:hgXIVQLAemq0Ld1Kl1mKoOpV21l1JnVQL3v1WY5VcUo=
+github.com/dustinkirkland/golang-petname v0.0.0-20261016130456-fdd95a3d0543/go.mod h1:8AuBTZBRSFqEYBPYULd+NN474/zZBLP+6WeT5S9xlAc=
 github.com/dylibso/observe-sdk/go v0.0.0-20240828172851-9145d8ad07e1 h1:idfl8M8rPW93NehFw5H1qqH8yG158t5POr+LX9avbJY=
 github.com/dylibso/observe-sdk/go v0.0.0-20240828172851-9145d8ad07e1/go.mod h1:C8DzXehI4zAbrdlbtOByKX6pfivJTBiV9Jjqv56Yd9Q=
 github.com/emicklei/go-restful/v3 v3.13.0 h1:C4Bl2xDndpU6nJ4bc1jXd+uTmYPVUwkD6bFY/oTyCes=
