@@ -4,7 +4,7 @@ module github.com/utkuozdemir/pv-migrate
 go 1.27.2
 
 require (
-	github.com/dustinkirkland/golang-petname v0.0.0-20260929120758-6e3915f1a6a8
+	github.com/dustinkirkland/golang-petname v0.0.0-20261016130456-fdd95a3d0543
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/mattn/go-isatty v0.0.24
 	github.com/mattn/go-runewidth v0.0.31
