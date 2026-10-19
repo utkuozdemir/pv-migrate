@@ -1,5 +1,7 @@
 package rsync
 
+import "strings"
+
 // exitCodeMeanings are rsync's exit values as its manual page words them. They
 // are quoted rather than paraphrased on purpose: an exit code is an observed
 // fact, its documented meaning is another one, and the scenario that produced it
@@ -54,5 +56,5 @@ func Interpret(code int) string {
 		return ""
 	}
 
-	return "rsync documents this exit code as: " + meaning
+	return strings.ToLower(meaning[:1]) + meaning[1:]
 }

@@ -57,7 +57,7 @@ func TestRunSummarizesEveryOutcome(t *testing.T) {
 
 	summary := out.String()
 
-	assert.Contains(t, summary, "Migration failed: no strategy could complete the migration.")
+	assert.Contains(t, summary, "Why no strategy could complete the migration:")
 	assert.Contains(t, summary, "mount")
 	assert.Contains(t, summary, "declined")
 	assert.Contains(t, summary, "source and destination are in different namespaces")
@@ -81,10 +81,47 @@ func TestRunSummaryIndentsMultiLineFailures(t *testing.T) {
 	req.Writer = &out
 
 	require.Error(t, mig.Run(t.Context(), req, slogt.New(t)))
-	assert.Contains(t, out.String(), "Migration failed: the mount strategy failed.\n",
+	assert.Contains(t, out.String(), "Why the mount strategy failed:\n",
 		"a single-strategy run reads as a sentence, not a one-row table")
-	assert.Contains(t, out.String(), "\n    first line\n    second line\n",
+	assert.Contains(t, out.String(), "\n  first line\n  second line\n",
 		"the failure text sits on its own indented lines, whole")
+}
+
+// TestRunEndsWithTheCauseOfASingleFailure pins that a single failed strategy's
+// error is the error the run ends with, so the summary does not repeat it.
+func TestRunEndsWithTheCauseOfASingleFailure(t *testing.T) {
+	t.Parallel()
+
+	failure := errors.New("pod ns/p failed: rsync exited with code 1 (syntax or usage error)")
+	mig := failingMigrator(map[string]error{"mount": failure})
+
+	var out bytes.Buffer
+
+	req := buildMigrationRequestWithStrategies([]string{"mount"}, true)
+	req.Writer = &out
+
+	err := mig.Run(t.Context(), req, slogt.New(t))
+	require.ErrorIs(t, err, failure)
+	assert.Equal(t, "mount: "+failure.Error(), err.Error())
+	assert.Empty(t, out.String(), "the error the run ends with says it already, so no block and no blank line")
+}
+
+// TestRunEndsWithTheReasonOfASingleDecline pins the same for a strategy that
+// declined: its reason is the error the run ends with.
+func TestRunEndsWithTheReasonOfASingleDecline(t *testing.T) {
+	t.Parallel()
+
+	mig := failingMigrator(map[string]error{"mount": strategy.Declined("the claims are in different namespaces")})
+
+	var out bytes.Buffer
+
+	req := buildMigrationRequestWithStrategies([]string{"mount"}, true)
+	req.Writer = &out
+
+	err := mig.Run(t.Context(), req, slogt.New(t))
+	require.ErrorIs(t, err, strategy.ErrUnaccepted)
+	assert.Equal(t, "mount: the claims are in different namespaces", err.Error())
+	assert.Empty(t, out.String())
 }
 
 // TestRunSummaryColorsWhenRequested pins that the color plumbing reaches the
@@ -93,7 +130,7 @@ func TestRunSummaryIndentsMultiLineFailures(t *testing.T) {
 func TestRunSummaryColorsWhenRequested(t *testing.T) {
 	t.Parallel()
 
-	mig := failingMigrator(map[string]error{"mount": errors.New("boom")})
+	mig := failingMigrator(map[string]error{"mount": errors.New("boom\nwith a second line")})
 
 	var out bytes.Buffer
 
@@ -102,7 +139,7 @@ func TestRunSummaryColorsWhenRequested(t *testing.T) {
 	req.ColorOutput = true
 
 	require.Error(t, mig.Run(t.Context(), req, slogt.New(t)))
-	assert.Contains(t, out.String(), "\x1b[1;31mMigration failed: the mount strategy failed.\x1b[0m")
+	assert.Contains(t, out.String(), "\x1b[1mWhy the mount strategy failed:\x1b[0m")
 }
 
 func TestRunWithoutWriterDoesNotPanic(t *testing.T) {

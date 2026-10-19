@@ -13,11 +13,10 @@ func TestPaletteDisabledIsPlainText(t *testing.T) {
 
 	var palette console.Palette
 
-	assert.Equal(t, "x", palette.Failure("x"))
 	assert.Equal(t, "x", palette.Bad("x"))
 	assert.Equal(t, "x", palette.Warn("x"))
 	assert.Equal(t, "x", palette.Good("x"))
-	assert.Equal(t, "x", palette.Dim("x"))
+	assert.Equal(t, "x", palette.Quote("x"))
 	assert.Equal(t, "x", palette.Bold("x"))
 }
 
@@ -27,7 +26,6 @@ func TestPaletteEnabledWrapsAndResets(t *testing.T) {
 	palette := console.Palette{Enabled: true}
 
 	assert.Equal(t, "\x1b[31mx\x1b[0m", palette.Bad("x"))
-	assert.Equal(t, "\x1b[1;31mx\x1b[0m", palette.Failure("x"))
 	assert.Empty(t, palette.Bad(""), "coloring nothing must stay nothing")
 }
 

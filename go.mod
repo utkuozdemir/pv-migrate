@@ -6,6 +6,7 @@ go 1.27.2
 require (
 	github.com/dustinkirkland/golang-petname v0.0.0-20261016130456-fdd95a3d0543
 	github.com/hashicorp/go-multierror v1.1.1
+	github.com/lmittmann/tint v1.2.1
 	github.com/mattn/go-isatty v0.0.24
 	github.com/mattn/go-runewidth v0.0.31
 	github.com/neilotoole/slogt/v2 v2.0.0

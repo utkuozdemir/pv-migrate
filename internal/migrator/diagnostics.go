@@ -27,7 +27,8 @@ func collectDiagnostics(ctx context.Context, attempt *migration.Attempt, logger 
 			continue
 		}
 
-		fmt.Fprintf(&buf, "  %s (%snamespace %s):\n", target.Release, sideLabel(attempt, info), info.Claim.Namespace)
+		fmt.Fprintf(&buf, "  %s\n", palette.Quote(fmt.Sprintf("%s (%snamespace %s):",
+			target.Release, sideLabel(attempt, info), info.Claim.Namespace)))
 
 		k8s.WriteWorkloadDiagnostics(ctx, info.ClusterClient.KubeClient, info.Claim.Namespace,
 			k8s.InstanceLabelSelector(target.Release), palette, &buf, logger)

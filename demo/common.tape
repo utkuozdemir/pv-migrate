@@ -24,7 +24,7 @@ Set Shell "bash"
 Set FontFamily "JetBrains Mono SemiBold"
 Set FontSize 36
 Set Width 2800
-Set Height 1240
+Set Height 1650
 Set Padding 48
 Set Margin 32
 Set MarginFill "#0d1117"

@@ -54,12 +54,17 @@ func (o attemptOutcome) message() string {
 // ladderExhaustedError reports that every requested strategy declined or failed.
 // Its message stays one line, because the CLI renders it as a single log
 // attribute, and the per-strategy errors are reachable through the standard
-// unwrap tree instead.
+// unwrap tree instead. A single failed strategy is the cause itself.
 type ladderExhaustedError struct {
-	errs []error
+	errs  []error
+	cause string
 }
 
 func (e *ladderExhaustedError) Error() string {
+	if e.cause != "" {
+		return e.cause
+	}
+
 	return "no strategy could complete the migration"
 }
 
@@ -78,7 +83,25 @@ func newLadderExhaustedError(outcomes []attemptOutcome) error {
 		errs = append(errs, fmt.Errorf("%s: %w", outcome.strategy, outcome.err))
 	}
 
-	return &ladderExhaustedError{errs: errs}
+	exhausted := &ladderExhaustedError{errs: errs}
+	exhausted.cause, _ = lineCause(outcomes)
+
+	return exhausted
+}
+
+// lineCause returns the error a run with a single strategy ends with, when the
+// strategy's message fits on that line, so no summary has to repeat it.
+func lineCause(outcomes []attemptOutcome) (string, bool) {
+	if len(outcomes) != 1 {
+		return "", false
+	}
+
+	message := outcomes[0].message()
+	if message == "" || strings.Contains(message, "\n") {
+		return "", false
+	}
+
+	return outcomes[0].strategy + ": " + message, true
 }
 
 // reportOutcomes explains the exhausted ladder. The summary is a plain-text block
@@ -112,27 +135,32 @@ func reportOutcomes(request *migration.Request, outcomes []attemptOutcome, logge
 }
 
 // writeSummary explains the exhausted ladder. Decline reasons are short and sit
-// in their row; failure messages are printed whole on their own indented lines,
+// in their row, failure messages are printed whole on their own indented lines,
 // since a long error chain inside a table cell defeats the table on any real
-// terminal width. A single-strategy run gets a sentence, because a one-row
+// terminal width. A single strategy gets no block when its message fits on the
+// line the run ends with, and a heading of its own otherwise, because a one-row
 // table about "no strategy" reads as if several were tried.
 func writeSummary(writer io.Writer, outcomes []attemptOutcome, palette console.Palette) {
-	fmt.Fprintln(writer)
+	_, onTheLine := lineCause(outcomes)
+	wrote := !onTheLine
 
-	if len(outcomes) == 1 {
+	switch {
+	case onTheLine:
+	case len(outcomes) == 1:
 		outcome := outcomes[0]
 
-		fmt.Fprintln(writer,
-			palette.Failure(fmt.Sprintf("Migration failed: the %s strategy %s.", outcome.strategy, outcome.status())))
-		writeIndented(writer, outcome.message())
-	} else {
+		fmt.Fprintln(writer)
+		fmt.Fprintln(writer, palette.Bold(fmt.Sprintf("Why the %s strategy %s:", outcome.strategy, outcome.status())))
+		writeIndented(writer, "  ", outcome.message(), palette)
+	default:
+		fmt.Fprintln(writer)
+
 		nameWidth := 0
 		for _, outcome := range outcomes {
 			nameWidth = max(nameWidth, len(outcome.strategy))
 		}
 
-		fmt.Fprintln(writer, palette.Failure("Migration failed: no strategy could complete the migration."))
-		fmt.Fprintln(writer)
+		fmt.Fprintln(writer, palette.Bold("Why no strategy could complete the migration:"))
 
 		for _, outcome := range outcomes {
 			// The status word is padded before coloring: escape codes have
@@ -145,29 +173,31 @@ func writeSummary(writer io.Writer, outcomes []attemptOutcome, palette console.P
 					"  %s  %s  %s\n",
 					palette.Bold(name),
 					palette.Warn(outcomeDeclined),
-					outcome.message(),
+					palette.Quote(outcome.message()),
 				)
 
 				continue
 			}
 
 			fmt.Fprintf(writer, "  %s  %s\n", palette.Bold(name), palette.Bad(outcomeFailed))
-			writeIndented(writer, outcome.message())
+			writeIndented(writer, "    ", outcome.message(), palette)
 		}
 	}
 
-	writeDiagnosticsBlocks(writer, outcomes, palette)
+	if writeDiagnosticsBlocks(writer, outcomes, palette) || wrote {
+		fmt.Fprintln(writer)
+	}
 }
 
-func writeIndented(writer io.Writer, message string) {
+func writeIndented(writer io.Writer, indent, message string, palette console.Palette) {
 	for line := range strings.SplitSeq(message, "\n") {
-		fmt.Fprintf(writer, "    %s\n", line)
+		fmt.Fprintf(writer, "%s%s\n", indent, palette.Quote(line))
 	}
 }
 
 // writeDiagnosticsBlocks prints what the cluster reported for the attempts that
 // got as far as creating something. Declines never reach the cluster.
-func writeDiagnosticsBlocks(writer io.Writer, outcomes []attemptOutcome, palette console.Palette) {
+func writeDiagnosticsBlocks(writer io.Writer, outcomes []attemptOutcome, palette console.Palette) bool {
 	printed := false
 
 	for _, outcome := range outcomes {
@@ -178,11 +208,12 @@ func writeDiagnosticsBlocks(writer io.Writer, outcomes []attemptOutcome, palette
 		if !printed {
 			fmt.Fprintln(writer)
 			fmt.Fprintln(writer, palette.Bold("What the cluster reported:"))
-			fmt.Fprintln(writer)
 
 			printed = true
 		}
 
 		fmt.Fprint(writer, outcome.diagnostics)
 	}
+
+	return printed
 }

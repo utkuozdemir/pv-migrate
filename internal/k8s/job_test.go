@@ -162,8 +162,7 @@ func TestWaitForJobCompletion_PodAlreadyFailedReturnsError(t *testing.T) {
 	err := k8s.WaitForJobCompletion(ctx, cli, "default", "test-rclone", false, false, console.Palette{},
 		&bytes.Buffer{}, slog.New(slog.DiscardHandler))
 	require.ErrorContains(t, err,
-		`pod default/test-rclone-abc failed: the data mover exited with code 3 `+
-			`(rclone documents this exit code as: Directory not found)`)
+		`pod default/test-rclone-abc failed: rclone exited with code 3 (directory not found)`)
 
 	for _, action := range cli.Actions() {
 		assert.NotEqual(t, "watch", action.GetVerb(), "already-failed pod should not start a watch")
@@ -203,7 +202,7 @@ func TestWaitForJobCompletion_RendersTerminatedStateAdditively(t *testing.T) {
 		&bytes.Buffer{}, slog.New(slog.DiscardHandler))
 	require.Error(t, err)
 
-	assert.Contains(t, err.Error(), "the data mover exited with code 137")
+	assert.Contains(t, err.Error(), "rsync exited with code 137")
 	assert.Contains(t, err.Error(), "killed by signal 9")
 	assert.Contains(t, err.Error(), "reason: OOMKilled")
 	assert.Contains(t, err.Error(), "message: out of memory")
@@ -282,8 +281,8 @@ func TestWaitForJobCompletion_RunningPodThatFails(t *testing.T) {
 
 	err := k8s.WaitForJobCompletion(t.Context(), cli, "default", "test-rsync", true, false, console.Palette{},
 		writer, slog.New(slog.DiscardHandler))
-	require.ErrorContains(t, err, "the data mover exited with code 23")
-	require.ErrorContains(t, err, `rsync documents this exit code as: Partial transfer due to error`)
+	require.ErrorContains(t, err, "rsync exited with code 23")
+	require.ErrorContains(t, err, `(partial transfer due to error)`)
 
 	out := writer.String()
 	assert.Contains(t, out, fakePodLogs, "the log tail is the most useful thing to show and was being dropped")
@@ -370,7 +369,7 @@ func TestWaitForJobCompletion_PodFailsBeforeRunning(t *testing.T) {
 
 	err := k8s.WaitForJobCompletion(t.Context(), cli, "default", "test-rsync", false, false, console.Palette{},
 		writer, slog.New(slog.DiscardHandler))
-	require.ErrorContains(t, err, `rsync documents this exit code as: Error in file I/O`)
+	require.ErrorContains(t, err, `(error in file I/O)`)
 	assert.Contains(t, writer.String(), fakePodLogs)
 }
 
@@ -404,7 +403,7 @@ func TestWaitForJobCompletion_StructuredLogsKeepTheWriterClean(t *testing.T) {
 
 	err := k8s.WaitForJobCompletion(t.Context(), cli, "default", "test-rsync", false, true, console.Palette{},
 		&writer, slog.New(slog.NewJSONHandler(&records, nil)))
-	require.ErrorContains(t, err, "the data mover exited with code 23")
+	require.ErrorContains(t, err, "rsync exited with code 23")
 
 	assert.Empty(t, writer.String(), "raw text on a structured stream corrupts it")
 	assert.Contains(t, records.String(), fakePodLogs, "the tail still has to reach the user")

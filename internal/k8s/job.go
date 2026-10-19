@@ -114,7 +114,7 @@ func WaitForJobStart(ctx context.Context, cli kubernetes.Interface,
 ) (*corev1.Pod, error) {
 	labelSelector := "job-name=" + name
 
-	logger.Info(fmt.Sprintf("⏳ waiting for the pod of job %s to start", name))
+	logger.Info("⏳ Waiting for the job pod to start", "job", name)
 
 	pod, err := WaitForPod(ctx, cli, ns, labelSelector, logger)
 	if err != nil {
@@ -123,14 +123,14 @@ func WaitForJobStart(ctx context.Context, cli kubernetes.Interface,
 
 	switch pod.Status.Phase { //nolint:exhaustive
 	case corev1.PodRunning:
-		logger.Info(fmt.Sprintf("🏃 pod %s is running on node %s", pod.Name, pod.Spec.NodeName))
+		logger.Info("🏃 Job pod is running", "pod", pod.Name, "node", pod.Spec.NodeName)
 	case corev1.PodSucceeded:
-		logger.Info(fmt.Sprintf("🏁 pod %s had already finished", pod.Name))
+		logger.Info("🏁 Job pod had already finished", "pod", pod.Name)
 	case corev1.PodFailed:
 		// Not "completed": on a skim that reads as success.
-		logger.Warn(fmt.Sprintf("🔶 pod %s had already failed", pod.Name))
+		logger.Warn("🔶 Job pod had already failed", "pod", pod.Name)
 	default:
-		logger.Info(fmt.Sprintf("✅ pod %s started, in phase %s", pod.Name, pod.Status.Phase))
+		logger.Info("✅ Job pod started", "pod", pod.Name, "phase", pod.Status.Phase)
 	}
 
 	return pod, nil
@@ -249,6 +249,7 @@ func WaitForJobCompletion(ctx context.Context, cli kubernetes.Interface,
 	}
 
 	progress.FinishBar(logger)
+	progress.LogCopied(logger)
 
 	// The progress parser consumed the log, so the marker the job script prints
 	// for skipped files has to be fetched back to be seen at all.
@@ -383,19 +384,19 @@ func writeFailureTail(
 	palette console.Palette,
 	writer io.Writer,
 	logger *slog.Logger,
-) {
+) bool {
 	tail := recentPodLogs(ctx, cli, pod, logger)
 	if tail == "" {
-		return
+		return false
 	}
 
 	if structuredLogs {
-		logger.Warn("📝 last log lines of the failed job pod", "pod", pod.Namespace+"/"+pod.Name, "tail", tail)
+		logger.Warn("📝 Last log lines of the failed job pod", "pod", pod.Namespace+"/"+pod.Name, "tail", tail)
 
-		return
+		return false
 	}
 
-	writeTail(pod, jobName, tail, palette, writer, logger)
+	return writeTail(pod, jobName, tail, palette, writer, logger)
 }
 
 func findTerminalJobPod(
@@ -438,8 +439,7 @@ func warnIfSourceFilesVanished(tail string, logger *slog.Logger) {
 		return
 	}
 
-	const msg = "🔶 completed with a warning: some source files vanished during the transfer and were skipped. " +
-		"Re-run the migration, or copy from a source that is not being written to"
+	const msg = "🔶 Some source files vanished during the transfer and were skipped, re-run to copy them"
 
 	if count := strings.Count(tail, "file has vanished:"); count > 0 {
 		logger.Warn(msg, "vanished_files", count)
@@ -455,18 +455,24 @@ func warnIfSourceFilesVanished(tail string, logger *slog.Logger) {
 // own output starts. The tail belongs to the attempt that was running, so it
 // sits at the depth of a detail, set apart by a blank line on both sides
 // because the attempt's own details follow it.
-func writeTail(pod *corev1.Pod, jobName, tail string, palette console.Palette, writer io.Writer, logger *slog.Logger) {
+func writeTail(
+	pod *corev1.Pod,
+	jobName, tail string,
+	palette console.Palette,
+	writer io.Writer,
+	logger *slog.Logger,
+) bool {
 	if tail == "" || writer == nil {
-		return
+		return false
 	}
 
 	var rendered strings.Builder
 
-	fmt.Fprintf(&rendered, "\n   %s\n",
-		palette.Dim(fmt.Sprintf("Last log lines of pod %s/%s:", pod.Namespace, pod.Name)))
+	fmt.Fprintf(&rendered, "\n%s\n",
+		palette.Bold(fmt.Sprintf("Last log lines of pod %s/%s:", pod.Namespace, pod.Name)))
 
 	for line := range strings.SplitSeq(strings.TrimRight(renderTail(jobName, tail), "\n"), "\n") {
-		rendered.WriteString("     " + line + "\n")
+		rendered.WriteString("  " + palette.Quote(line) + "\n")
 	}
 
 	rendered.WriteString("\n")
@@ -474,6 +480,8 @@ func writeTail(pod *corev1.Pod, jobName, tail string, palette console.Palette, w
 	if _, err := io.WriteString(writer, rendered.String()); err != nil {
 		logger.Debug("Failed to write the finished job pod's logs", "pod", pod.Namespace+"/"+pod.Name, "error", err)
 	}
+
+	return true
 }
 
 // renderTail makes a tail readable without dropping evidence. rclone writes

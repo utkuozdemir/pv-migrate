@@ -9,16 +9,22 @@ Output img/demo-failure.gif
 
 # A prompt of one plain character. An escape sequence in it would be counted as
 # visible width by the shell's line editor, which then wraps the typed command
-# in the wrong column. The binary comes from the PATH that task demo:record sets.
+# in the wrong column. The continuation prompt is two spaces, so the command
+# reads as it would in the docs, one group of flags per line. The binary comes
+# from the PATH that task demo:record sets.
 Hide
-Type `PS1='❯ '`
+Type `PS1='❯ ' PS2='  '`
 Enter
 Type "clear"
 Enter
 Show
 
 Sleep 1s
-Type "pv-migrate -n demo --source app-data -N demo --dest app-data-new -s mount --rsync-extra-args=--nope"
+Type "pv-migrate --source-namespace demo --source app-data \"
+Enter
+Type "--dest-namespace demo --dest app-data-new \"
+Enter
+Type "--strategies mount --rsync-extra-args=--nope"
 Sleep 500ms
 Enter
 

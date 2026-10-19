@@ -1,7 +1,6 @@
 package rsync_test
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -12,22 +11,20 @@ import (
 func TestInterpret(t *testing.T) {
 	t.Parallel()
 
-	const documented = `rsync documents this exit code as: %s`
-
 	tests := map[string]struct {
 		code int
 		want string
 	}{
-		"usage error":  {code: 1, want: fmt.Sprintf(documented, "Syntax or usage error")},
-		"partial":      {code: 23, want: fmt.Sprintf(documented, "Partial transfer due to error")},
-		"timeout":      {code: 30, want: fmt.Sprintf(documented, "Timeout in data send/receive")},
+		"usage error":  {code: 1, want: "syntax or usage error"},
+		"partial":      {code: 23, want: "partial transfer due to error"},
+		"timeout":      {code: 30, want: "timeout in data send/receive"},
 		"success":      {code: 0, want: ""},
 		"undocumented": {code: 99, want: ""},
 		"negative":     {code: -1, want: ""},
 		"oom kill":     {code: 137, want: ""},
 		"vanished": {
 			code: rsync.VanishedFilesExitCode,
-			want: fmt.Sprintf(documented, "Partial transfer due to vanished source files"),
+			want: "partial transfer due to vanished source files",
 		},
 	}
 

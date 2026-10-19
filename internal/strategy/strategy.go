@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -62,27 +61,27 @@ const (
 	nonRootUID     = 10000
 )
 
-// Describe says in one line what a strategy does, for the step that announces
-// the attempt. The direction matters for the ones that run sshd on one side.
-func Describe(name string, push bool) string {
-	side := "sshd next to the source, rsync next to the destination"
+// Describe returns what the strategy does as log attributes: which side runs
+// sshd and which runs rsync, and how they reach each other.
+func Describe(name string, push bool) []any {
+	sides := []any{"sshd", "source", "rsync", "destination"}
 	if push {
-		side = "sshd next to the destination, rsync next to the source"
+		sides = []any{"sshd", "destination", "rsync", "source"}
 	}
 
 	switch name {
 	case mountStrategy:
-		return "one pod mounts both claims and copies locally, no network"
+		return []any{"network", "none"}
 	case clusterIPStrategy:
-		return side + ", over a ClusterIP service"
+		return append(sides, "service", "ClusterIP")
 	case loadBalancerStrategy:
-		return side + ", over a LoadBalancer service"
+		return append(sides, "service", "LoadBalancer")
 	case nodePortStrategy:
-		return side + ", over a NodePort service"
+		return append(sides, "service", "NodePort")
 	case localStrategy:
-		return "sshd on both sides, the copy goes through this machine"
+		return []any{"sshd", "source,destination", "rsync", "source", "route", "this machine"}
 	default:
-		return ""
+		return nil
 	}
 }
 
@@ -163,7 +162,7 @@ func Cleanup(attempt *migration.Attempt, logger *slog.Logger) error {
 			}
 
 			if removed {
-				details.Info(fmt.Sprintf("🧹 removed release %s from namespace %s", name, info.Claim.Namespace))
+				details.Info("🧹 Removed release", "release", name, "namespace", info.Claim.Namespace)
 			}
 		}
 	}
@@ -378,7 +377,7 @@ func describeRelease(
 	details := narrate.Detail(logger, 1)
 	deeper := narrate.Detail(logger, 2)
 
-	details.Info("📦 created release " + release)
+	details.Info("📦 Created release", "release", release)
 
 	if sshd, ok := helm.EnabledComponent(vals, sshdComponent); ok {
 		namespace := helm.ComponentNamespace(sshd)
@@ -388,8 +387,8 @@ func describeRelease(
 			return fmt.Errorf("failed to wait for the sshd pod to become ready (see --helm-timeout): %w", err)
 		}
 
-		deeper.Info(fmt.Sprintf("🏃 sshd pod %s in namespace %s, on node %s, image %s, %s",
-			pod.Name, namespace, pod.Spec.NodeName, podImage(pod), helm.DescribeMounts(sshd)))
+		deeper.Info("🏃 sshd pod is ready", "pod", pod.Name, "namespace", namespace, "node", pod.Spec.NodeName,
+			"image", podImage(pod), "mounts", helm.DescribeMounts(sshd))
 		describeService(ctx, cli, namespace, release+"-sshd", deeper)
 		describeNetworkPolicy(sshd, "sshd", deeper)
 	}
@@ -397,8 +396,8 @@ func describeRelease(
 	if rsync, ok := helm.EnabledComponent(vals, rsyncComponent); ok {
 		namespace := helm.ComponentNamespace(rsync)
 
-		deeper.Info(fmt.Sprintf("🚚 rsync job %s-rsync in namespace %s, image %s, %s",
-			release, namespace, k8s.JobImage(ctx, cli, namespace, release+"-rsync"), helm.DescribeMounts(rsync)))
+		deeper.Info("🚚 Created rsync job", "job", release+"-rsync", "namespace", namespace,
+			"image", k8s.JobImage(ctx, cli, namespace, release+"-rsync"), "mounts", helm.DescribeMounts(rsync))
 		describeNetworkPolicy(rsync, "rsync", deeper)
 	}
 
@@ -417,9 +416,9 @@ func podImage(pod *corev1.Pod) string {
 // narrateConnection says which side rsync connects to and where, under the
 // release it belongs to.
 func narrateConnection(logger *slog.Logger, push bool, host string, port int) {
-	verb := "pulls from"
+	direction := "pull"
 	if push {
-		verb = "pushes to"
+		direction = "push"
 	}
 
 	address := host
@@ -427,7 +426,7 @@ func narrateConnection(logger *slog.Logger, push bool, host string, port int) {
 		address = fmt.Sprintf("%s:%d", host, port)
 	}
 
-	narrate.Detail(logger, 2).Info(fmt.Sprintf("🔗 %s sshd at %s", verb, address))
+	narrate.Detail(logger, 2).Info("🔗 rsync connects to sshd", "direction", direction, "address", address)
 }
 
 // describeService tells how the sshd Service can be reached, from the object
@@ -439,22 +438,29 @@ func describeService(ctx context.Context, cli kubernetes.Interface, namespace, n
 	}
 
 	port := svc.Spec.Ports[0]
-	line := fmt.Sprintf("🔌 service %s, type %s, cluster address %s:%d",
-		name, svc.Spec.Type, svc.Spec.ClusterIP, port.Port)
+	attrs := []any{
+		"service",
+		name,
+		"type",
+		svc.Spec.Type,
+		"cluster_address",
+		fmt.Sprintf("%s:%d", svc.Spec.ClusterIP, port.Port),
+	}
 
 	if port.NodePort != 0 {
-		line += fmt.Sprintf(", node port %d", port.NodePort)
+		attrs = append(attrs, "node_port", port.NodePort)
 	}
 
 	if svc.Spec.Type == corev1.ServiceTypeLoadBalancer {
-		line += ", load balancer address pending"
-
+		address := "pending"
 		if ingress := svc.Status.LoadBalancer.Ingress; len(ingress) > 0 {
-			line = strings.TrimSuffix(line, " pending") + " " + cmp.Or(ingress[0].Hostname, ingress[0].IP)
+			address = cmp.Or(ingress[0].Hostname, ingress[0].IP)
 		}
+
+		attrs = append(attrs, "load_balancer_address", address)
 	}
 
-	logger.Info(line)
+	logger.Info("🔌 Created sshd service", attrs...)
 }
 
 // describeNetworkPolicy says whether the component's pod got its allow-all
@@ -464,9 +470,7 @@ func describeNetworkPolicy(section map[string]any, component string, logger *slo
 		return
 	}
 
-	logger.Info(
-		fmt.Sprintf("🔒 network policy for the %s pod, so a default-deny namespace does not block it", component),
-	)
+	logger.Info("🔒 Created network policy", "component", component)
 }
 
 // canCreateNetworkPolicies asks the cluster the release goes into.
@@ -536,8 +540,8 @@ func writeMidInstallDiagnostics(
 
 	palette := console.Palette{Enabled: req.ColorOutput}
 
-	fmt.Fprintf(req.Writer, "\n%s\n\n  %s (namespace %s):\n",
-		palette.Bold("Still waiting. What the cluster reports so far:"), release, ns)
+	fmt.Fprintf(req.Writer, "\n%s\n  %s\n", palette.Bold("Still waiting. What the cluster reports so far:"),
+		palette.Quote(fmt.Sprintf("%s (namespace %s):", release, ns)))
 	k8s.WriteWorkloadDiagnostics(ctx, cli, ns,
 		k8s.InstanceLabelSelector(release), palette, req.Writer, logger)
 	// The wait goes on narrating under its step after this, so the block closes

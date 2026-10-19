@@ -41,15 +41,15 @@ func DescribeMounts(section map[string]any) string {
 	parts := make([]string, 0, len(mounts))
 
 	for _, mount := range mounts {
-		part := fmt.Sprintf("mounts %v at %v", mount["name"], mount["mountPath"])
+		part := fmt.Sprintf("%v:%v", mount["name"], mount["mountPath"])
 		if mount["readOnly"] == true {
-			part += " read-only"
+			part += ":ro"
 		}
 
 		parts = append(parts, part)
 	}
 
-	return strings.Join(parts, ", ")
+	return strings.Join(parts, ",")
 }
 
 func mountList(value any) []map[string]any {
@@ -162,16 +162,16 @@ func networkPoliciesAllowed(
 ) bool {
 	allowed, err := canCreate(ctx, namespace)
 	if err != nil {
-		logger.Warn("🔶 could not check whether network policies can be created, continuing without them. "+
-			"A transfer over the network will not connect in a default-deny namespace",
+		logger.Warn("🔶 Could not check whether network policies can be created, "+
+			"continuing without them, so a default-deny namespace will block the transfer",
 			"namespace", namespace, "error", err)
 
 		return false
 	}
 
 	if !allowed {
-		logger.Warn("🔶 not allowed to create network policies in the namespace, continuing without them. "+
-			"A transfer over the network will not connect in a default-deny namespace",
+		logger.Warn("🔶 Not allowed to create network policies, "+
+			"continuing without them, so a default-deny namespace will block the transfer",
 			"namespace", namespace)
 	}
 

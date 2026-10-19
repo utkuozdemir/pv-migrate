@@ -55,6 +55,9 @@ type Logger struct {
 	progressBar    *progressbar.ProgressBar
 	barTransferred int64
 	barFinished    bool
+	// What the parsed progress said last, with or without a bar.
+	transferred int64
+	parsed      bool
 }
 
 type LoggerOptions struct {
@@ -119,6 +122,14 @@ func (l *Logger) MarkAsComplete(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// LogCopied says how much data the finished transfer copied, so the transfer
+// gets a line of the log, with or without a progress bar.
+func (l *Logger) LogCopied(logger *slog.Logger) {
+	if l.parsed {
+		logger.Info("📂 Copied data", "transferred", FormatBytes(l.transferred))
+	}
 }
 
 // Rendered reports whether the bar has drawn anything. A bar that never got a
@@ -291,6 +302,9 @@ func (l *Logger) handleLine(
 		return
 	}
 
+	l.parsed = true
+	l.transferred = max(l.transferred, progress.Transferred)
+
 	if !l.options.ShowProgressBar {
 		args := []any{
 			slog.Group(
@@ -387,4 +401,22 @@ func (l *Logger) updateProgressBar(progressBar *progressbar.ProgressBar, percent
 	}
 
 	return nil
+}
+
+// FormatBytes formats a byte count with a binary unit, e.g. "1.0GiB".
+func FormatBytes(bytes int64) string {
+	const unit = 1024
+
+	if bytes < unit {
+		return fmt.Sprintf("%dB", bytes)
+	}
+
+	div, exp := int64(unit), 0
+
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+
+	return fmt.Sprintf("%.1f%ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

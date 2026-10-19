@@ -206,9 +206,9 @@ func TestRunStrategiesInOrder(t *testing.T) {
 	assert.Equal(t, []int{3, 1, 2}, result)
 }
 
-// TestRunStatesItsIdentityOnce pins the shape of the run's logging: the source
-// and destination are said once, in the record that announces the migration,
-// and every record from there on carries the identifier that groups them.
+// TestRunStatesItsIdentityOnce pins the shape of the run's logging: the source,
+// the destination and the identifier are said once, in the record that
+// announces the migration.
 func TestRunStatesItsIdentityOnce(t *testing.T) {
 	t.Parallel()
 
@@ -234,21 +234,19 @@ func TestRunStatesItsIdentityOnce(t *testing.T) {
 
 		require.NoError(t, json.Unmarshal([]byte(line), &record))
 
-		msg, _ := record["msg"].(string)
-
-		if strings.Contains(msg, "migration id ") {
+		if _, ok := record["id"]; ok {
 			identified++
-
-			assert.InDelta(t, 1.0, record["indent"], 0, "the identifier is a detail of the opening step")
 		}
 
-		if !strings.HasPrefix(msg, "🚀 Migrating ") {
+		if record["msg"] != "🚀 Migrating" {
 			continue
 		}
 
 		announcements++
 
-		assert.Contains(t, msg, sourceNS+"/"+sourcePVC+" to "+destNS+"/"+destPVC)
+		assert.Equal(t, sourceNS+"/"+sourcePVC, record["source"])
+		assert.Equal(t, destNS+"/"+destPVC, record["dest"])
+		assert.NotEmpty(t, record["id"])
 	}
 
 	assert.Equal(t, 1, announcements, "the source and destination are said once, in the opening step")
