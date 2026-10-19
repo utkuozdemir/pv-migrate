@@ -22,6 +22,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/narrate"
 	"github.com/utkuozdemir/pv-migrate/internal/opid"
+	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
 )
 
 func buildStatusCmd(logger **slog.Logger) *cobra.Command {
@@ -108,10 +109,10 @@ func runStatus(
 				logger.Error("❌ Operation failed", "error", explanation)
 			}
 		} else {
-			fmt.Fprintf(os.Stderr, "\n%s\n", palette.Failure("Operation failed."))
+			fmt.Fprintf(os.Stderr, "\n%s\n", palette.Bold("Why the operation failed:"))
 
 			for line := range strings.SplitSeq(explanation, "\n") {
-				fmt.Fprintf(os.Stderr, "    %s\n", line)
+				fmt.Fprintf(os.Stderr, "  %s\n", palette.Quote(line))
 			}
 		}
 
@@ -128,7 +129,7 @@ func runStatus(
 func followJobProgress(
 	ctx context.Context, cli kubernetes.Interface, job *batchv1.Job, structuredLogs bool, logger *slog.Logger,
 ) error {
-	logger.Info(fmt.Sprintf("👀 Following job %s, %s", job.Name, jobprogress.Description(job.Name)))
+	logger.Info("👀 Following job", "job", job.Name, "mover", jobprogress.Description(job.Name))
 
 	palette := console.Palette{Enabled: console.ForTerminal(isatty.IsTerminal(os.Stderr.Fd()), structuredLogs)}
 
@@ -178,8 +179,8 @@ func printJobProgress(ctx context.Context, cli kubernetes.Interface, job *batchv
 		return
 	}
 
-	narrate.Detail(logger, 1).Info(fmt.Sprintf("📊 %d%% done, %s of %s transferred",
-		latest.Percentage, formatBytes(latest.Transferred), formatBytes(latest.Total)))
+	narrate.Detail(logger, 1).Info("📊 Progress", "percent", latest.Percentage,
+		"transferred", progresslog.FormatBytes(latest.Transferred), "total", progresslog.FormatBytes(latest.Total))
 }
 
 func printJobStatus(job *batchv1.Job, logger *slog.Logger) {
@@ -209,10 +210,19 @@ func printJobStatus(job *batchv1.Job, logger *slog.Logger) {
 		logFn = logger.Warn
 	}
 
-	emoji := map[string]string{"Succeeded": "✅", "Failed": "❌", "Running": "🏃", "Pending": "⏳"}[status]
+	message := map[string]string{
+		"Succeeded": "✅ Job succeeded",
+		"Failed":    "❌ Job failed",
+		"Running":   "🏃 Job is running",
+		"Pending":   "⏳ Job is pending",
+	}[status]
 
-	logFn(fmt.Sprintf("%s Job %s in namespace %s is %s, %s", emoji, job.Name, job.Namespace,
-		strings.ToLower(status), elapsed))
+	args := []any{"job", job.Name, "namespace", job.Namespace}
+	if elapsed != "" {
+		args = append(args, "duration", elapsed)
+	}
+
+	logFn(message, args...)
 }
 
 // jobElapsed reports how long the job ran. A failed job has no completion
@@ -241,21 +251,4 @@ func jobElapsed(job *batchv1.Job) string {
 	}
 
 	return end.Sub(job.Status.StartTime.Time).Truncate(time.Second).String()
-}
-
-func formatBytes(bytes int64) string {
-	const unit = 1024
-
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-
-	div, exp := int64(unit), 0
-
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-
-	return fmt.Sprintf("%.1f %ciB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

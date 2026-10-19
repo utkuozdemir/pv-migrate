@@ -7,7 +7,9 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/lmittmann/tint"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 	"k8s.io/klog/v2"
@@ -426,10 +428,11 @@ func buildLogger(logLevel, logFormat string, writer io.Writer, isATTY bool) (*sl
 			out = console.EraseLineBefore(writer)
 		}
 
-		handler = narrate.NewHandler(out, narrate.Options{
-			Level: level,
-			Color: console.ForTerminal(isATTY, false),
-		})
+		handler = narrate.NewHandler(tint.NewTextHandler(out, &tint.Options{
+			Level:      level,
+			TimeFormat: time.TimeOnly,
+			NoColor:    !console.ForTerminal(isATTY, false),
+		}))
 	default:
 		return nil, fmt.Errorf("unknown log format: %s", logFormat)
 	}

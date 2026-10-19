@@ -1,6 +1,7 @@
 package progresslog_test
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"log/slog"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
@@ -52,4 +54,43 @@ func TestLoggerRetriesAfterStreamEOF(t *testing.T) {
 
 	require.NoError(t, logger.MarkAsComplete(ctx))
 	require.NoError(t, <-done)
+}
+
+// TestLoggerSaysWhatWasCopiedWithoutABar pins that the copied-data record does
+// not depend on a bar being drawn, so a JSON or redirected run gets it too.
+func TestLoggerSaysWhatWasCopiedWithoutABar(t *testing.T) {
+	t.Parallel()
+
+	var parsedLines atomic.Int32
+
+	logger := progresslog.NewLogger(progresslog.LoggerOptions{
+		Writer: io.Discard,
+		LogStreamFunc: func(context.Context) (io.ReadCloser, error) {
+			return io.NopCloser(strings.NewReader("progress\n")), nil
+		},
+		ParseLineFunc: func(string) (progresslog.Update, error) {
+			parsedLines.Add(1)
+
+			return progresslog.Update{Transferred: 2048, Total: 2048, Percentage: 100}, nil
+		},
+	})
+
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+
+	done := make(chan error, 1)
+
+	go func() {
+		done <- logger.Start(ctx, slog.New(slog.DiscardHandler))
+	}()
+
+	require.Eventually(t, func() bool { return parsedLines.Load() >= 1 }, time.Second, 25*time.Millisecond)
+	require.NoError(t, logger.MarkAsComplete(ctx))
+	require.NoError(t, <-done)
+
+	var buf bytes.Buffer
+
+	logger.LogCopied(slog.New(slog.NewJSONHandler(&buf, nil)))
+
+	assert.Contains(t, buf.String(), `"msg":"📂 Copied data","transferred":"2.0KiB"`)
 }

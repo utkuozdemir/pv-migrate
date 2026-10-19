@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"unicode"
 	"unicode/utf8"
@@ -52,13 +53,21 @@ func run() int {
 
 	rootCmd, err := app.BuildMigrateCmd(ctx, version, commit, date, nil)
 	if err != nil {
-		slog.Default().Error("❌ Failed to build the command: " + err.Error())
+		slog.Default().Error("❌ Failed to build the command", "error", err)
 
 		return 1
 	}
 
 	if err = rootCmd.ExecuteContext(ctx); err != nil {
-		slog.Default().Error("❌ " + capitalized(err.Error()))
+		// "migration failed: <cause>" reads as the message and its error
+		message, cause, found := strings.Cut(err.Error(), ": ")
+		if !found || !strings.HasSuffix(message, " failed") {
+			slog.Default().Error("❌ " + capitalized(err.Error()))
+
+			return 1
+		}
+
+		slog.Default().Error("❌ "+capitalized(message), "error", cause)
 
 		return 1
 	}

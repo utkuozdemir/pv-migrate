@@ -6,8 +6,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// Every strategy the ladder can pick has a line that says what it does, in
-// both directions, so the step that announces it never dangles.
+// Every strategy the ladder can pick says what it does, in both directions, so
+// the step that announces it never comes without its attributes.
 func TestEveryStrategyHasADescription(t *testing.T) {
 	t.Parallel()
 
@@ -17,6 +17,8 @@ func TestEveryStrategyHasADescription(t *testing.T) {
 	}
 
 	assert.Empty(t, Describe("no-such-strategy", false))
-	assert.Contains(t, Describe(clusterIPStrategy, true), "sshd next to the destination")
-	assert.Contains(t, Describe(clusterIPStrategy, false), "sshd next to the source")
+	assert.Equal(t, []any{"sshd", "destination", "rsync", "source", "service", "ClusterIP"},
+		Describe(clusterIPStrategy, true))
+	assert.Equal(t, []any{"sshd", "source", "rsync", "destination", "service", "ClusterIP"},
+		Describe(clusterIPStrategy, false))
 }

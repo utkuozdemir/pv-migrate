@@ -83,14 +83,14 @@ func New(
 	}, nil
 }
 
-// Describe says what the claim is in one line: where it is, how big, which
-// access modes, and whether a pod has it mounted.
-func (i *Info) Describe() string {
+// LogAttrs returns what the claim is as log attributes: where it is, how big,
+// which access modes, and the node of the pod that has it mounted.
+func (i *Info) LogAttrs() []any {
 	claim := i.Claim
-	line := claim.Namespace + "/" + claim.Name
+	attrs := []any{"pvc", claim.Namespace + "/" + claim.Name}
 
 	if size := i.Size(); !size.IsZero() {
-		line += ", " + size.String()
+		attrs = append(attrs, "size", size.String())
 	}
 
 	modes := make([]string, 0, len(claim.Spec.AccessModes))
@@ -99,14 +99,14 @@ func (i *Info) Describe() string {
 	}
 
 	if len(modes) > 0 {
-		line += ", " + strings.Join(modes, "+")
+		attrs = append(attrs, "access_modes", strings.Join(modes, ","))
 	}
 
 	if i.MountedNode != "" {
-		return line + ", mounted on node " + i.MountedNode
+		attrs = append(attrs, "mounted_on", i.MountedNode)
 	}
 
-	return line + ", not mounted"
+	return attrs
 }
 
 // Size returns the storage capacity of the PVC. It prefers the actual capacity

@@ -19,8 +19,8 @@ func TestInterpret(t *testing.T) {
 		// a credentials failure, so its documented "syntax or usage error" would
 		// mislead next to the log tail that names the real cause.
 		"usage error":   {code: 1, want: ""},
-		"no directory":  {code: 3, want: `rclone documents this exit code as: Directory not found`},
-		"no file":       {code: 4, want: `rclone documents this exit code as: File not found`},
+		"no directory":  {code: 3, want: "directory not found"},
+		"no file":       {code: 4, want: "file not found"},
 		"success":       {code: 0, want: ""},
 		"uncategorised": {code: 2, want: ""},
 		"fatal":         {code: 7, want: ""},

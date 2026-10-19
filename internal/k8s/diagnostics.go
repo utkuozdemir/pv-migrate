@@ -86,7 +86,7 @@ func WriteWorkloadDiagnostics(
 	}
 
 	if len(objects) == 0 {
-		fmt.Fprintln(writer, "    "+palette.Dim("no resources found"))
+		fmt.Fprintln(writer, "    "+palette.Quote("no resources found"))
 
 		return
 	}
@@ -231,7 +231,7 @@ func podFacts(pod *corev1.Pod, palette console.Palette) workloadFacts {
 		uid:   pod.UID,
 		kind:  "pod",
 		name:  pod.Name,
-		title: fmt.Sprintf("pod %s: %s", pod.Name, colorPhase(pod.Status.Phase, palette)),
+		title: palette.Quote("pod "+pod.Name+": ") + colorPhase(pod.Status.Phase, palette),
 	}
 
 	for i := range pod.Status.ContainerStatuses {
@@ -249,7 +249,7 @@ func podFacts(pod *corev1.Pod, palette console.Palette) workloadFacts {
 			if status.State.Terminated.ExitCode != 0 {
 				line = palette.Bad(line)
 			} else {
-				line = palette.Dim(line)
+				line = palette.Quote(line)
 			}
 
 			facts.details = append(facts.details, line)
@@ -278,7 +278,7 @@ func colorPhase(phase corev1.PodPhase, palette console.Palette) string {
 	case corev1.PodRunning, corev1.PodSucceeded:
 		return palette.Good(string(phase))
 	default:
-		return string(phase)
+		return palette.Quote(string(phase))
 	}
 }
 
@@ -315,7 +315,7 @@ func serviceFacts(service *corev1.Service, palette console.Palette) workloadFact
 		uid:   service.UID,
 		kind:  "service",
 		name:  service.Name,
-		title: palette.Dim(fmt.Sprintf("service %s: %s", service.Name, service.Spec.Type)),
+		title: palette.Quote(fmt.Sprintf("service %s: %s", service.Name, service.Spec.Type)),
 	}
 
 	var addresses []string
@@ -351,7 +351,7 @@ func jobFacts(job *batchv1.Job, palette console.Palette) workloadFacts {
 	case job.Status.Succeeded > 0:
 		title = palette.Good(title)
 	default:
-		title = palette.Dim(title)
+		title = palette.Quote(title)
 	}
 
 	return workloadFacts{
@@ -360,7 +360,7 @@ func jobFacts(job *batchv1.Job, palette console.Palette) workloadFacts {
 		name:      job.Name,
 		title:     title,
 		quiet:     job.Status.Succeeded == 0 && job.Status.Failed == 0,
-		bareTitle: palette.Dim("job " + job.Name + ":"),
+		bareTitle: palette.Quote("job " + job.Name + ":"),
 	}
 }
 
@@ -426,7 +426,7 @@ func colorReadiness(line string, ready, desired int32, palette console.Palette) 
 	case desired > 0:
 		return palette.Good(line)
 	default:
-		return palette.Dim(line)
+		return palette.Quote(line)
 	}
 }
 

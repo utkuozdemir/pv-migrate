@@ -153,21 +153,20 @@ func Run(ctx context.Context, req *Request) error {
 	}
 
 	if req.Direction == rclone.DirectionBackup {
-		logger.Info(fmt.Sprintf("📦 Backing up %s/%s to %s", ns, req.PVCName, remotePath))
+		logger.Info("📦 Backing up", "pvc", ns+"/"+req.PVCName, "remote", remotePath, "id", operationID)
 	} else {
-		logger.Info(fmt.Sprintf("📥 Restoring %s to %s/%s", remotePath, ns, req.PVCName))
+		logger.Info("📥 Restoring", "remote", remotePath, "pvc", ns+"/"+req.PVCName, "id", operationID)
 	}
 
 	details := narrate.Detail(logger, 1)
-	details.Info(fmt.Sprintf("🆔 operation id %s, for status and cleanup", operationID))
-	details.Info("📌 claim " + pvcInfo.Describe())
+	details.Info("📌 Claim", pvcInfo.LogAttrs()...)
 
 	if err = handleMounted(pvcInfo, req.IgnoreMounted, details); err != nil {
 		return err
 	}
 
 	if req.DeleteExtraneousFiles {
-		details.Info("❕ files missing on the source will be deleted from the destination")
+		details.Info("❕ Files missing on the source will be deleted from the destination")
 	}
 
 	rcloneCmd := rclone.Cmd{
@@ -209,7 +208,7 @@ func Run(ctx context.Context, req *Request) error {
 	if err = installHelmChart(ctx, helmChart, pvcInfo, releaseName, helmVals, req, logger); err != nil {
 		// A timed-out install means resources that are stuck rather than absent,
 		// and this path runs no cleanup, so they are still there to be read.
-		writeFailure(ctx, req, client.KubeClient, ns, releaseName, err, logger)
+		fmt.Fprint(req.Writer, failureDiagnostics(ctx, req, client.KubeClient, ns, releaseName, logger))
 
 		return fmt.Errorf("failed to install helm chart: %w", err)
 	}
@@ -500,21 +499,17 @@ func installHelmChart(
 	details := narrate.Detail(logger, 1)
 	deeper := narrate.Detail(logger, 2)
 
-	details.Info("📦 created release " + releaseName)
+	details.Info("📦 Created release", "release", releaseName)
 
 	if rcloneVals, ok := helm.EnabledComponent(merged, "rclone"); ok {
 		namespace := helm.ComponentNamespace(rcloneVals)
 
-		deeper.Info(fmt.Sprintf(
-			"🚚 rclone job %s-rclone in namespace %s, image %s, %s",
-			releaseName,
-			namespace,
-			k8s.JobImage(ctx, pvcInfo.ClusterClient.KubeClient, namespace, releaseName+"-rclone"),
-			helm.DescribeMounts(rcloneVals),
-		))
+		deeper.Info("🚚 Created rclone job", "job", releaseName+"-rclone", "namespace", namespace,
+			"image", k8s.JobImage(ctx, pvcInfo.ClusterClient.KubeClient, namespace, releaseName+"-rclone"),
+			"mounts", helm.DescribeMounts(rcloneVals))
 
 		if helm.NetworkPolicyOn(rcloneVals) {
-			deeper.Info("🔒 network policy for the rclone pod, so a default-deny namespace does not block it")
+			deeper.Info("🔒 Created network policy", "component", "rclone")
 		}
 	}
 
@@ -552,34 +547,22 @@ func handleJobCompletion(
 	kubeClient := pvcInfo.ClusterClient.KubeClient
 	namespace := pvcInfo.Claim.Namespace
 
+	started := time.Now()
+
+	// what the cluster reported about a failure, collected before the cleanup
+	// removes the resources and written after it, like the migration summary
+	var diagnostics string
+
 	defer func() {
-		if req.NoCleanup {
-			narrate.Detail(logger, 1).Info("🧹 cleanup skipped, the resources stay in the cluster")
+		cleanupAfterRun(req, pvcInfo, releaseName, retErr, logger)
+		fmt.Fprint(req.Writer, diagnostics)
 
-			return
-		}
-
-		if req.NoCleanupOnFailure && retErr != nil {
-			narrate.Detail(logger, 1).
-				Info("🧹 cleanup skipped since the operation failed, the resources stay for inspection")
-
-			return
-		}
-
-		if req.Detach {
-			return
-		}
-
-		details := narrate.Detail(logger, 1)
-
-		if cleanupErr := cleanupRelease(pvcInfo, releaseName, req.HelmTimeout); cleanupErr != nil {
-			details.Warn("🔶 cleanup failed, clean up with pv-migrate cleanup: " + cleanupErr.Error())
-		} else {
-			details.Info(fmt.Sprintf("🧹 removed release %s from namespace %s", releaseName, namespace))
+		// Said after the cleanup, so the run ends on its verdict.
+		if retErr == nil && !req.Detach {
+			logger.Info("✅ "+capitalizedDirection(req.Direction)+" succeeded",
+				"duration", time.Since(started).Round(time.Second))
 		}
 	}()
-
-	started := time.Now()
 
 	if req.Detach {
 		if _, err := k8s.WaitForJobStart(ctx, kubeClient, namespace, jobName, narrate.Detail(logger, 1)); err != nil {
@@ -594,8 +577,7 @@ func handleJobCompletion(
 	if err := k8s.WaitForJobCompletion(ctx, kubeClient, namespace, jobName,
 		shouldShowProgressBar(req.Writer), req.StructuredLogs,
 		console.Palette{Enabled: req.ColorOutput}, req.Writer, narrate.Detail(logger, 1)); err != nil {
-		// Before the deferred cleanup removes the resources this is about.
-		writeFailure(ctx, req, kubeClient, namespace, releaseName, err, logger)
+		diagnostics = failureDiagnostics(ctx, req, kubeClient, namespace, releaseName, logger)
 
 		// Deliberately unwrapped: the error already names the failed pod and the
 		// exit state, the public API adds the operation prefix, and a plumbing
@@ -603,24 +585,39 @@ func handleJobCompletion(
 		return err //nolint:wrapcheck
 	}
 
-	logger.Info(fmt.Sprintf("✅ %s succeeded in %s", capitalizedDirection(req.Direction),
-		time.Since(started).Round(time.Second)))
-
 	return nil
 }
 
-// writeFailure explains a failure the way the migration summary does: a heading,
-// the cause on an indented line beneath it, then what the cluster reported. On a
-// structured log stream the plain-text block would corrupt the records around
-// it, so it travels inside a record instead.
-func writeFailure(
+// cleanupAfterRun removes the release, unless told not to.
+func cleanupAfterRun(req *Request, pvcInfo *pvc.Info, releaseName string, runErr error, logger *slog.Logger) {
+	details := narrate.Detail(logger, 1)
+
+	switch {
+	case req.NoCleanup:
+		details.Info("🧹 Skipped cleanup, the resources stay in the cluster")
+	case req.NoCleanupOnFailure && runErr != nil:
+		details.Info("🧹 Skipped cleanup because the operation failed, the resources stay for inspection")
+	case req.Detach:
+	default:
+		if err := cleanupRelease(pvcInfo, releaseName, req.HelmTimeout); err != nil {
+			details.Warn("🔶 Cleanup failed, run pv-migrate cleanup to remove the resources", "error", err)
+		} else {
+			details.Info("🧹 Removed release", "release", releaseName, "namespace", pvcInfo.Claim.Namespace)
+		}
+	}
+}
+
+// failureDiagnostics returns what the cluster reported about a failed job as a
+// text block. The cause itself is the error the run ends with. On a structured
+// log stream the block would corrupt the records around it, so it travels
+// inside a record instead and nothing is returned.
+func failureDiagnostics(
 	ctx context.Context,
 	req *Request,
 	kubeClient kubernetes.Interface,
 	namespace, releaseName string,
-	cause error,
 	logger *slog.Logger,
-) {
+) string {
 	if req.StructuredLogs {
 		var buf bytes.Buffer
 
@@ -630,23 +627,20 @@ func writeFailure(
 		logger.Error("❌ What the cluster reported", "release", releaseName,
 			"namespace", namespace, "diagnostics", buf.String())
 
-		return
+		return ""
 	}
 
 	palette := console.Palette{Enabled: req.ColorOutput}
 
-	fmt.Fprintf(req.Writer, "\n%s\n", palette.Failure(capitalizedDirection(req.Direction)+" failed."))
+	var buf bytes.Buffer
 
-	if cause != nil {
-		for line := range strings.SplitSeq(cause.Error(), "\n") {
-			fmt.Fprintf(req.Writer, "    %s\n", line)
-		}
-	}
-
-	fmt.Fprintf(req.Writer, "\n%s\n\n  %s (namespace %s):\n",
-		palette.Bold("What the cluster reported:"), releaseName, namespace)
+	fmt.Fprintf(&buf, "\n%s\n  %s\n", palette.Bold("What the cluster reported:"),
+		palette.Quote(fmt.Sprintf("%s (namespace %s):", releaseName, namespace)))
 	k8s.WriteWorkloadDiagnostics(ctx, kubeClient, namespace,
-		k8s.InstanceLabelSelector(releaseName), palette, req.Writer, logger)
+		k8s.InstanceLabelSelector(releaseName), palette, &buf, logger)
+	buf.WriteString("\n")
+
+	return buf.String()
 }
 
 func capitalizedDirection(direction string) string {
@@ -683,8 +677,8 @@ func handleMounted(info *pvc.Info, ignoreMounted bool, logger *slog.Logger) erro
 	}
 
 	if ignoreMounted {
-		logger.Info(fmt.Sprintf("💡 %s/%s is mounted on node %s, continuing because --ignore-mounted is set",
-			info.Claim.Namespace, info.Claim.Name, info.MountedNode))
+		logger.Info("💡 Claim is mounted, continuing because --ignore-mounted is set",
+			"pvc", info.Claim.Namespace+"/"+info.Claim.Name, "mounted_on", info.MountedNode)
 
 		return nil
 	}
@@ -708,12 +702,8 @@ func validateSubpath(p string) error {
 }
 
 func printDetachMessage(req *Request, operationID string, logger *slog.Logger) {
-	logger.Info(fmt.Sprintf("🚀 %s detached, the rclone job keeps running in the cluster",
-		capitalizedDirection(req.Direction)))
+	logger.Info("🚀 " + capitalizedDirection(req.Direction) + " detached, the rclone job keeps running in the cluster")
 
-	fmt.Fprintln(req.Writer)
-	fmt.Fprintf(req.Writer, "%s %s detached. The rclone job is running in the cluster.\n",
-		req.Direction, operationID)
 	fmt.Fprintln(req.Writer)
 	fmt.Fprintln(req.Writer, "To check status:")
 	fmt.Fprintf(req.Writer, "  pv-migrate status %s\n", operationID)

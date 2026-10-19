@@ -115,7 +115,7 @@ func runCleanup(
 		return fmt.Errorf("no releases found matching %q", filterPrefix)
 	}
 
-	logger.Info(fmt.Sprintf("🧹 Found %d releases to clean up", len(releases)))
+	logger.Info("🧹 Found releases to clean up", "count", len(releases))
 
 	if !force {
 		if err = checkNoActiveJobs(ctx, client.KubeClient, releases, logger); err != nil {
@@ -150,7 +150,7 @@ func checkNoActiveJobs(
 		}
 	}
 
-	narrate.Detail(logger, 1).Info("🧹 no job is still running, so every release can go")
+	narrate.Detail(logger, 1).Info("🧹 No job is still running, removing every release")
 
 	return nil
 }
@@ -168,8 +168,7 @@ func uninstallReleases(releases []release.Releaser, client *k8s.ClusterClient, l
 		}
 
 		if removed {
-			narrate.Detail(logger, 1).
-				Info(fmt.Sprintf("🧹 removed release %s from namespace %s", acc.Name(), acc.Namespace()))
+			narrate.Detail(logger, 1).Info("🧹 Removed release", "release", acc.Name(), "namespace", acc.Namespace())
 		}
 	}
 

@@ -1,5 +1,7 @@
 package rclone
 
+import "strings"
+
 // exitCodeMeanings are the rclone exit values worth naming, as its documentation
 // words them. The table is deliberately short: rclone puts almost everything
 // under codes 2 and 7, which say no more than "an error", and the job runs with
@@ -21,5 +23,5 @@ func Interpret(code int) string {
 		return ""
 	}
 
-	return "rclone documents this exit code as: " + meaning
+	return strings.ToLower(meaning[:1]) + meaning[1:]
 }

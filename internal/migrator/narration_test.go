@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/lmittmann/tint"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,14 +19,23 @@ import (
 
 // TestRunNarratesEachAttemptUnderItsStep pins the shape of a run's text output:
 // the opening step with its facts, then one step per attempt with its own
-// outcome under it, a decline, a failure with a line break in its error, and a
-// success that closes the run.
+// outcome under it, a decline, a failure whose multi-line error stays on its
+// line, and a success that closes the run.
 func TestRunNarratesEachAttemptUnderItsStep(t *testing.T) {
 	t.Parallel()
 
 	var buf bytes.Buffer
 
-	logger := slog.New(narrate.NewHandler(&buf, narrate.Options{}))
+	logger := slog.New(narrate.NewHandler(tint.NewTextHandler(&buf, &tint.Options{
+		NoColor: true,
+		ReplaceAttr: func(groups []string, attr slog.Attr) slog.Attr {
+			if attr.Key == slog.TimeKey && len(groups) == 0 {
+				return slog.Attr{}
+			}
+
+			return attr
+		},
+	})))
 
 	declines := &mockStrategy{runFunc: func(context.Context, *migration.Attempt) error {
 		return strategy.Declined("the claims are in different namespaces")
@@ -45,22 +55,22 @@ func TestRunNarratesEachAttemptUnderItsStep(t *testing.T) {
 	req := buildMigrationRequestWithStrategies([]string{"declines", "fails", "works"}, true)
 	require.NoError(t, migrator.Run(t.Context(), req, logger))
 
-	assertLinesInOrder(t, buf.String(),
-		"🚀 Migrating namespace1/pvc1 to namespace2/pvc2",
-		"   🆔 migration id ",
-		"   📌 source namespace1/pvc1, 512Mi, ReadOnlyMany, mounted on node node1",
-		"   📌 destination namespace2/pvc2, 512Mi, ReadWriteOnce+ReadWriteMany, mounted on node node2",
-		"   🏠 ",
-		"   💡 namespace1/pvc1 is mounted on node node1, continuing because --ignore-mounted is set",
-		"   🧭 trying declines, fails, works, in that order",
-		"🚁 declines",
-		"   🦊 does not apply: the claims are in different namespaces",
-		"🚁 fails",
-		"   🔶 failed: the data mover exited with code 12",
-		"      last lines of rsync output:",
-		"      connection closed",
-		"🚁 works",
-		"✅ Migration succeeded over works in ",
+	assertLinesInOrder(
+		t,
+		buf.String(),
+		"INF 🚀 Migrating source=namespace1/pvc1 dest=namespace2/pvc2 id=",
+		"INF    📌 Source claim pvc=namespace1/pvc1 size=512Mi access_modes=ReadOnlyMany mounted_on=node1",
+		"INF    📌 Destination claim pvc=namespace2/pvc2 size=512Mi access_modes=ReadWriteOnce,ReadWriteMany "+
+			"mounted_on=node2",
+		"INF    🏠 ",
+		"INF    💡 Claim is mounted, continuing because --ignore-mounted is set pvc=namespace1/pvc1 mounted_on=node1",
+		"INF    🧭 Strategies to try strategies=declines,fails,works",
+		"INF 🚁 Trying strategy strategy=declines",
+		`INF    🦊 Strategy does not apply reason="the claims are in different namespaces"`,
+		"INF 🚁 Trying strategy strategy=fails",
+		`WRN    🔶 Strategy failed error="the data mover exited with code 12\nlast lines of rsync output:\nconnection closed"`,
+		"INF 🚁 Trying strategy strategy=works",
+		"INF ✅ Migration succeeded strategy=works duration=",
 	)
 }
 

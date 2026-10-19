@@ -37,7 +37,7 @@ func (r *Local) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 
 	if hasHelmOverrides(req) {
 		narrate.Detail(logger, 1).Warn(
-			"🔶 the local strategy runs no rsync Job, so the rsync.* Helm values have no effect")
+			"🔶 The rsync.* Helm values have no effect, the local strategy runs no rsync job")
 	}
 
 	publicKey, privateKey, privateKeyMountPath, err := generateSSHKeys(req.KeyAlgorithm, logger)
@@ -157,12 +157,10 @@ func waitAndRunRsync(
 	case destFwdPort = <-destPortCh:
 	}
 
-	narrate.Detail(logger, 1).Info(fmt.Sprintf(
-		"🔌 port-forwarding through the API servers: source sshd on localhost:%d, destination sshd on localhost:%d",
-		srcFwdPort, destFwdPort))
-	narrate.Detail(logger, 1).Info(fmt.Sprintf(
-		"🔗 rsync runs in the source pod and reaches the destination through a tunnel on its port %d, via this machine",
-		attempt.Migration.Request.SSHReverseTunnelPort))
+	narrate.Detail(logger, 1).Info("🔌 Port-forwarding to both sshd pods through the API servers",
+		"source_port", srcFwdPort, "dest_port", destFwdPort)
+	narrate.Detail(logger, 1).Info("🔗 rsync runs in the source pod and reaches the destination through this machine",
+		"tunnel_port", attempt.Migration.Request.SSHReverseTunnelPort)
 
 	return runRsyncOverSSH(ctx, attempt, privateKey, srcFwdPort, destFwdPort, logger)
 }
@@ -309,10 +307,11 @@ func finishRsyncSession(
 	}
 
 	progressLogger.FinishBar(logger)
+	progressLogger.LogCopied(narrate.Detail(logger, 1))
 
 	if vanished {
-		logger.Warn("🔶 Completed with a warning: some source files vanished during the transfer and were skipped. " +
-			"Re-run the migration, or copy from a source that is not being written to")
+		narrate.Detail(logger, 1).
+			Warn("🔶 Some source files vanished during the transfer and were skipped, re-run to copy them")
 	}
 
 	return nil

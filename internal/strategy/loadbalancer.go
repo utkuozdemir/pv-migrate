@@ -45,11 +45,11 @@ func resolveLBTarget(
 	}
 
 	details := narrate.Detail(logger, 1)
-	details.Info(fmt.Sprintf("⏳ waiting up to %s for the load balancer address", req.LoadBalancerTimeout))
+	details.Info("⏳ Waiting for the load balancer address", "timeout", req.LoadBalancerTimeout)
 
 	lbAddress, err := k8s.GetServiceAddress(ctx, cli, info.Claim.Namespace, svcName, req.LoadBalancerTimeout)
 	if err == nil {
-		details.Info("🔗 load balancer address " + lbAddress)
+		details.Info("🔗 Got the load balancer address", "address", lbAddress)
 
 		return sshTarget{host: formatSSHTargetHost(lbAddress)}, nil
 	}
@@ -59,8 +59,8 @@ func resolveLBTarget(
 		return sshTarget{}, err
 	}
 
-	details.Warn("🔶 no load balancer address within --loadbalancer-timeout, using the Service's node port instead. " +
-		"Expected on a cluster without a load balancer controller. If yours has one and is slow, raise the timeout")
+	details.Warn("🔶 No load balancer address within --loadbalancer-timeout, using the node port instead",
+		"timeout", req.LoadBalancerTimeout)
 
 	target, fallbackErr := resolveNodePortTarget(ctx, attempt, topo, sshdRelease, logger)
 	if fallbackErr != nil {

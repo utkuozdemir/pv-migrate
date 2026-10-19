@@ -2,6 +2,7 @@ package k8s
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io"
@@ -55,7 +56,13 @@ func failedPodError(
 // "Error", which Kubernetes attaches to any non-zero exit and which therefore
 // says nothing.
 func describeTerminated(jobName string, terminated *corev1.ContainerStateTerminated) string {
-	parts := []string{fmt.Sprintf("the data mover exited with code %d", terminated.ExitCode)}
+	parts := []string{
+		fmt.Sprintf(
+			"%s exited with code %d",
+			cmp.Or(dataMoverContainer(jobName), "the data mover"),
+			terminated.ExitCode,
+		),
+	}
 
 	if terminated.Signal != 0 {
 		parts = append(parts, fmt.Sprintf("killed by signal %d", terminated.Signal))
@@ -155,8 +162,9 @@ func WriteJobFailureEvidence(
 	writer io.Writer,
 	logger *slog.Logger,
 ) {
+	tailWritten := false
 	if pod, _, err := findTerminalJobPod(ctx, cli, job.Namespace, job.Name); err == nil && pod != nil {
-		writeFailureTail(ctx, cli, job.Name, pod, structuredLogs, palette, writer, logger)
+		tailWritten = writeFailureTail(ctx, cli, job.Name, pod, structuredLogs, palette, writer, logger)
 	}
 
 	release := job.Name
@@ -182,9 +190,15 @@ func WriteJobFailureEvidence(
 		return
 	}
 
-	fmt.Fprintf(writer, "\n%s\n\n  %s (namespace %s):\n",
-		palette.Bold("What the cluster reported:"), release, job.Namespace)
+	// the tail already ends with the blank line that opens this block
+	if !tailWritten {
+		fmt.Fprintln(writer)
+	}
+
+	fmt.Fprintf(writer, "%s\n  %s\n", palette.Bold("What the cluster reported:"),
+		palette.Quote(fmt.Sprintf("%s (namespace %s):", release, job.Namespace)))
 	WriteWorkloadDiagnostics(ctx, cli, job.Namespace, InstanceLabelSelector(release), palette, writer, logger)
+	fmt.Fprintln(writer)
 }
 
 // dataMoverContainer is the container the chart names after the data mover it

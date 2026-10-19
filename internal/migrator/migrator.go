@@ -63,13 +63,10 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 
 	sourceNs, destNs := resolvedNamespaces(request, sourceClient, destClient)
 
-	// The story opens with what is being migrated, once the namespaces are
-	// known, and the facts about it follow as details: the identifier, the two
-	// claims, what was asked for, and the order the strategies are tried in.
-	logger.Info(fmt.Sprintf("🚀 Migrating %s/%s to %s/%s", sourceNs, request.Source.Name, destNs, request.Dest.Name))
+	logger.Info("🚀 Migrating", "source", sourceNs+"/"+request.Source.Name, "dest", destNs+"/"+request.Dest.Name,
+		"id", migrationID)
 
 	details := narrate.Detail(logger, 1)
-	details.Info(fmt.Sprintf("🆔 migration id %s, for status and cleanup", migrationID))
 
 	mig, err := m.buildMigrationWithClients(ctx, request, sourceClient, destClient, details)
 	if err != nil {
@@ -89,11 +86,12 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 			Migration:             mig,
 		}
 
-		logger.Info(describeAttempt(name, request.Push))
+		logger.Info("🚁 Trying strategy", append([]any{"strategy", name}, strategy.Describe(name, request.Push)...)...)
 
 		last := strategyIndex == len(strategies)-1
+		started := time.Now()
 
-		if attemptErr := runAttempt(ctx, str, attempt, name, last, logger); attemptErr != nil {
+		if attemptErr := runAttempt(ctx, str, attempt, last, logger); attemptErr != nil {
 			outcomes = append(outcomes, recordFailedAttempt(name, attempt, attemptErr))
 
 			// An interrupted run must not walk the remaining rungs: each failed
@@ -108,7 +106,12 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 
 		if request.Detach {
 			printDetachMessage(request, migrationID, name, logger)
+
+			return nil
 		}
+
+		// Said after the cleanup, so the run ends on its verdict.
+		logger.Info("✅ Migration succeeded", "strategy", name, "duration", time.Since(started).Round(time.Second))
 
 		return nil
 	}
@@ -118,28 +121,14 @@ func (m *Migrator) Run(ctx context.Context, request *migration.Request, logger *
 	return newLadderExhaustedError(outcomes)
 }
 
-// describeAttempt announces a strategy with what it does, when it has a
-// description to give.
-func describeAttempt(name string, push bool) string {
-	if description := strategy.Describe(name, push); description != "" {
-		return "🚁 " + name + ": " + description
-	}
-
-	return "🚁 " + name
-}
-
 // describeMigration tells the facts the run starts from: the two claims, how
 // they relate, what was asked for, and the order of the strategies.
 func describeMigration(mig *migration.Migration, strategies []string, details *slog.Logger) {
 	if mig.Request.DeleteExtraneousFiles {
-		details.Info("❕ files missing on the source will be deleted from the destination")
+		details.Info("❕ Files missing on the source will be deleted from the destination")
 	}
 
-	if len(strategies) == 1 {
-		details.Info("🧭 trying " + strategies[0] + " only")
-	} else {
-		details.Info("🧭 trying " + strings.Join(strategies, ", ") + ", in that order")
-	}
+	details.Info("🧭 Strategies to try", "strategies", strings.Join(strategies, ","))
 }
 
 // describeRelation says how the two claims sit relative to each other, which
@@ -151,11 +140,11 @@ func describeRelation(sourceInfo, destInfo *pvc.Info) string {
 
 	switch {
 	case !sameCluster:
-		return "🏠 the claims are in different clusters"
+		return "🏠 Claims are in different clusters"
 	case sourceInfo.Claim.Namespace == destInfo.Claim.Namespace:
-		return "🏠 both claims are in the same cluster and namespace"
+		return "🏠 Claims are in the same namespace"
 	default:
-		return "🏠 both claims are in the same cluster, in different namespaces"
+		return "🏠 Claims are in different namespaces of the same cluster"
 	}
 }
 
@@ -177,25 +166,22 @@ func narrateFailedAttempt(attemptErr error, last, structuredLogs bool, logger *s
 	if declined, ok := errors.AsType[*strategy.DeclinedError](attemptErr); ok {
 		// The reason is the typed one, without the error sentinel's suffix. The
 		// next attempt's own line says that one follows.
-		details.Info("🦊 does not apply: " + declined.Reason)
+		details.Info("🦊 Strategy does not apply", "reason", declined.Reason)
 
 		return
 	}
 
 	if errors.Is(attemptErr, strategy.ErrUnaccepted) {
-		details.Info("🦊 does not apply")
+		details.Info("🦊 Strategy does not apply")
 
 		return
 	}
 
-	// On the last attempt the summary repeats the error a few lines below, so in
-	// text mode the mid-run line skips it rather than showing the same sentence
-	// twice on one screen. Mid-ladder, and always on a structured stream, this
-	// line is the only timely record.
+	// On the last attempt in text mode, the end of the run reports the error once.
 	if last && !structuredLogs {
-		details.Warn("🔶 failed, see below")
+		details.Warn("🔶 Strategy failed")
 	} else {
-		details.Warn("🔶 failed: " + attemptErr.Error())
+		details.Warn("🔶 Strategy failed", "error", attemptErr)
 	}
 }
 
@@ -203,23 +189,14 @@ func runAttempt(
 	ctx context.Context,
 	str strategy.Strategy,
 	attempt *migration.Attempt,
-	name string,
 	last bool,
 	logger *slog.Logger,
 ) (runErr error) {
 	defer func() { cleanupAttempt(attempt, runErr, logger) }()
 
-	started := time.Now()
-
 	runErr = str.Run(ctx, attempt, logger)
 	if runErr != nil {
 		narrateFailedAttempt(runErr, last, attempt.Migration.Request.StructuredLogs, logger)
-	}
-
-	// The success is said before the cleanup that follows it, since the cleanup
-	// is part of the story of a finished transfer, not of a new step.
-	if runErr == nil && !attempt.Detached {
-		logger.Info(fmt.Sprintf("✅ Migration succeeded over %s in %s", name, time.Since(started).Round(time.Second)))
 	}
 
 	// A decline never reached the cluster, so there is nothing to ask it about.
@@ -246,22 +223,19 @@ func cleanupAttempt(attempt *migration.Attempt, runErr error, logger *slog.Logge
 
 	switch {
 	case attempt.Migration.Request.NoCleanup || attempt.Detached:
-		details.Info("🧹 cleanup skipped, the resources stay in the cluster")
+		details.Info("🧹 Skipped cleanup, the resources stay in the cluster")
 	case attempt.Migration.Request.NoCleanupOnFailure && runErr != nil:
-		details.Info("🧹 cleanup skipped since the migration failed, the resources stay for inspection")
+		details.Info("🧹 Skipped cleanup because the migration failed, the resources stay for inspection")
 	default:
 		if cleanupErr := strategy.Cleanup(attempt, logger); cleanupErr != nil {
-			details.Warn("🔶 cleanup failed, clean up with pv-migrate cleanup: " + cleanupErr.Error())
+			details.Warn("🔶 Cleanup failed, run pv-migrate cleanup to remove the resources", "error", cleanupErr)
 		}
 	}
 }
 
 func printDetachMessage(request *migration.Request, migrationID, strategyName string, logger *slog.Logger) {
-	logger.Info(fmt.Sprintf("🚀 Migration detached, the rsync job of the %s strategy keeps running in the cluster",
-		strategyName))
+	logger.Info("🚀 Migration detached, the rsync job keeps running in the cluster", "strategy", strategyName)
 
-	fmt.Fprintln(request.Writer)
-	fmt.Fprintf(request.Writer, "Migration %s detached. The rsync job is running in the cluster.\n", migrationID)
 	fmt.Fprintln(request.Writer)
 	fmt.Fprintln(request.Writer, "To check status:")
 	fmt.Fprintf(request.Writer, "  pv-migrate status %s\n", migrationID)
@@ -324,8 +298,8 @@ func (m *Migrator) buildMigrationWithClients(
 
 	// The facts about the claims come before the checks that qualify them, so an
 	// exception reads as one.
-	logger.Info("📌 source " + sourcePvcInfo.Describe())
-	logger.Info("📌 destination " + destPvcInfo.Describe())
+	logger.Info("📌 Source claim", sourcePvcInfo.LogAttrs()...)
+	logger.Info("📌 Destination claim", destPvcInfo.LogAttrs()...)
 	logger.Info(describeRelation(sourcePvcInfo, destPvcInfo))
 
 	err = handleMountedPVCs(request, sourcePvcInfo, destPvcInfo, logger)
@@ -425,7 +399,7 @@ func handleSizes(
 	destSize := destInfo.Size()
 
 	if request.IgnoreSizes {
-		logger.Info("💡 skipping the size check because --ignore-sizes is set")
+		logger.Info("💡 Skipping the size check because --ignore-sizes is set")
 
 		return nil
 	}
@@ -459,8 +433,8 @@ func handleSizes(
 		}
 
 		if !capacityEnforced(provisioner) {
-			logger.Info(fmt.Sprintf("💡 the %s's provisioner %s does not enforce capacity, so the size check is skipped",
-				candidate.role, provisioner))
+			logger.Info("💡 Skipping the size check, the provisioner does not enforce capacity",
+				"side", candidate.role, "provisioner", provisioner)
 
 			return nil
 		}
@@ -502,8 +476,8 @@ func handleMounted(info *pvc.Info, ignoreMounted bool, logger *slog.Logger) erro
 	}
 
 	if ignoreMounted {
-		logger.Info(fmt.Sprintf("💡 %s/%s is mounted on node %s, continuing because --ignore-mounted is set",
-			info.Claim.Namespace, info.Claim.Name, info.MountedNode))
+		logger.Info("💡 Claim is mounted, continuing because --ignore-mounted is set",
+			"pvc", info.Claim.Namespace+"/"+info.Claim.Name, "mounted_on", info.MountedNode)
 
 		return nil
 	}

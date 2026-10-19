@@ -87,7 +87,7 @@ func TestCompleteRsyncSessionOnFailure(t *testing.T) {
 	assert.Contains(t, sessionErr.Error(), "Process exited with status 23")
 
 	enriched := rsyncSessionError(sessionErr.err, []string{"some raw line"})
-	assert.Contains(t, enriched.Error(), `rsync documents this exit code as: Partial transfer due to error`)
+	assert.Contains(t, enriched.Error(), `(partial transfer due to error)`)
 }
 
 // TestLineTailCapturesAtTheSource pins the property the tail exists for: it has
@@ -112,7 +112,7 @@ func TestRsyncSessionErrorKeepsTheRawOutput(t *testing.T) {
 	err := rsyncSessionError(&stubExitError{status: 12}, []string{"rsync: connection unexpectedly closed", "tail"})
 	require.Error(t, err)
 
-	assert.Contains(t, err.Error(), `rsync documents this exit code as: Error in rsync protocol data stream`)
+	assert.Contains(t, err.Error(), `(error in rsync protocol data stream)`)
 	assert.Contains(t, err.Error(), "last lines of rsync output:\nrsync: connection unexpectedly closed\ntail")
 }
 

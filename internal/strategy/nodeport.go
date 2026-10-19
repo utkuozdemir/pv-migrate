@@ -47,7 +47,7 @@ func resolveNodePortTarget(
 	details := narrate.Detail(logger, 1)
 
 	if attempt.Migration.Request.DestHostOverride != "" {
-		details.Info(fmt.Sprintf("🔗 connecting to node port %d on the host override", nodePort))
+		details.Info("🔗 Connecting to the node port on the host override", "node_port", nodePort)
 
 		// The caller fills the host in from the override, so only the port is
 		// resolved here.
@@ -63,15 +63,15 @@ func resolveNodePortTarget(
 
 	nodeIP, err := k8s.GetNodeIP(ctx, cli, podNode)
 	if err != nil {
-		details.Warn(fmt.Sprintf("🔶 could not get the address of node %s, using another node: %v", podNode, err))
+		details.Warn("🔶 Could not get the node address, using another node", "node", podNode, "error", err)
 
 		nodeIP, err = k8s.GetAnyNodeIP(ctx, cli)
 		if err != nil {
 			return sshTarget{}, fmt.Errorf("failed to find usable node IP: %w", err)
 		}
 	} else {
-		details.Info(fmt.Sprintf("🔗 connecting to node port %d on node %s at %s, where the sshd pod runs",
-			nodePort, podNode, nodeIP))
+		details.Info("🔗 Connecting to the node port of the sshd pod's node", "node_port", nodePort, "node", podNode,
+			"address", nodeIP)
 	}
 
 	return sshTarget{host: formatSSHTargetHost(nodeIP), port: nodePort}, nil

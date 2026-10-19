@@ -72,8 +72,7 @@ func generateSSHKeys(keyAlgorithm string, logger *slog.Logger) (string, string, 
 		return "", "", "", fmt.Errorf("failed to create ssh key pair: %w", err)
 	}
 
-	narrate.Detail(logger, 1).Info(fmt.Sprintf("🔑 generated an %s SSH key pair for this transfer, thrown away with it",
-		keyAlgorithm))
+	narrate.Detail(logger, 1).Info("🔑 Generated SSH key pair", "algorithm", keyAlgorithm)
 
 	return publicKey, privateKey, "/tmp/id_" + keyAlgorithm, nil
 }

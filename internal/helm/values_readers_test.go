@@ -21,14 +21,14 @@ func TestDescribeMountsReadsBothShapes(t *testing.T) {
 			{"name": "dest", "mountPath": "/dest"},
 		},
 	}
-	assert.Equal(t, "mounts src at /source read-only, mounts dest at /dest", helm.DescribeMounts(typed))
+	assert.Equal(t, "src:/source:ro,dest:/dest", helm.DescribeMounts(typed))
 
 	parsed := map[string]any{}
 	require.NoError(t, strvals.ParseInto("sshd.pvcMounts[0].name=src,sshd.pvcMounts[0].mountPath=/elsewhere", parsed))
 
 	section, ok := parsed["sshd"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "mounts src at /elsewhere", helm.DescribeMounts(section),
+	assert.Equal(t, "src:/elsewhere", helm.DescribeMounts(section),
 		"a mount path the user set is the one that is told")
 
 	assert.Empty(t, helm.DescribeMounts(map[string]any{}))

@@ -65,7 +65,7 @@ It has its own identity concept, because a backup has to be findable again later
 - `internal/strategy`: the strategies themselves, plus the topology that decides which side runs sshd and which runs rsync.
 - `internal/bucketstorage`: the backup and restore workflow end to end.
 - `internal/rsync`, `internal/rclone`: build the data mover command strings, and the rclone config.
-- `internal/narrate`: the text log's shape, as a `slog` handler. Steps and their indented details, see below.
+- `internal/narrate`: indents the details of a step under it, in front of tint, which draws the text log. See below.
 - `internal/progresslog`: tails a log stream, parses progress and drives the progress bar, for either data mover.
   `internal/rsync/progress` and `internal/rclone/progress` are just the two line parsers; `internal/jobprogress` picks between them by job name.
 - `internal/helm`: the embedded chart, its loader, and the adjustments to its values that depend on what the cluster allows.
@@ -116,28 +116,39 @@ The chart's component suffixes do not: the test spells those out, so a longer on
 
 ## The text output
 
-The text log reads as a story: one step line per record the tool writes, each opening with an emoji, and the details of a step indented under it.
-The text handler draws the shape: a step opens a paragraph, so a blank line goes before every step but the first, and the details of a step stay under it without one, three spaces of indent per level, two levels at most.
-A few blocks are written to the same stream directly rather than as records (the tail of a job's log, the failure summary, the cluster diagnostics, the detach instructions), and each starts with a blank line and sits at the depth of what it belongs to: a job's log tail is indented like the details of the attempt it came from, the summary of a run stays at the margin.
-A block ends without a blank line when a step or another block follows it, since those bring their own, and with one when details follow it, as they do after a log tail.
+The text log is tint's: every record is one line with a faint time, a colored level, the message, and its attributes as `key=value`, the key faint and the value plain.
+That column is the point of the shape: a reader scans one edge for `WRN` and `ERR`, and the time shows which step took the minutes, which matters for a tool that mostly waits.
+A message is a short capitalized phrase that opens with an emoji, and every fact goes into an attribute, with real names: the release, the pod, the node, the address.
+The phrase stays short enough to read at a glance, and the facts are what a program reading `--log-format json` parses.
 Nothing in the shape depends on color, so a log file or a CI log reads the same as a terminal.
 
-A detail is an ordinary info record carrying its depth as an attribute, which the text handler draws as indentation and the JSON handler keeps as a field.
-So `--log-format json` gets the same records with the same attributes, and a detail line costs the caller one wrapped logger.
-Debug records are drawn as details too, so `--log-level debug` deepens the story instead of interleaving another shape with it.
+The details of a step are indented under it.
+A detail is an ordinary record carrying its depth as an attribute, which `narrate.Detail` adds.
+`internal/narrate` sits in front of tint, turns the depth into indentation and drops the attribute, and the JSON handler keeps it as a field.
+Everything else about the drawing is tint's, configured rather than reimplemented: a handler of our own once drifted from the one it imitated.
 
-The text handler prints no timestamp and no level word.
-A step is what happened, its details are what that consisted of and why, and a warning is told apart by its marker and its color, not by a label.
+Some blocks are written to the same stream directly rather than as records: the tail of a job's log, the cluster diagnostics, the failure summary.
+They are evidence from somewhere else, and having no time or level is what sets them apart from the tool's own lines.
+The detach instructions are written the same way, as plain text, since they are commands to copy rather than evidence.
+Each opens with a blank line and a bold label ending in a colon, indents two spaces per level, and ends with a blank line when a record follows.
+Nothing else gets a blank line.
+What a block quotes is drawn in bright blue, so the evidence reads as its own layer, and only the facts that mean something keep their own color: red, yellow, green.
+
+Every color is one of the terminal's sixteen theme colors, or bold, or faint, never a fixed RGB value.
+A color scheme defines those sixteen for its own background, so they stay readable on light and dark themes alike, and a fixed value that looks right on one is unreadable on the other.
+
+A run ends on its verdict.
+The success line comes after the cleanup, and a failure ends with one `ERR` line that carries the cause.
+When a single strategy failed, its error is that cause and nothing repeats it.
+The summary block explains only what one line cannot: several strategies, or an error that spans lines.
 
 How the lines are written, so that they stay one story:
 
-- A step is a capitalized phrase, a detail is a lowercase one, both open with an emoji and both carry their facts in the sentence rather than as attributes. Real names, always: the release, the pod, the node, the address.
 - The logger handed down to a function carries the depth. A function that narrates for the step above it receives a detail logger and does not know it is one, so the waits in `internal/k8s` and the value helpers in `internal/helm` narrate wherever they are called from.
-- What a release put in the cluster is told in one place, right after the install, from the merged values and the objects the cluster created. A strategy adds only what it alone knows: where rsync connects, why it picked a node, what it fell back to.
-- An attempt narrates its own outcome under its own step, before its cleanup, so a decline or a failure sits where it belongs and not under the cleanup that follows.
-- The Kubernetes client is given a detail logger, so what it says is drawn under the step that was running. Helm logs through the default logger, and what it says at the debug level is drawn as dim details for the same reason.
-- Functions in `internal/k8s` and `internal/helm` write their lines in detail case, lowercase after the emoji, because every caller hands them a detail logger. A new caller does the same.
 - A detail logger handed down and wrapped again goes one level deeper, which is what lets a function narrate under whatever its caller was narrating.
+- What a release put in the cluster is told in one place, right after the install, from the merged values and the objects the cluster created. A strategy adds only what it alone knows: where rsync connects, why it picked a node, what it fell back to.
+- An attempt narrates its own outcome under its own step, before its cleanup, so a decline or a failure sits where it belongs.
+- The Kubernetes client is given a detail logger, so what it says is drawn under the step that was running.
 
 ## Progress reporting
 
@@ -223,6 +234,8 @@ Things worth knowing before changing them:
 - Both tapes source `demo/common.tape`, so the two recordings cannot drift apart in size or colour. The dimensions there are twice what the README displays, because GitHub renders the image at about half that width and the spare pixels are what keep the text sharp.
 - A tape waits for the shell prompt to come back rather than for a phrase in the output, since the phrase can scroll off screen before the command exits. When a tape ends, VHS kills whatever is still running, which for this tool means a half-installed release left behind on the cluster.
 - The transfer needs to be worth watching. Uniform file sizes keep the progress bar moving at a steady rate, and the destination is emptied first, since rsync copies only what differs and a second run against a full destination is over before the bar moves.
+- The typed command is spread over continuation lines, one group of flags per line, and the recording is as tall as the success run needs to keep that command and the whole run on one screen.
+  The failure run is longer and scrolls, by design: its last screen is the explanation, which is what that recording is for.
 - Both tapes pin a strategy. Left alone the ladder picks the mount strategy, which copies locally in a second or two and is too fast to see. The failure tape pins mount for the opposite reason, to keep that recording short, and doing so assumes one pod can mount both claims. On a cluster that provisions them in different zones the strategy declines instead, and the recording shows the wrong failure.
 - The workflow runs the same steps as the local task, from the same tapes. Only the recorder differs. CI runs VHS from its own image, whose fonts include the colour emoji this tool prints and which a bare runner may not have.
 - The recorder honours a setting only where nothing precedes it, and otherwise warns and carries on with its own defaults, so a tape can record at the wrong size and colours while reporting success. The settings therefore come first in every tape, anything that is not a setting comes after them, and `task demo:record` fails on that warning rather than leaving it to be noticed.
