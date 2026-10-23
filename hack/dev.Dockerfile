@@ -24,9 +24,9 @@ ARG SHFMT_VERSION=3.14.1
 # the single declaration of the goreleaser version: the workflows read it from
 # here rather than carrying their own, so the version that validates the release
 # config is always the version that performs the release
-ARG GORELEASER_VERSION=v2.18.3
+ARG GORELEASER_VERSION=v2.19.0
 
-FROM goreleaser/goreleaser:${GORELEASER_VERSION}@sha256:b61a4eedf5e3b1d283792dade34ee0f8c6cce3e6f1f65851d3b397b8f8a75b6d AS goreleaser-bin
+FROM goreleaser/goreleaser:${GORELEASER_VERSION}@sha256:b62e651c2fd9e7b1c94133a4e5d131187649e45aeeca137fbf4940f0f654ad08 AS goreleaser-bin
 FROM alpine/helm:4.3.1@sha256:e3f8d5c462d75470fbb1fce79ad5c20063657096d1f98c0fcea869e2600e2e5e AS helm-bin
 FROM jnorwood/helm-docs:v1.14.2@sha256:7e562b49ab6b1dbc50c3da8f2dd6ffa8a5c6bba327b1c6335cc15ce29267979c AS helm-docs-bin
 
@@ -34,7 +34,7 @@ FROM jnorwood/helm-docs:v1.14.2@sha256:7e562b49ab6b1dbc50c3da8f2dd6ffa8a5c6bba32
 # toolchain build. The downloads are a linear chain: bumping an earlier tool
 # re-fetches the later ones, which is a few seconds and not worth a stage per
 # tool.
-FROM alpine:3@sha256:71e9b7bae160ba167fa17414401b94cbcdaf3c32feeab9298bd794a2a0614c35 AS tools
+FROM alpine:3@sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a AS tools
 RUN apk add --no-cache curl tar git
 ARG TARGETARCH
 ARG GOLANGCI_LINT_VERSION
