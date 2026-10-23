@@ -192,11 +192,13 @@ homebrew_casks:
       fish: completions/pv-migrate.fish
     # pv-migrate binaries are not code-signed/notarized, so strip the macOS
     # quarantine bit on install to avoid the "damaged and can't be opened" error.
+    # The steps form is Homebrew's declarative postflight: goreleaser renders
+    # .StagedPath to the {{staged_path}} placeholder Homebrew fills in.
     hooks:
       post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/pv-migrate"]
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}/pv-migrate"]
           end
 
 scoops:
