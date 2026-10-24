@@ -30,6 +30,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -89,16 +91,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Get short SHA
         id: vars
         run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build images
+        env:
+          TAG: ${{ steps.vars.outputs.sha }}
         run: |
-          TAG="${{ steps.vars.outputs.sha }}"
-          docker build -t integration-test-rsync:$TAG ./docker/rsync/
-          docker build -t integration-test-sshd:$TAG ./docker/sshd/
+          docker build -t "integration-test-rsync:${TAG}" ./docker/rsync/
+          docker build -t "integration-test-sshd:${TAG}" ./docker/sshd/
 
       - name: Install go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -117,12 +122,12 @@ jobs:
           # renovate: depName=cilium/cilium-cli datasource=github-releases
           CILIUM_CLI_VERSION: v0.20.1
         run: |
-          wget https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz
+          wget "https://github.com/cilium/cilium-cli/releases/download/${CILIUM_CLI_VERSION}/cilium-linux-amd64.tar.gz"
           sudo tar xzvfC cilium-linux-amd64.tar.gz /usr/local/bin
           rm cilium-linux-amd64.tar.gz
 
       - name: kind-1 - Setup
-        uses: ./.github/actions/setup-cluster
+        uses: $/.github/actions/setup-cluster
         with:
           cluster_name: kind-1
           kubeconfig: /home/runner/.kube/config
@@ -131,7 +136,7 @@ jobs:
           metallb_ip_range_end: 255
 
       - name: kind-2 - Setup
-        uses: ./.github/actions/setup-cluster
+        uses: $/.github/actions/setup-cluster
         with:
           cluster_name: kind-2
           kubeconfig: /home/runner/.kube/kind-2.yaml
@@ -199,13 +204,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Get short SHA
         id: vars
         run: echo "sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Build rclone image
-        run: docker build -t integration-test-rclone:${{ steps.vars.outputs.sha }} ./docker/rclone/
+        env:
+          TAG: ${{ steps.vars.outputs.sha }}
+        run: docker build -t "integration-test-rclone:${TAG}" ./docker/rclone/
 
       - name: Install go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -226,7 +235,9 @@ jobs:
           version: v0.33.0
 
       - name: Load rclone image
-        run: kind load docker-image integration-test-rclone:${{ steps.vars.outputs.sha }} --name backup-test
+        env:
+          TAG: ${{ steps.vars.outputs.sha }}
+        run: kind load docker-image "integration-test-rclone:${TAG}" --name backup-test
 
       # the credentials and the bucket match the constants in integration/backup_test.go
       - name: Deploy SeaweedFS
@@ -238,7 +249,7 @@ jobs:
         run: |
           kubectl create namespace pv-migrate-test --dry-run=client -oyaml | kubectl apply -f -
           kubectl -n pv-migrate-test run seaweedfs \
-            --image=docker.io/chrislusf/seaweedfs:${SEAWEEDFS_VERSION} \
+            --image="docker.io/chrislusf/seaweedfs:${SEAWEEDFS_VERSION}" \
             --env=AWS_ACCESS_KEY_ID=pv-migrate \
             --env=AWS_SECRET_ACCESS_KEY=pv-migrate \
             --port=8333 \
@@ -247,7 +258,7 @@ jobs:
           kubectl -n pv-migrate-test wait --for=condition=Ready pod/seaweedfs --timeout=60s
           # the job retries until the S3 endpoint answers, which the pod being ready does not promise
           kubectl -n pv-migrate-test create job make-bucket \
-            --image=docker.io/rclone/rclone:${RCLONE_VERSION} \
+            --image="docker.io/rclone/rclone:${RCLONE_VERSION}" \
             -- rclone mkdir ":s3,provider=Other,endpoint='http://seaweedfs:8333',access_key_id=pv-migrate,secret_access_key=pv-migrate:pv-migrate-test"
           kubectl -n pv-migrate-test wait --for=condition=Complete job/make-bucket --timeout=120s
 

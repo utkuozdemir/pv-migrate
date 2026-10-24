@@ -72,12 +72,13 @@ tasks:
   # Split into named checks so that a failure names the check that failed. Run as
   # one list of commands, `task` could only report the whole thing as exit status 1.
   lint:
-    desc: lint everything (go, chart, shell scripts, release config)
+    desc: lint everything (go, chart, shell scripts, release config, workflows)
     cmds:
       - task: lint:go
       - task: lint:chart
       - task: lint:shell
       - task: lint:release
+      - task: lint:workflows
 
   lint:go:
     desc: lint go code and module tidiness
@@ -108,6 +109,12 @@ tasks:
     cmds:
       - task: stage
         vars: {TARGET: lint-release}
+
+  lint:workflows:
+    desc: audit the GitHub Actions workflows and actions
+    cmds:
+      - task: stage
+        vars: {TARGET: lint-workflows}
 
   test:
     desc: run the unit tests (COVERPROFILE=coverage.txt to also write a coverage profile)

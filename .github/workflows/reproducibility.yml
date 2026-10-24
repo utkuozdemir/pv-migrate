@@ -20,6 +20,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: reproducibility-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     shell: bash --noprofile --norc -euox pipefail {0}
@@ -34,6 +38,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -66,6 +71,9 @@ jobs:
   compare:
     runs-on: ubuntu-26.04
     needs: build
+    # nothing here talks to GitHub: a same-run artifact download runs on the
+    # runner's own token, which this block does not govern, and the rest is diff
+    permissions: {}
     steps:
       - name: Download both checksum files
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2

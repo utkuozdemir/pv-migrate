@@ -97,6 +97,16 @@ RUN git init -q . \
     && git remote add origin https://github.com/utkuozdemir/pv-migrate.git \
     && goreleaser check
 
+# the workflows and the composite action, audited offline: the audits that ask
+# GitHub about an action's pin are skipped, and Renovate keeps those fresh
+# anyway. Every finding fails the stage, and an accepted one is listed in the
+# config with its reason. Its own image rather than the tools stage: the
+# binary is built against glibc and does not run on alpine.
+FROM ghcr.io/zizmorcore/zizmor:1.31.1@sha256:42d409dbb851d4c5d35a058cf042b828bea1e3f2884378c526eb0974780e18d9 AS lint-workflows
+WORKDIR /src
+COPY .github ./.github
+RUN zizmor --offline --config .github/zizmor.yml .github
+
 # the formatters, the generators and the shell checks run against a bind-mounted
 # working tree rather than a stage export. Shell is not a stage of its own on
 # purpose: the file list comes from git on the host, so a scratch directory or a

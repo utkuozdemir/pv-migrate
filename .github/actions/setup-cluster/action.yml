@@ -34,10 +34,12 @@ runs:
     - name: Load local images
       env:
         KUBECONFIG: ${{ inputs.kubeconfig }}
+        IMAGE_TAG: ${{ inputs.image_tag }}
+        CLUSTER_NAME: ${{ inputs.cluster_name }}
       shell: bash --noprofile --norc -euox pipefail {0}
       run: |
-        kind load docker-image integration-test-rsync:${{ inputs.image_tag }} --name ${{ inputs.cluster_name }}
-        kind load docker-image integration-test-sshd:${{ inputs.image_tag }} --name ${{ inputs.cluster_name }}
+        kind load docker-image "integration-test-rsync:${IMAGE_TAG}" --name "${CLUSTER_NAME}"
+        kind load docker-image "integration-test-sshd:${IMAGE_TAG}" --name "${CLUSTER_NAME}"
 
     - name: Create metallb-system namespace
       env:
@@ -70,11 +72,14 @@ runs:
       env:
         KUBECONFIG: ${{ inputs.kubeconfig }}
         METALLB_CHART_VERSION: 6.4.22
+        CLUSTER_NAME: ${{ inputs.cluster_name }}
+        IP_RANGE_START: ${{ inputs.metallb_ip_range_start }}
+        IP_RANGE_END: ${{ inputs.metallb_ip_range_end }}
       shell: bash --noprofile --norc -euox pipefail {0}
       run: |
-        MANIFESTS_PATH=/tmp/metallb-manifests-${{ inputs.cluster_name }}.yaml
+        MANIFESTS_PATH="/tmp/metallb-manifests-${CLUSTER_NAME}.yaml"
         ADDRESS_RANGE_PREFIX=$(docker network inspect -f json kind | jq -r '.[0].IPAM.Config | map(select(.Subnet | test("^[0-9]+\\."))) | .[0].Subnet | split("/")[0] | split(".")[:3] | join(".")')
-        export ADDRESS_RANGE=${ADDRESS_RANGE_PREFIX}.${{ inputs.metallb_ip_range_start }}-${ADDRESS_RANGE_PREFIX}.${{ inputs.metallb_ip_range_end }}
+        export ADDRESS_RANGE="${ADDRESS_RANGE_PREFIX}.${IP_RANGE_START}-${ADDRESS_RANGE_PREFIX}.${IP_RANGE_END}"
         envsubst < test/metallb-manifests.yaml > $MANIFESTS_PATH
         METALLB_CONTROLLER_VERSION=v0.15.3
         METALLB_SPEAKER_VERSION=v0.15.3

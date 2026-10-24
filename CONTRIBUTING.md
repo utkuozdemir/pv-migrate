@@ -30,7 +30,7 @@ go test ./...
 
 ```bash
 task test              # unit tests, including the fuzz seed corpora
-task lint              # go, chart, shell and release-config linting
+task lint              # go, chart, shell, release-config and workflow linting
 task fmt               # formatters
 task build             # snapshot build via goreleaser
 task test:fuzz         # drive the fuzzers, FUZZTIME=2m to search longer

@@ -49,6 +49,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Check that the released commit is on main
         run: |
@@ -77,6 +78,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # to be able to generate the full changelog:
           # https://github.com/goreleaser/goreleaser-action/issues/56#issuecomment-568718162
           fetch-depth: 0
@@ -84,6 +86,10 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+          # no cache: the published binaries are compiled from scratch rather
+          # than linked from packages an earlier run restored, since nothing
+          # checks what a cache entry holds
+          cache: false
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - name: Set up Docker Buildx
@@ -187,8 +193,8 @@ jobs:
     # package manager step
     if: ${{ !cancelled() && needs.release.outputs.docker_io != '' }}
     permissions:
-      id-token: write
-      attestations: write
+      id-token: write # sign the attestations (OIDC)
+      attestations: write # store them with the repository
     steps:
       - name: Download the checksums
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -232,6 +238,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -239,7 +246,7 @@ jobs:
           go-version-file: go.mod
           # no cache: the point of this job is to rebuild from scratch on a
           # runner that shares nothing with the release build. The cache key
-          # is only the go.sum hash, so the release job's compiled packages
+          # is only the go.sum hash, so a cached build's compiled packages
           # would otherwise be restored here and the comparison would only
           # cover the packaging
           cache: false
@@ -286,6 +293,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Update new version in krew-index
         uses: rajatjindal/krew-release-bot@c970b8a8f6dbc2f2285a26e3ae160903b87002c3 # v0.0.51
         env:
@@ -308,7 +317,7 @@ jobs:
       contents: read
       packages: write # push the images to GHCR
       id-token: write # cosign keyless signing and the attestations (OIDC)
-      attestations: write
+      attestations: write # store the attestations with the repository
     strategy:
       matrix:
         image:
@@ -321,6 +330,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Set up QEMU
         uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
       - name: Set up Docker Buildx
@@ -343,14 +354,16 @@ jobs:
           cosign-release: v3.1.4
       - name: Determine tags
         id: tags
+        env:
+          IMAGE: ${{ matrix.image.name }}
         run: |
-          TAGS="docker.io/utkuozdemir/${{ matrix.image.name }}:${{ github.ref_name }}"
-          TAGS="${TAGS},ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}:${{ github.ref_name }}"
-          if [[ "${{ github.ref_name }}" != *-* ]]; then
-            TAGS="${TAGS},docker.io/utkuozdemir/${{ matrix.image.name }}:latest"
-            TAGS="${TAGS},ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}:latest"
+          TAGS="docker.io/utkuozdemir/${IMAGE}:${GITHUB_REF_NAME}"
+          TAGS="${TAGS},ghcr.io/${GITHUB_REPOSITORY_OWNER}/${IMAGE}:${GITHUB_REF_NAME}"
+          if [[ "${GITHUB_REF_NAME}" != *-* ]]; then
+            TAGS="${TAGS},docker.io/utkuozdemir/${IMAGE}:latest"
+            TAGS="${TAGS},ghcr.io/${GITHUB_REPOSITORY_OWNER}/${IMAGE}:latest"
           fi
-          echo "tags=${TAGS}" >> "$GITHUB_OUTPUT"
+          echo "tags=${TAGS}" >>"${GITHUB_OUTPUT}"
       # buildkit's own provenance and SBOM attestations are off: GitHub's
       # build provenance is attached below instead, and one kind of
       # attestation is enough to verify
@@ -365,9 +378,12 @@ jobs:
           sbom: false
           tags: ${{ steps.tags.outputs.tags }}
       - name: Sign the image
+        env:
+          IMAGE: ${{ matrix.image.name }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          cosign sign --yes "docker.io/utkuozdemir/${{ matrix.image.name }}@${{ steps.build.outputs.digest }}"
-          cosign sign --yes "ghcr.io/${{ github.repository_owner }}/${{ matrix.image.name }}@${{ steps.build.outputs.digest }}"
+          cosign sign --yes "docker.io/utkuozdemir/${IMAGE}@${DIGEST}"
+          cosign sign --yes "ghcr.io/${GITHUB_REPOSITORY_OWNER}/${IMAGE}@${DIGEST}"
       - name: Attest the Docker Hub image
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
