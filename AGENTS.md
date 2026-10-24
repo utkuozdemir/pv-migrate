@@ -299,12 +299,12 @@ Things that have bitten before:
   Renovate therefore updates the Go image and the go.mod version in one group: a go.mod bump arriving on its own would stay red until the image caught up.
   Never give a BuildKit platform argument such as `TARGETPLATFORM` or `TARGETARCH` a default: it shadows the value BuildKit injects per platform, and every architecture's image once shipped the amd64 binary because of one.
   Renovate opens pull requests for qualifying updates, grouped as configured, and merges them itself once the required checks pass.
-- Every workflow declares `permissions:` at the top, and a job declares its own block when its needs differ, down to `{}` for a job that touches nothing on GitHub, each permission beyond the plain checkout read with a comment saying what uses it.
+- Every workflow declares `permissions:` at the top, and a job declares its own block when its needs differ, down to `{}` for a job that touches nothing on GitHub, and each permission beyond the plain checkout read carries a comment saying what uses it.
   A same-run artifact download or upload needs none of them: it runs on the runner's own token, which the block does not govern.
   The repository's default for the token is read-only as well, so a workflow that forgets the block gets read access rather than write.
   zizmor audits the workflows and the composite action in `task lint`, and `.github/zizmor.yml` lists the accepted exceptions with the reason for each.
-  It enforces the rules below and that a `permissions:` block exists at all, and nothing more: it cannot know what a job uses, so a job inheriting a permission it never touches, or a permission without its comment, is caught in review.
-  A value from an expression reaches a `run:` script through `env:`, never inline, so a tag, branch or input name with shell characters in it is data rather than code.
+  It enforces the rules below and that a `permissions:` block exists, except three that review keeps: a job inheriting a permission it never touches, a permission without its comment, and an inline expression of a value GitHub fixes, such as the run id.
+  A value from an expression reaches a `run:` script through `env:` or the runner's own `GITHUB_*` variables, never inline, even a value GitHub fixes, so a tag, branch or input name with shell characters in it is data rather than code.
   A checkout drops its credentials unless the job pushes, so a later step in the job cannot pick the token up from disk, and an in-repo action is referenced with the `$/` self-repository syntax, which resolves to the running commit rather than to whatever a previous step left in the workspace.
   The release build restores no Go cache, since nothing checks what a cache entry holds before it is linked into a published binary.
 - The main branch ruleset requires a pull request and the three build workflow jobs to pass, and has no bypass, not even for admins.
