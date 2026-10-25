@@ -109,6 +109,24 @@ pv-migrate \
   --dest new-pvc
 ```
 
+## Cloud load balancers
+
+When using the `loadbalancer` strategy on a managed Kubernetes cluster (e.g., EKS), pass the controller-specific `Service` annotations under `sshd.service.annotations` using `--helm-values`.
+
+`--loadbalancer-timeout` only waits for the `Service` to get an IP or hostname.
+On some providers, the load balancer gets a hostname before its DNS record is resolvable, and the `rsync` job then retries until it can connect (`rsync.maxRetries` is `10` and `rsync.retryPeriodSeconds` is `5` by default).
+Increase both values if DNS propagation takes longer in your environment:
+
+```bash
+pv-migrate \
+  --strategies loadbalancer \
+  --helm-values lb-values.yaml \
+  --helm-set rsync.maxRetries=20 \
+  --helm-set rsync.retryPeriodSeconds=60 \
+  --source old-pvc \
+  --dest new-pvc
+```
+
 ## Detached mode
 
 For large migrations, `--detach` lets the job continue in the cluster after the CLI exits:
