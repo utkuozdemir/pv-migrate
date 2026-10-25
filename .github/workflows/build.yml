@@ -243,7 +243,7 @@ jobs:
       - name: Deploy SeaweedFS
         env:
           # renovate: depName=chrislusf/seaweedfs datasource=docker versioning=docker
-          SEAWEEDFS_VERSION: "4.48"
+          SEAWEEDFS_VERSION: "4.50"
           # renovate: depName=rclone/rclone datasource=docker
           RCLONE_VERSION: 1.75.2
         run: |
