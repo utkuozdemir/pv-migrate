@@ -51,7 +51,7 @@ COPY --from=helm-docs-bin /usr/bin/helm-docs /usr/local/bin/helm-docs
 # a linter bump must not re-download the modules.
 # The image ships GOTOOLCHAIN=local, so a go.mod that declares a newer Go fails
 # the download here instead of fetching a toolchain behind the pinned digest.
-FROM golang:1.27.3@sha256:6f1acc898d064a4e9d5773ee574a9af6a9b786306939ac14d7fd806bf62046db AS deps
+FROM golang:1.27.3@sha256:b76020929b709ddb6202afc05410a0faefae20ae05e27ad548b3870092688a69 AS deps
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/root/.cache/go-build,id=pv_migrate/go-build \
