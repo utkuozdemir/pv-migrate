@@ -232,6 +232,9 @@ func applyNonRootValues(vals map[string]any, req *migration.Request) {
 		"runAsUser":                nonRootUID,
 		"runAsGroup":               nonRootUID,
 		"allowPrivilegeEscalation": false,
+		// nil removes the chart's default SYS_CHROOT when Helm merges the values
+		"capabilities":   map[string]any{"drop": []any{"ALL"}, "add": nil},
+		"seccompProfile": map[string]any{"type": "RuntimeDefault"},
 	}
 	nonRootPodSecCtx := map[string]any{
 		"fsGroup": nonRootUID,
