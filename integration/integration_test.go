@@ -25,6 +25,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	utilrand "k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/apimachinery/pkg/watch"
@@ -196,7 +197,7 @@ func TestMigrate(t *testing.T) {
 	})
 	t.Run("NonRoot", func(t *testing.T) {
 		t.Parallel()
-		te := setupDiffNS(t, si)
+		te := setupIsolatedDiffNS(t, si, generateDataShellCommand)
 		testNonRoot(t, te)
 	})
 	t.Run("NonRootFailOnRestrictedFiles", func(t *testing.T) {
@@ -860,6 +861,10 @@ func testNonRoot(t *testing.T, te *testEnv) {
 	_, err := execInPod(ctx, te.destCli, te.destNS, "dest", generateExtraDataShellCommand)
 	require.NoError(t, err)
 
+	// --non-root is the mode for namespaces that enforce the restricted Pod Security Standard
+	enforceRestricted(t, te.sourceCli, te.sourceNS)
+	enforceRestricted(t, te.destCli, te.destNS)
+
 	cmd := fmt.Sprintf(
 		"%s --non-root -i -n %s -N %s --source source --dest dest",
 		defaultHelmArgs(t),
@@ -1059,6 +1064,18 @@ func setupLongPVCNames(t *testing.T, si *sharedInfra) *testEnv {
 }
 
 // --- Infrastructure helpers ---
+
+// enforceRestricted makes the namespace reject new pods that violate the restricted Pod Security Standard.
+// The pods already running in it are not affected.
+func enforceRestricted(t *testing.T, cli *k8s.ClusterClient, ns string) {
+	t.Helper()
+
+	patch := []byte(`{"metadata":{"labels":{"pod-security.kubernetes.io/enforce":"restricted"}}}`)
+
+	_, err := cli.KubeClient.CoreV1().Namespaces().
+		Patch(t.Context(), ns, types.MergePatchType, patch, metav1.PatchOptions{})
+	require.NoError(t, err)
+}
 
 // newTestNS creates a namespace with a random suffix and registers fire-and-forget cleanup.
 func newTestNS(t *testing.T, cli *k8s.ClusterClient, prefix string) string {
