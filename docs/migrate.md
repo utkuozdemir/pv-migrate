@@ -51,6 +51,8 @@ pv-migrate \
   --dest new-pvc
 ```
 
+For EKS load balancer configuration, DNS retries, and network troubleshooting, see [AWS PVC migration](aws-migration.md).
+
 If files are deleted from the source while the transfer is running, rsync skips them.
 The migration still succeeds, and a warning line names the condition.
 With `--dest-delete-extraneous-files`, the skipped files keep their existing copies on the destination.

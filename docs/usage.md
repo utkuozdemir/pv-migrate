@@ -43,5 +43,6 @@ Run `pv-migrate cleanup <id>` once the job is done.
 ## Where to go next
 
 - [PVC-to-PVC migration](migrate.md) if you are moving data between Kubernetes volumes.
+- [AWS PVC migration](aws-migration.md) for EKS load balancer configuration, DNS retries, and network troubleshooting.
 - [Bucket backup and restore](backup-restore.md) if you want a backup in object storage or a later restore.
 - [CLI reference](cli-reference.md) for the exact flag names and defaults.
