@@ -245,7 +245,7 @@ jobs:
           # renovate: depName=chrislusf/seaweedfs datasource=docker versioning=docker
           SEAWEEDFS_VERSION: "4.52"
           # renovate: depName=rclone/rclone datasource=docker
-          RCLONE_VERSION: 1.75.2
+          RCLONE_VERSION: 1.76.0
         run: |
           kubectl create namespace pv-migrate-test --dry-run=client -oyaml | kubectl apply -f -
           kubectl -n pv-migrate-test run seaweedfs \
