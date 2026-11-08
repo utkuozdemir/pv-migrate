@@ -36,7 +36,7 @@ const (
 	// verifyImage reads the bucket back. It is upstream rclone rather than the
 	// image under test, so the check does not share that image's mistakes.
 	// renovate: depName=rclone/rclone datasource=docker
-	verifyImage = "docker.io/rclone/rclone:1.75.2"
+	verifyImage = "docker.io/rclone/rclone:1.76.0"
 
 	backupTestDataContent = "BACKUP_DATA"
 	backupTestDataPath    = "/volume/backup_test.txt"
