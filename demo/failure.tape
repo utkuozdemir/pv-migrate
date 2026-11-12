@@ -32,4 +32,8 @@ Enter
 # The phrase can scroll off screen before the command exits, and a tape that
 # stops early kills the migration and leaves its resources on the cluster.
 Wait+Line@5m /^\x{276f}\s*$/
-Sleep 5s
+
+# At 2800x1650 the CI runner captures roughly half of Framerate 30, so a
+# Sleep plays back in about half the wall-clock duration (~13.5s here, since
+# all three diagnostic blocks appear on screen at once).
+Sleep 25s
