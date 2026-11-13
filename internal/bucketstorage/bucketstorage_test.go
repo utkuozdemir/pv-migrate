@@ -1,13 +1,35 @@
 package bucketstorage_test
 
 import (
+	"bytes"
+	"context"
+	"errors"
+	"io"
+	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"helm.sh/helm/v4/pkg/action"
+	"helm.sh/helm/v4/pkg/chart/common"
+	"helm.sh/helm/v4/pkg/kube"
+	kubefake "helm.sh/helm/v4/pkg/kube/fake"
+	releasecommon "helm.sh/helm/v4/pkg/release/common"
+	releasev1 "helm.sh/helm/v4/pkg/release/v1"
+	"helm.sh/helm/v4/pkg/storage"
+	"helm.sh/helm/v4/pkg/storage/driver"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/watch"
+	clientfeatures "k8s.io/client-go/features"
+	clientfeaturestesting "k8s.io/client-go/features/testing"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/utkuozdemir/pv-migrate/internal/bucketstorage"
+	"github.com/utkuozdemir/pv-migrate/internal/helm"
+	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rclone"
 )
@@ -244,6 +266,275 @@ func TestBuildHelmValues_MetadataPresentWhenGenerated(t *testing.T) {
 
 	assert.Equal(t, "metadata", rcloneVals["metadataBase64"])
 	assert.Equal(t, "remote:path.meta.yaml", rcloneVals["metadataRemotePath"])
+}
+
+func TestRunRelease_CleansUpFailedInstall(t *testing.T) {
+	t.Parallel()
+
+	const releaseName = "pv-migrate-op1-backup"
+
+	helmChart, err := helm.LoadChart("0.0.0-test")
+	require.NoError(t, err)
+
+	releases, initCfg := fakeHelmConfig(&kubefake.FailingKubeClient{
+		Out:       io.Discard,
+		WaitError: errors.New("timed out waiting for the condition"),
+	})
+
+	stuckPod := testJobPod(releaseName, corev1.PodPending)
+
+	var out, logs bytes.Buffer
+
+	info := testClusterPVCInfo(stuckPod)
+	req := &bucketstorage.Request{
+		Direction:   rclone.DirectionBackup,
+		HelmTimeout: time.Minute,
+		Writer:      &out,
+	}
+
+	err = bucketstorage.RunRelease(t.Context(), helmChart, info, releaseName, "op1",
+		testBackupValues(req, info), req, initCfg, slog.New(slog.NewTextHandler(&logs, nil)))
+	require.ErrorContains(t, err, "failed to install helm chart")
+	require.ErrorContains(t, err, "timed out waiting for the condition")
+
+	_, histErr := releases.History(releaseName)
+	require.ErrorIs(t, histErr, driver.ErrReleaseNotFound)
+	assert.Contains(t, logs.String(), "Removed release")
+	assert.Contains(t, out.String(), "What the cluster reported:")
+	assert.Contains(t, out.String(), stuckPod.Name)
+}
+
+func TestRunRelease_HonorsNoCleanupOnFailureForInstall(t *testing.T) {
+	t.Parallel()
+
+	const releaseName = "pv-migrate-op2-backup"
+
+	helmChart, err := helm.LoadChart("0.0.0-test")
+	require.NoError(t, err)
+
+	releases, initCfg := fakeHelmConfig(&kubefake.FailingKubeClient{
+		Out:       io.Discard,
+		WaitError: errors.New("timed out waiting for the condition"),
+	})
+
+	var out, logs bytes.Buffer
+
+	info := testClusterPVCInfo()
+	req := &bucketstorage.Request{
+		Direction:          rclone.DirectionBackup,
+		NoCleanupOnFailure: true,
+		HelmTimeout:        time.Minute,
+		Writer:             &out,
+	}
+
+	err = bucketstorage.RunRelease(t.Context(), helmChart, info, releaseName, "op2",
+		testBackupValues(req, info), req, initCfg, slog.New(slog.NewTextHandler(&logs, nil)))
+	require.ErrorContains(t, err, "failed to install helm chart")
+
+	history, histErr := releases.History(releaseName)
+	require.NoError(t, histErr)
+	assert.Len(t, history, 1)
+	assert.Contains(t, logs.String(), "Skipped cleanup because the operation failed")
+}
+
+func TestRunRelease_IgnoresMissingReleaseOnEarlyInstallFailure(t *testing.T) {
+	t.Parallel()
+
+	const releaseName = "pv-migrate-op3-backup"
+
+	helmChart, err := helm.LoadChart("0.0.0-test")
+	require.NoError(t, err)
+
+	_, initCfg := fakeHelmConfig(&kubefake.FailingKubeClient{
+		Out:        io.Discard,
+		BuildError: errors.New("manifest build failed"),
+	})
+
+	var logs bytes.Buffer
+
+	info := testClusterPVCInfo()
+	req := &bucketstorage.Request{
+		Direction:   rclone.DirectionBackup,
+		HelmTimeout: time.Minute,
+		Writer:      io.Discard,
+	}
+
+	err = bucketstorage.RunRelease(t.Context(), helmChart, info, releaseName, "op3",
+		testBackupValues(req, info), req, initCfg, slog.New(slog.NewTextHandler(&logs, nil)))
+	require.ErrorContains(t, err, "failed to install helm chart")
+	assert.NotContains(t, logs.String(), "Cleanup failed")
+	assert.NotContains(t, logs.String(), "Removed release")
+}
+
+func TestRunRelease_PreservesExistingReleaseOnNameConflict(t *testing.T) {
+	t.Parallel()
+
+	const releaseName = "pv-migrate-op6-backup"
+
+	helmChart, err := helm.LoadChart("0.0.0-test")
+	require.NoError(t, err)
+
+	releases, initCfg := fakeHelmConfig(&kubefake.PrintingKubeClient{Out: io.Discard})
+	require.NoError(t, releases.Create(&releasev1.Release{
+		Name:      releaseName,
+		Namespace: "default",
+		Version:   1,
+		Info: &releasev1.Info{
+			Status:      releasecommon.StatusDeployed,
+			Description: "Install complete",
+		},
+	}))
+
+	var out, logs bytes.Buffer
+
+	info := testClusterPVCInfo(testJobPod(releaseName, corev1.PodRunning))
+	req := &bucketstorage.Request{
+		Direction:   rclone.DirectionBackup,
+		HelmTimeout: time.Minute,
+		Writer:      &out,
+	}
+
+	err = bucketstorage.RunRelease(t.Context(), helmChart, info, releaseName, "op6",
+		testBackupValues(req, info), req, initCfg, slog.New(slog.NewTextHandler(&logs, nil)))
+	require.ErrorContains(t, err, "cannot reuse a name that is still in use")
+
+	history, histErr := releases.History(releaseName)
+	require.NoError(t, histErr)
+	require.Len(t, history, 1)
+	assert.Empty(t, out.String())
+	assert.NotContains(t, logs.String(), "Removed release")
+}
+
+func TestRunRelease_CleansUpWhenDetachWaitFails(t *testing.T) {
+	t.Parallel()
+
+	const releaseName = "pv-migrate-op4-backup"
+
+	helmChart, err := helm.LoadChart("0.0.0-test")
+	require.NoError(t, err)
+
+	releases, initCfg := fakeHelmConfig(&kubefake.PrintingKubeClient{Out: io.Discard})
+	stuckPod := testJobPod(releaseName, corev1.PodPending)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+
+	cli := fake.NewClientset(stuckPod)
+	cli.PrependWatchReactor("pods", func(k8stesting.Action) (bool, watch.Interface, error) {
+		cancel()
+
+		return true, watch.NewEmptyWatch(), nil
+	})
+
+	info := &pvc.Info{
+		Claim:         &corev1.PersistentVolumeClaim{Namespace: "default", Name: "src"},
+		ClusterClient: &k8s.ClusterClient{KubeClient: cli},
+	}
+
+	var out, logs bytes.Buffer
+
+	req := &bucketstorage.Request{
+		Direction:   rclone.DirectionBackup,
+		Detach:      true,
+		HelmTimeout: time.Minute,
+		Writer:      &out,
+	}
+
+	err = bucketstorage.RunRelease(ctx, helmChart, info, releaseName, "op4",
+		testBackupValues(req, info), req, initCfg, slog.New(slog.NewTextHandler(&logs, nil)))
+	require.ErrorContains(t, err, "failed to wait for job to start")
+
+	_, histErr := releases.History(releaseName)
+	require.ErrorIs(t, histErr, driver.ErrReleaseNotFound)
+	assert.Contains(t, logs.String(), "Removed release")
+	assert.Contains(t, out.String(), "What the cluster reported:")
+	assert.Contains(t, out.String(), stuckPod.Name)
+	assert.NotContains(t, out.String(), "To check status:")
+}
+
+//nolint:paralleltest // the feature gate below is process-wide
+func TestRunRelease_KeepsReleaseWhenDetachSucceeds(t *testing.T) {
+	clientfeaturestesting.SetFeatureDuringTest(t, clientfeatures.WatchListClient, false)
+
+	const releaseName = "pv-migrate-op5-backup"
+
+	helmChart, err := helm.LoadChart("0.0.0-test")
+	require.NoError(t, err)
+
+	releases, initCfg := fakeHelmConfig(&kubefake.PrintingKubeClient{Out: io.Discard})
+	runningPod := testJobPod(releaseName, corev1.PodRunning)
+	runningPod.Spec.NodeName = "node-1"
+
+	var out, logs bytes.Buffer
+
+	info := testClusterPVCInfo(runningPod)
+	req := &bucketstorage.Request{
+		Direction:   rclone.DirectionBackup,
+		Detach:      true,
+		HelmTimeout: time.Minute,
+		Writer:      &out,
+	}
+
+	err = bucketstorage.RunRelease(t.Context(), helmChart, info, releaseName, "op5",
+		testBackupValues(req, info), req, initCfg, slog.New(slog.NewTextHandler(&logs, nil)))
+	require.NoError(t, err)
+
+	history, histErr := releases.History(releaseName)
+	require.NoError(t, histErr)
+	assert.Len(t, history, 1)
+	assert.Contains(t, out.String(), "pv-migrate status op5")
+	assert.NotContains(t, logs.String(), "Removed release")
+	assert.NotContains(t, logs.String(), "Backup succeeded")
+}
+
+func fakeHelmConfig(kubeClient kube.Interface) (*storage.Storage, bucketstorage.HelmActionConfigFunc) {
+	releases := storage.Init(driver.NewMemory())
+	cfg := &action.Configuration{
+		Releases:     releases,
+		KubeClient:   kubeClient,
+		Capabilities: common.DefaultCapabilities,
+	}
+
+	return releases, func(*pvc.Info) (*action.Configuration, error) {
+		return cfg, nil
+	}
+}
+
+func testBackupValues(req *bucketstorage.Request, info *pvc.Info) map[string]any {
+	return bucketstorage.BuildHelmValues(
+		info.Claim.Namespace,
+		req,
+		info,
+		"[remote]\ntype = s3\n",
+		"rclone sync /data remote:b/n/",
+		true,
+		"",
+		"",
+	)
+}
+
+func testJobPod(releaseName string, phase corev1.PodPhase) *corev1.Pod {
+	return &corev1.Pod{
+		Namespace: "default",
+		Name:      releaseName + "-rclone-pod",
+		Labels: map[string]string{
+			"app.kubernetes.io/instance": releaseName,
+			"job-name":                   releaseName + "-rclone",
+		},
+		Status: corev1.PodStatus{Phase: phase},
+	}
+}
+
+func testClusterPVCInfo(objects ...runtime.Object) *pvc.Info {
+	return &pvc.Info{
+		Claim: &corev1.PersistentVolumeClaim{
+			Namespace: "default",
+			Name:      "src",
+		},
+		ClusterClient: &k8s.ClusterClient{
+			KubeClient: fake.NewClientset(objects...),
+		},
+	}
 }
 
 func testPVCInfo(name string) *pvc.Info {
