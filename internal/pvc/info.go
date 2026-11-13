@@ -182,16 +182,38 @@ func findMountedNode(ctx context.Context, kubeClient kubernetes.Interface,
 		return "", fmt.Errorf("failed to list pods: %w", err)
 	}
 
-	for _, pod := range podList.Items {
-		for _, volume := range pod.Spec.Volumes {
-			persistentVolumeClaim := volume.PersistentVolumeClaim
-			if persistentVolumeClaim != nil && persistentVolumeClaim.ClaimName == pvc.Name {
-				return pod.Spec.NodeName, nil
-			}
+	var fallbackNode string
+
+	for i := range podList.Items {
+		pod := &podList.Items[i]
+		if pod.Spec.NodeName == "" ||
+			pod.Status.Phase == corev1.PodSucceeded ||
+			pod.Status.Phase == corev1.PodFailed ||
+			!podMountsClaim(pod, pvc.Name) {
+			continue
+		}
+
+		if pod.Status.Phase == corev1.PodRunning {
+			return pod.Spec.NodeName, nil
+		}
+
+		if fallbackNode == "" {
+			fallbackNode = pod.Spec.NodeName
 		}
 	}
 
-	return "", nil
+	return fallbackNode, nil
+}
+
+func podMountsClaim(pod *corev1.Pod, claimName string) bool {
+	for _, volume := range pod.Spec.Volumes {
+		persistentVolumeClaim := volume.PersistentVolumeClaim
+		if persistentVolumeClaim != nil && persistentVolumeClaim.ClaimName == claimName {
+			return true
+		}
+	}
+
+	return false
 }
 
 func buildAffinityHelmValues(nodeName string, required bool) map[string]any {
