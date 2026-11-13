@@ -289,16 +289,25 @@ func runRsyncSession(
 
 	// The group is joined before anything is reported: the progress bar owns the
 	// output until every goroutine has stopped, and the tail is complete by now.
-	return finishRsyncSession(eg.Wait(), vanished, tail, progressLogger, logger)
+	return finishRsyncSession(eg.Wait(), vanished, tail, progressLogger, req.Writer, logger)
 }
 
 // finishRsyncSession reports the joined group's outcome. Only the session's own
-// failure gets the exit-status interpretation and the output tail; any other
+// failure gets the exit-status interpretation and the output tail. Any other
 // error passes through untouched.
 func finishRsyncSession(
-	waitErr error, vanished bool, tail *lineTail, progressLogger *progresslog.Logger, logger *slog.Logger,
+	waitErr error,
+	vanished bool,
+	tail *lineTail,
+	progressLogger *progresslog.Logger,
+	writer io.Writer,
+	logger *slog.Logger,
 ) error {
 	if waitErr != nil {
+		if progressLogger.Rendered() {
+			fmt.Fprintln(writer)
+		}
+
 		if sessionErr, ok := errors.AsType[*rsyncRunError](waitErr); ok {
 			return rsyncSessionError(sessionErr.err, tail.Lines())
 		}
@@ -321,7 +330,7 @@ func finishRsyncSession(
 func sessionProgressLogger(req *migration.Request, reader io.ReadCloser) *progresslog.Logger {
 	return progresslog.NewLogger(progresslog.LoggerOptions{
 		Writer:          req.Writer,
-		ShowProgressBar: req.ShowProgressBar,
+		ShowProgressBar: req.ShowProgressBar && !req.StructuredLogs,
 		LogStreamFunc: func(context.Context) (io.ReadCloser, error) {
 			return reader, nil
 		},

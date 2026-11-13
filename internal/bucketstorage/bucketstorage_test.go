@@ -1,6 +1,10 @@
 package bucketstorage_test
 
 import (
+	"bytes"
+	"encoding/json"
+	"log/slog"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -244,6 +248,44 @@ func TestBuildHelmValues_MetadataPresentWhenGenerated(t *testing.T) {
 
 	assert.Equal(t, "metadata", rcloneVals["metadataBase64"])
 	assert.Equal(t, "remote:path.meta.yaml", rcloneVals["metadataRemotePath"])
+}
+
+func TestPrintDetachMessage_StructuredLogsKeepsJSONStreamClean(t *testing.T) {
+	t.Parallel()
+
+	var structuredOut bytes.Buffer
+
+	bucketstorage.PrintDetachMessage(
+		&bucketstorage.Request{
+			Direction:      rclone.DirectionBackup,
+			Writer:         &structuredOut,
+			StructuredLogs: true,
+		},
+		"op-456",
+		slog.New(slog.NewJSONHandler(&structuredOut, nil)),
+	)
+
+	lines := strings.Split(strings.TrimRight(structuredOut.String(), "\n"), "\n")
+	require.Len(t, lines, 1)
+
+	var record map[string]any
+	require.NoError(t, json.Unmarshal([]byte(lines[0]), &record))
+	assert.Contains(t, record["msg"], "Backup detached")
+	assert.Equal(t, "op-456", record["id"])
+
+	var textOut bytes.Buffer
+
+	bucketstorage.PrintDetachMessage(
+		&bucketstorage.Request{
+			Direction:      rclone.DirectionBackup,
+			Writer:         &textOut,
+			StructuredLogs: false,
+		},
+		"op-456",
+		slog.New(slog.DiscardHandler),
+	)
+	assert.Contains(t, textOut.String(), "pv-migrate status op-456")
+	assert.Contains(t, textOut.String(), "pv-migrate cleanup op-456")
 }
 
 func testPVCInfo(name string) *pvc.Info {
