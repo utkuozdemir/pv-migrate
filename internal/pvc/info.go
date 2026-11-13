@@ -183,6 +183,12 @@ func findMountedNode(ctx context.Context, kubeClient kubernetes.Interface,
 	}
 
 	for _, pod := range podList.Items {
+		if pod.Spec.NodeName == "" ||
+			pod.Status.Phase == corev1.PodSucceeded ||
+			pod.Status.Phase == corev1.PodFailed {
+			continue
+		}
+
 		for _, volume := range pod.Spec.Volumes {
 			persistentVolumeClaim := volume.PersistentVolumeClaim
 			if persistentVolumeClaim != nil && persistentVolumeClaim.ClaimName == pvc.Name {
