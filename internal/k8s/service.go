@@ -67,14 +67,17 @@ func GetServiceAddress(
 				return true, nil
 			}
 
-			if len(res.Status.LoadBalancer.Ingress) > 0 {
-				if len(res.Status.LoadBalancer.Ingress[0].Hostname) > 0 {
-					result = res.Status.LoadBalancer.Ingress[0].Hostname
-				} else {
-					result = res.Status.LoadBalancer.Ingress[0].IP
-				}
+			for _, ing := range res.Status.LoadBalancer.Ingress {
+				switch {
+				case ing.Hostname != "":
+					result = ing.Hostname
 
-				return true, nil
+					return true, nil
+				case ing.IP != "":
+					result = ing.IP
+
+					return true, nil
+				}
 			}
 
 			return false, nil

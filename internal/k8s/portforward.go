@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"path"
 
 	"golang.org/x/sync/errgroup"
 	"k8s.io/client-go/rest"
@@ -31,7 +30,7 @@ func PortForward(ctx context.Context, req *PortForwardRequest, logger *slog.Logg
 		return fmt.Errorf("failed to parse target url: %w", err)
 	}
 
-	targetURL.Path = path.Join(
+	targetURL = targetURL.JoinPath(
 		"api", "v1", "namespaces", req.PodNs, "pods", req.PodName, "portforward",
 	)
 

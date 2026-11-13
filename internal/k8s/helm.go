@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"fmt"
 	"log/slog"
 
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -38,8 +39,13 @@ func (c *HelmRESTClientGetter) ToDiscoveryClient() (discovery.CachedDiscoveryInt
 		return nil, err
 	}
 
-	config.Burst = 100
-	discoveryClient, _ := discovery.NewDiscoveryClientForConfig(config)
+	copied := rest.CopyConfig(config)
+	copied.Burst = 100
+
+	discoveryClient, err := discovery.NewDiscoveryClientForConfig(copied)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create discovery client: %w", err)
+	}
 
 	return memory.NewMemCacheClient(discoveryClient), nil
 }
