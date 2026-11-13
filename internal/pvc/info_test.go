@@ -115,6 +115,67 @@ func TestNew(t *testing.T) {
 
 		assert.Empty(t, pvcInfo.MountedNode)
 	})
+
+	t.Run("skips unscheduled pod sorting before running pod", func(t *testing.T) {
+		t.Parallel()
+
+		testPVC := &corev1.PersistentVolumeClaim{
+			Name:      "test",
+			Namespace: "testns",
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			},
+		}
+		pendingPod := podMountingTestClaim("a-pending", "", corev1.PodPending)
+		runningPod := podMountingTestClaim("z-running", "node-2", corev1.PodRunning)
+
+		client := &k8s.ClusterClient{KubeClient: fake.NewClientset(testPVC, pendingPod, runningPod)}
+
+		pvcInfo, err := pvc.New(t.Context(), client, "testns", "test")
+		require.NoError(t, err)
+		assert.Equal(t, "node-2", pvcInfo.MountedNode)
+	})
+
+	t.Run("ignores completed pods including ReadWriteOncePod", func(t *testing.T) {
+		t.Parallel()
+
+		testPVC := &corev1.PersistentVolumeClaim{
+			Name:      "test",
+			Namespace: "testns",
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOncePod},
+			},
+		}
+		succeededPod := podMountingTestClaim("job-succeeded", "node-1", corev1.PodSucceeded)
+		failedPod := podMountingTestClaim("job-failed", "node-1", corev1.PodFailed)
+
+		client := &k8s.ClusterClient{KubeClient: fake.NewClientset(testPVC, succeededPod, failedPod)}
+
+		pvcInfo, err := pvc.New(t.Context(), client, "testns", "test")
+		require.NoError(t, err)
+		assert.Empty(t, pvcInfo.MountedNode)
+		assert.Nil(t, pvcInfo.AffinityHelmValues)
+	})
+
+	t.Run("skips completed pod sorting before running pod on another node", func(t *testing.T) {
+		t.Parallel()
+
+		testPVC := &corev1.PersistentVolumeClaim{
+			Name:      "test",
+			Namespace: "testns",
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			},
+		}
+		completedJobPod := podMountingTestClaim("a-backup-job", "node-1", corev1.PodSucceeded)
+		runningAppPod := podMountingTestClaim("z-app", "node-2", corev1.PodRunning)
+
+		client := &k8s.ClusterClient{KubeClient: fake.NewClientset(testPVC, completedJobPod, runningAppPod)}
+
+		pvcInfo, err := pvc.New(t.Context(), client, "testns", "test")
+		require.NoError(t, err)
+		assert.Equal(t, "node-2", pvcInfo.MountedNode)
+	})
 }
 
 func TestSize(t *testing.T) {
@@ -329,5 +390,26 @@ func buildClusterClient(
 
 	return &k8s.ClusterClient{
 		KubeClient: kubeClient,
+	}
+}
+
+func podMountingTestClaim(name, nodeName string, phase corev1.PodPhase) *corev1.Pod {
+	return &corev1.Pod{
+		Name:      name,
+		Namespace: "testns",
+		Spec: corev1.PodSpec{
+			NodeName: nodeName,
+			Volumes: []corev1.Volume{
+				{
+					Name: "data",
+					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+						ClaimName: "test",
+					},
+				},
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase: phase,
+		},
 	}
 }
