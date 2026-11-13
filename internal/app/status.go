@@ -21,7 +21,6 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/jobprogress"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
 	"github.com/utkuozdemir/pv-migrate/internal/narrate"
-	"github.com/utkuozdemir/pv-migrate/internal/opid"
 	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
 )
 
@@ -70,9 +69,7 @@ func runStatus(
 		ns = client.NsInContext
 	}
 
-	releasePrefix := opid.ReleasePrefix + operationID + "-"
-
-	job, err := k8s.FindDataMoverJob(ctx, client.KubeClient, ns, releasePrefix, logger)
+	job, err := k8s.FindDataMoverJob(ctx, client.KubeClient, ns, operationID, logger)
 	if err != nil {
 		return err
 	}
