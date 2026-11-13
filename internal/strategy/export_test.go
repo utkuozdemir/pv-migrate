@@ -7,6 +7,8 @@ func NewLineTail(limit int) *LineTail {
 }
 
 var (
-	FinishRsyncSession    = finishRsyncSession
-	SessionProgressLogger = sessionProgressLogger
+	FinishRsyncSession         = finishRsyncSession
+	PeekAfter                  = peekAfter
+	SessionProgressLogger      = sessionProgressLogger
+	WriteMidInstallDiagnostics = writeMidInstallDiagnostics
 )

@@ -25,20 +25,20 @@ func (r *ClusterIP) Run(ctx context.Context, attempt *migration.Attempt, logger 
 		return fmt.Errorf("failed to build helm values: %w", err)
 	}
 
+	// This one release spans two namespaces when source and destination differ:
+	// the rsync job lands in the destination's, sshd in the source's. Recording
+	// the source side before the install lets mid-install peeks and install-timeout
+	// diagnostics see the sshd pod too.
+	if mig.SourceInfo.Claim.Namespace != mig.DestInfo.Claim.Namespace {
+		attempt.DiagnosticTargets = append(attempt.DiagnosticTargets,
+			migration.DiagnosticTarget{Release: releaseName, Info: mig.SourceInfo})
+	}
+
 	if err = installHelmChart(ctx, attempt, mig.DestInfo, releaseName, helmVals, logger); err != nil {
 		return err
 	}
 
 	narrateConnection(logger, topo.push, sshTargetHost, 0)
-
-	// This one release spans two namespaces when source and destination differ:
-	// the rsync job lands in the destination's, sshd in the source's. The install
-	// records the former, so the sshd side has to be added for diagnostics to
-	// see it.
-	if mig.SourceInfo.Claim.Namespace != mig.DestInfo.Claim.Namespace {
-		attempt.DiagnosticTargets = append(attempt.DiagnosticTargets,
-			migration.DiagnosticTarget{Release: releaseName, Info: mig.SourceInfo})
-	}
 
 	return waitForRsyncJob(ctx, attempt, topo.rsync.info, releaseName, logger)
 }
