@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	petname "github.com/dustinkirkland/golang-petname"
 )
@@ -64,4 +65,28 @@ func Validate(id string) error {
 	}
 
 	return nil
+}
+
+// Every strategy name and bucket direction is a single word and none is named
+// "src" or "dest", so a release suffix after "pv-migrate-<id>-" has one word
+// plus an optional "-src" or "-dest" side suffix. Any longer operation ID
+// starting with "<id>-" adds at least one extra word in front of the strategy
+// or direction name and therefore fails to match.
+var jobTail = regexp.MustCompile(`^[a-z]+(-src|-dest)?-(rsync|rclone)$`)
+
+// ReleaseFilter returns a regular expression for Helm's list filter that
+// matches only releases belonging to the given operation ID.
+func ReleaseFilter(id string) string {
+	return "^" + regexp.QuoteMeta(ReleasePrefix+id+"-") + `[a-z]+(-src|-dest)?$`
+}
+
+// MatchesJob reports whether jobName is a data mover job belonging to the given
+// operation ID.
+func MatchesJob(jobName, id string) bool {
+	tail, ok := strings.CutPrefix(jobName, ReleasePrefix+id+"-")
+	if !ok {
+		return false
+	}
+
+	return jobTail.MatchString(tail)
 }
