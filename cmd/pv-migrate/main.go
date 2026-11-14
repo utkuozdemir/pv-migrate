@@ -41,15 +41,7 @@ func run() int {
 	signal.Notify(signalCh, os.Interrupt, syscall.SIGTERM)
 	defer signal.Stop(signalCh)
 
-	go func() {
-		select {
-		case <-signalCh:
-			slog.Default().Warn("🔶 Received termination signal")
-
-			cancel()
-		case <-doneCh:
-		}
-	}()
+	go watchSignal(signalCh, doneCh, signal.Stop, cancel)
 
 	rootCmd, err := app.BuildMigrateCmd(ctx, version, commit, date, nil)
 	if err != nil {
@@ -73,6 +65,24 @@ func run() int {
 	}
 
 	return 0
+}
+
+// watchSignal cancels ctx on the first termination signal and unregisters
+// signalCh so a second signal terminates the process instead of being dropped.
+func watchSignal(
+	signalCh chan os.Signal,
+	doneCh <-chan struct{},
+	stop func(chan<- os.Signal),
+	cancel context.CancelFunc,
+) {
+	select {
+	case <-signalCh:
+		stop(signalCh)
+		slog.Default().Warn("🔶 Received termination signal")
+
+		cancel()
+	case <-doneCh:
+	}
 }
 
 // capitalized makes an error's message read as a sentence on the last line,
