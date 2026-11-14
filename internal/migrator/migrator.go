@@ -234,7 +234,12 @@ func cleanupAttempt(attempt *migration.Attempt, runErr error, logger *slog.Logge
 }
 
 func printDetachMessage(request *migration.Request, migrationID, strategyName string, logger *slog.Logger) {
-	logger.Info("🚀 Migration detached, the rsync job keeps running in the cluster", "strategy", strategyName)
+	logger.Info("🚀 Migration detached, the rsync job keeps running in the cluster",
+		"strategy", strategyName, "id", migrationID)
+
+	if request.StructuredLogs {
+		return
+	}
 
 	fmt.Fprintln(request.Writer)
 	fmt.Fprintln(request.Writer, "To check status:")

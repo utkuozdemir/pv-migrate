@@ -702,7 +702,12 @@ func validateSubpath(p string) error {
 }
 
 func printDetachMessage(req *Request, operationID string, logger *slog.Logger) {
-	logger.Info("🚀 " + capitalizedDirection(req.Direction) + " detached, the rclone job keeps running in the cluster")
+	logger.Info("🚀 "+capitalizedDirection(req.Direction)+" detached, the rclone job keeps running in the cluster",
+		"id", operationID)
+
+	if req.StructuredLogs {
+		return
+	}
 
 	fmt.Fprintln(req.Writer)
 	fmt.Fprintln(req.Writer, "To check status:")
