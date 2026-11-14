@@ -18,6 +18,7 @@ import (
 
 	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/jobprogress"
+	"github.com/utkuozdemir/pv-migrate/internal/opid"
 	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 )
@@ -55,13 +56,13 @@ const (
 
 var jobSuffixes = []string{rsyncJobSuffix, rcloneJobSuffix}
 
-// FindDataMoverJob finds the data mover job (rsync or rclone) for a migration by listing
-// all Helm-managed jobs and matching by the release name prefix plus a known suffix.
-// If nothing is found in the given namespace, it retries across all namespaces.
+// FindDataMoverJob finds the data mover job (rsync or rclone) for an operation
+// by listing Helm-managed jobs and matching the operation ID. If nothing is
+// found in the given namespace, it retries across all namespaces.
 func FindDataMoverJob(
 	ctx context.Context,
 	cli kubernetes.Interface,
-	ns, releasePrefix string,
+	ns, operationID string,
 	logger *slog.Logger,
 ) (*batchv1.Job, error) {
 	jobs, err := cli.BatchV1().Jobs(ns).List(ctx, metav1.ListOptions{
@@ -73,27 +74,21 @@ func FindDataMoverJob(
 
 	for i := range jobs.Items {
 		job := &jobs.Items[i]
-		if !strings.HasPrefix(job.Name, releasePrefix) {
-			continue
-		}
-
-		for _, suffix := range jobSuffixes {
-			if strings.HasSuffix(job.Name, suffix) {
-				return job, nil
-			}
+		if opid.MatchesJob(job.Name, operationID) {
+			return job, nil
 		}
 	}
 
 	if ns != "" {
 		if logger != nil {
 			logger.Warn("🔶 No data mover job in the namespace, looking in all namespaces",
-				"namespace", ns, "release_prefix", releasePrefix)
+				"namespace", ns, "id", operationID)
 		}
 
-		return FindDataMoverJob(ctx, cli, "", releasePrefix, logger)
+		return FindDataMoverJob(ctx, cli, "", operationID, logger)
 	}
 
-	return nil, fmt.Errorf("no job found for migration %s", releasePrefix)
+	return nil, fmt.Errorf("no job found for operation %s", operationID)
 }
 
 // JobImage is the image the job's first container runs, or "unknown" when the

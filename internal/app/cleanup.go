@@ -42,15 +42,14 @@ func buildCleanupCmd(logger **slog.Logger) *cobra.Command {
 				return errors.New("provide an operation ID or use --all")
 			}
 
-			var filterPrefix string
-			if all {
-				filterPrefix = opid.ReleasePrefix
-			} else {
+			var operationID string
+
+			if !all {
 				if args[0] == "" {
 					return errors.New("operation ID must not be empty")
 				}
 
-				filterPrefix = opid.ReleasePrefix + args[0] + "-"
+				operationID = args[0]
 			}
 
 			return runCleanup(
@@ -59,7 +58,7 @@ func buildCleanupCmd(logger **slog.Logger) *cobra.Command {
 				kubeconfig,
 				kubeContext,
 				namespace,
-				filterPrefix,
+				operationID,
 				all,
 				force,
 			)
@@ -79,7 +78,7 @@ func buildCleanupCmd(logger **slog.Logger) *cobra.Command {
 func runCleanup(
 	ctx context.Context,
 	logger *slog.Logger,
-	kubeconfig, kubeContext, namespace, filterPrefix string,
+	kubeconfig, kubeContext, namespace, operationID string,
 	all, force bool,
 ) error {
 	client, err := k8s.GetClusterClient(kubeconfig, kubeContext, logger)
@@ -96,7 +95,12 @@ func runCleanup(
 	}
 
 	list := action.NewList(ac)
-	list.Filter = "^" + regexp.QuoteMeta(filterPrefix)
+	if all {
+		list.Filter = "^" + regexp.QuoteMeta(opid.ReleasePrefix)
+	} else {
+		list.Filter = opid.ReleaseFilter(operationID)
+	}
+
 	list.AllNamespaces = allNamespaces
 	list.StateMask = action.ListAll
 
@@ -112,7 +116,7 @@ func runCleanup(
 			return nil
 		}
 
-		return fmt.Errorf("no releases found matching %q", filterPrefix)
+		return fmt.Errorf("no releases found for operation %q", operationID)
 	}
 
 	logger.Info("🧹 Found releases to clean up", "count", len(releases))

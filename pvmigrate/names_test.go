@@ -1,6 +1,7 @@
 package pvmigrate_test
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
@@ -133,4 +134,31 @@ func TestGeneratedIDFitsLimit(t *testing.T) {
 
 	t.Logf("longest generated ID seen is %d of the %d allowed characters: %s",
 		len(longest), pvmigrate.MaxIDLength, longest)
+}
+
+func TestOperationIDMatchersCoverAllStrategies(t *testing.T) {
+	t.Parallel()
+
+	ownFilter := regexp.MustCompile(opid.ReleaseFilter("app"))
+
+	middles := make([]string, 0, len(pvmigrate.AllStrategies)+len(operationMiddles))
+	for _, name := range pvmigrate.AllStrategies {
+		middles = append(middles, string(name))
+	}
+
+	middles = append(middles, operationMiddles...)
+
+	for _, middle := range middles {
+		for _, side := range sideSuffixes {
+			ownRelease := opid.ReleasePrefix + "app-" + middle + side
+			siblingRelease := opid.ReleasePrefix + "app-db-" + middle + side
+
+			assert.True(t, ownFilter.MatchString(ownRelease), "ReleaseFilter missed %q", ownRelease)
+			assert.False(t, ownFilter.MatchString(siblingRelease), "ReleaseFilter matched sibling %q", siblingRelease)
+			assert.True(t, opid.MatchesJob(ownRelease+"-rsync", "app"), "MatchesJob missed %q", ownRelease+"-rsync")
+			assert.True(t, opid.MatchesJob(ownRelease+"-rclone", "app"), "MatchesJob missed %q", ownRelease+"-rclone")
+			assert.False(t, opid.MatchesJob(ownRelease+"-sshd", "app"))
+			assert.False(t, opid.MatchesJob(siblingRelease+"-rsync", "app"))
+		}
+	}
 }

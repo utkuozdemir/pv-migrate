@@ -416,64 +416,64 @@ func TestFindDataMoverJob(t *testing.T) {
 	helmLabels := map[string]string{"app.kubernetes.io/managed-by": "Helm"}
 
 	tests := []struct {
-		name       string
-		jobs       []batchv1.Job
-		ns         string
-		prefix     string
-		wantJob    string
-		wantNs     string
-		wantErrMsg string
+		name        string
+		jobs        []batchv1.Job
+		ns          string
+		operationID string
+		wantJob     string
+		wantNs      string
+		wantErrMsg  string
 	}{
 		{
-			name:       "no jobs",
-			ns:         "default",
-			prefix:     "pv-migrate-abc12",
-			wantErrMsg: "no job found for migration pv-migrate-abc12",
+			name:        "no jobs",
+			ns:          "default",
+			operationID: "abc12",
+			wantErrMsg:  "no job found for operation abc12",
 		},
 		{
 			name: "single-release rsync job",
 			jobs: []batchv1.Job{
 				{
-					Name:      "pv-migrate-abc12-rsync",
+					Name:      "pv-migrate-abc12-mount-rsync",
 					Namespace: "default",
 					Labels:    helmLabels,
 				},
 			},
-			ns:      "default",
-			prefix:  "pv-migrate-abc12",
-			wantJob: "pv-migrate-abc12-rsync",
-			wantNs:  "default",
+			ns:          "default",
+			operationID: "abc12",
+			wantJob:     "pv-migrate-abc12-mount-rsync",
+			wantNs:      "default",
 		},
 		{
 			name: "dual-release dest rsync job",
 			jobs: []batchv1.Job{
 				{
-					Name:      "pv-migrate-abc12-dest-rsync",
+					Name:      "pv-migrate-abc12-loadbalancer-dest-rsync",
 					Namespace: "ns1",
 					Labels:    helmLabels,
 				},
 			},
-			ns:      "ns1",
-			prefix:  "pv-migrate-abc12",
-			wantJob: "pv-migrate-abc12-dest-rsync",
-			wantNs:  "ns1",
+			ns:          "ns1",
+			operationID: "abc12",
+			wantJob:     "pv-migrate-abc12-loadbalancer-dest-rsync",
+			wantNs:      "ns1",
 		},
 		{
-			name: "with strategy suffix",
+			name: "backup rclone job",
 			jobs: []batchv1.Job{
 				{
-					Name:      "pv-migrate-fuzzy-panda-clusterip-rsync",
+					Name:      "pv-migrate-fuzzy-panda-backup-rclone",
 					Namespace: "default",
 					Labels:    helmLabels,
 				},
 			},
-			ns:      "default",
-			prefix:  "pv-migrate-fuzzy-panda-",
-			wantJob: "pv-migrate-fuzzy-panda-clusterip-rsync",
-			wantNs:  "default",
+			ns:          "default",
+			operationID: "fuzzy-panda",
+			wantJob:     "pv-migrate-fuzzy-panda-backup-rclone",
+			wantNs:      "default",
 		},
 		{
-			name: "does not match prefix collision",
+			name: "does not match prefix collision without hyphen",
 			jobs: []batchv1.Job{
 				{
 					Name:      "pv-migrate-foo2-clusterip-rsync",
@@ -481,36 +481,60 @@ func TestFindDataMoverJob(t *testing.T) {
 					Labels:    helmLabels,
 				},
 			},
-			ns:         "default",
-			prefix:     "pv-migrate-foo-",
-			wantErrMsg: "no job found",
+			ns:          "default",
+			operationID: "foo",
+			wantErrMsg:  "no job found",
+		},
+		{
+			name: "does not match hyphenated prefix collision",
+			jobs: []batchv1.Job{
+				{
+					Name:      "pv-migrate-app-db-backup-rclone",
+					Namespace: "default",
+					Labels:    helmLabels,
+				},
+				{
+					Name:      "pv-migrate-app-clusterip-clusterip-rsync",
+					Namespace: "default",
+					Labels:    helmLabels,
+				},
+				{
+					Name:      "pv-migrate-app-restore-rclone",
+					Namespace: "default",
+					Labels:    helmLabels,
+				},
+			},
+			ns:          "default",
+			operationID: "app",
+			wantJob:     "pv-migrate-app-restore-rclone",
+			wantNs:      "default",
 		},
 		{
 			name: "falls back to all namespaces",
 			jobs: []batchv1.Job{
 				{
-					Name:      "pv-migrate-abc12-rsync",
+					Name:      "pv-migrate-abc12-clusterip-rsync",
 					Namespace: "other-ns",
 					Labels:    helmLabels,
 				},
 			},
-			ns:      "wrong-ns",
-			prefix:  "pv-migrate-abc12",
-			wantJob: "pv-migrate-abc12-rsync",
-			wantNs:  "other-ns",
+			ns:          "wrong-ns",
+			operationID: "abc12",
+			wantJob:     "pv-migrate-abc12-clusterip-rsync",
+			wantNs:      "other-ns",
 		},
 		{
-			name: "ignores non-rsync jobs",
+			name: "ignores non-mover jobs",
 			jobs: []batchv1.Job{
 				{
-					Name:      "pv-migrate-abc12-sshd",
+					Name:      "pv-migrate-abc12-clusterip-sshd",
 					Namespace: "default",
 					Labels:    helmLabels,
 				},
 			},
-			ns:         "",
-			prefix:     "pv-migrate-abc12",
-			wantErrMsg: "no job found for migration pv-migrate-abc12",
+			ns:          "",
+			operationID: "abc12",
+			wantErrMsg:  "no job found for operation abc12",
 		},
 	}
 
@@ -526,7 +550,7 @@ func TestFindDataMoverJob(t *testing.T) {
 				require.NoError(t, err)
 			}
 
-			job, err := k8s.FindDataMoverJob(ctx, cli, tt.ns, tt.prefix, slog.New(slog.DiscardHandler))
+			job, err := k8s.FindDataMoverJob(ctx, cli, tt.ns, tt.operationID, slog.New(slog.DiscardHandler))
 			if tt.wantErrMsg != "" {
 				require.ErrorContains(t, err, tt.wantErrMsg)
 

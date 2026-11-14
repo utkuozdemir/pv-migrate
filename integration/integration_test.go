@@ -905,8 +905,7 @@ func testDetachMode(t *testing.T, te *testEnv) {
 	require.NoError(t, runCliApp(ctx, t, cmd))
 
 	// Find the data-mover job created by the detached migration
-	releasePrefix := "pv-migrate-" + migrationID + "-"
-	job, err := k8s.FindDataMoverJob(ctx, te.sourceCli.KubeClient, te.sourceNS, releasePrefix, slogt.New(t))
+	job, err := k8s.FindDataMoverJob(ctx, te.sourceCli.KubeClient, te.sourceNS, migrationID, slogt.New(t))
 	require.NoError(t, err)
 	assert.Contains(t, job.Name, migrationID)
 
