@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/go-multierror"
@@ -343,11 +344,15 @@ func installHelmChart(
 	// half the budget the resources are peeked at once, turning the silent half
 	// of the wait into an answer.
 	stopPeek := peekAfter(timeout/2, func() {
-		writeMidInstallDiagnostics(ctx, attempt, pvcInfo, name, logger)
+		writeMidInstallDiagnostics(ctx, attempt, name, logger)
 	})
 	defer stopPeek()
 
-	if _, err = install.Run(mig.Chart, vals); err != nil {
+	_, err = install.Run(mig.Chart, vals)
+
+	stopPeek()
+
+	if err != nil {
 		// The bare context error names no duration and no knob, and it is the
 		// headline of every stuck-resource failure.
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -498,19 +503,35 @@ func installsLoadBalancer(values map[string]any) bool {
 	return service["type"] == "LoadBalancer"
 }
 
-// peekAfter runs the peek once after the delay unless stopped first.
+// peekAfter runs the peek once after the delay unless stopped first. Calling
+// the returned stop function waits for any in-flight peek to finish before
+// returning, so its output cannot interleave with later writes to the same
+// stream.
 func peekAfter(delay time.Duration, peek func()) func() {
 	done := make(chan struct{})
+	stopped := make(chan struct{})
+
+	var stopOnce sync.Once
 
 	go func() {
+		defer close(stopped)
+
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+
 		select {
 		case <-done:
-		case <-time.After(delay):
+		case <-timer.C:
 			peek()
 		}
 	}()
 
-	return func() { close(done) }
+	return func() {
+		stopOnce.Do(func() {
+			close(done)
+		})
+		<-stopped
+	}
 }
 
 // writeMidInstallDiagnostics narrates a still-running install wait with what the
@@ -519,32 +540,52 @@ func peekAfter(delay time.Duration, peek func()) func() {
 func writeMidInstallDiagnostics(
 	ctx context.Context,
 	attempt *migration.Attempt,
-	pvcInfo *pvc.Info,
 	release string,
 	logger *slog.Logger,
 ) {
 	req := attempt.Migration.Request
-	cli := pvcInfo.ClusterClient.KubeClient
-	ns := pvcInfo.Claim.Namespace
+	infos := releaseDiagnosticInfos(attempt, release)
 
 	if req.StructuredLogs {
-		var buf bytes.Buffer
+		for _, info := range infos {
+			var buf bytes.Buffer
 
-		k8s.WriteWorkloadDiagnostics(ctx, cli, ns,
-			k8s.InstanceLabelSelector(release), console.Palette{}, &buf, logger)
-		logger.Warn("🔶 Still waiting for the release's resources. What the cluster reports so far",
-			"release", release, "namespace", ns, "diagnostics", buf.String())
+			k8s.WriteWorkloadDiagnostics(ctx, info.ClusterClient.KubeClient, info.Claim.Namespace,
+				k8s.InstanceLabelSelector(release), console.Palette{}, &buf, logger)
+			logger.Warn("🔶 Still waiting for the release's resources. What the cluster reports so far",
+				"release", release, "namespace", info.Claim.Namespace, "diagnostics", buf.String())
+		}
 
 		return
 	}
 
 	palette := console.Palette{Enabled: req.ColorOutput}
 
-	fmt.Fprintf(req.Writer, "\n%s\n  %s\n", palette.Bold("Still waiting. What the cluster reports so far:"),
-		palette.Quote(fmt.Sprintf("%s (namespace %s):", release, ns)))
-	k8s.WriteWorkloadDiagnostics(ctx, cli, ns,
-		k8s.InstanceLabelSelector(release), palette, req.Writer, logger)
+	fmt.Fprintf(req.Writer, "\n%s\n", palette.Bold("Still waiting. What the cluster reports so far:"))
+
+	for _, info := range infos {
+		fmt.Fprintf(
+			req.Writer,
+			"  %s\n",
+			palette.Quote(fmt.Sprintf("%s (namespace %s):", release, info.Claim.Namespace)),
+		)
+		k8s.WriteWorkloadDiagnostics(ctx, info.ClusterClient.KubeClient, info.Claim.Namespace,
+			k8s.InstanceLabelSelector(release), palette, req.Writer, logger)
+	}
+
 	// The wait goes on narrating under its step after this, so the block closes
 	// with a blank line rather than letting a detail follow the diagnostics directly.
 	fmt.Fprintln(req.Writer)
+}
+
+func releaseDiagnosticInfos(attempt *migration.Attempt, release string) []*pvc.Info {
+	infos := make([]*pvc.Info, 0, len(attempt.DiagnosticTargets))
+
+	for _, target := range attempt.DiagnosticTargets {
+		if target.Release == release {
+			infos = append(infos, target.Info)
+		}
+	}
+
+	return infos
 }
