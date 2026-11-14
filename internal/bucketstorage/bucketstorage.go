@@ -22,6 +22,7 @@ import (
 	"helm.sh/helm/v4/pkg/cli/values"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
+	"helm.sh/helm/v4/pkg/storage/driver"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/utkuozdemir/pv-migrate/internal/console"
@@ -205,17 +206,7 @@ func Run(ctx context.Context, req *Request) error {
 
 	releaseName := opid.ReleasePrefix + operationID + "-" + req.Direction
 
-	if err = installHelmChart(ctx, helmChart, pvcInfo, releaseName, helmVals, req, logger); err != nil {
-		// A timed-out install means resources that are stuck rather than absent,
-		// and this path runs no cleanup, so they are still there to be read.
-		fmt.Fprint(req.Writer, failureDiagnostics(ctx, req, client.KubeClient, ns, releaseName, logger))
-
-		return fmt.Errorf("failed to install helm chart: %w", err)
-	}
-
-	jobName := releaseName + "-rclone"
-
-	return handleJobCompletion(ctx, req, pvcInfo, releaseName, jobName, operationID, logger)
+	return runRelease(ctx, helmChart, pvcInfo, releaseName, operationID, helmVals, req, initHelmActionConfig, logger)
 }
 
 func buildRcloneConfig(req *Request) (string, error) {
@@ -455,29 +446,27 @@ func applyNonRootValues(vals map[string]any) {
 	}
 }
 
-func installHelmChart(
-	ctx context.Context,
-	helmChart *chart.Chart,
-	pvcInfo *pvc.Info,
-	releaseName string,
-	baseValues map[string]any,
-	req *Request,
-	logger *slog.Logger,
-) error {
+type helmActionConfigFunc func(pvcInfo *pvc.Info) (*action.Configuration, error)
+
+func initHelmActionConfig(pvcInfo *pvc.Info) (*action.Configuration, error) {
 	actionConfig := new(action.Configuration)
 
 	err := actionConfig.Init(pvcInfo.ClusterClient.RESTClientGetter,
 		pvcInfo.Claim.Namespace, os.Getenv("HELM_DRIVER"))
 	if err != nil {
-		return fmt.Errorf("failed to initialize helm action config: %w", err)
+		return nil, fmt.Errorf("failed to initialize helm action config: %w", err)
 	}
 
-	install := action.NewInstall(actionConfig)
-	install.Namespace = pvcInfo.Claim.Namespace
-	install.ReleaseName = releaseName
-	install.WaitStrategy = kube.LegacyStrategy
-	install.Timeout = req.HelmTimeout
+	return actionConfig, nil
+}
 
+func prepareHelmValues(
+	ctx context.Context,
+	pvcInfo *pvc.Info,
+	baseValues map[string]any,
+	req *Request,
+	logger *slog.Logger,
+) (map[string]any, error) {
 	// Before the user's values are merged on top, so that an explicit request
 	// for the policy is still honored, and the install then reports the real
 	// permission problem.
@@ -487,13 +476,40 @@ func installHelmChart(
 
 	helm.DisableNetworkPoliciesWhereForbidden(ctx, baseValues, canCreate, narrate.Detail(logger, 1))
 
-	merged, err := mergeHelmValues(baseValues, req)
+	return mergeHelmValues(baseValues, req)
+}
+
+func installHelmRelease(
+	ctx context.Context,
+	helmChart *chart.Chart,
+	pvcInfo *pvc.Info,
+	releaseName string,
+	baseValues map[string]any,
+	req *Request,
+	initActionConfig helmActionConfigFunc,
+	logger *slog.Logger,
+) (bool, error) {
+	actionConfig, err := initActionConfig(pvcInfo)
 	if err != nil {
-		return err
+		return false, fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
-	if _, err = install.Run(helmChart, merged); err != nil {
-		return fmt.Errorf("failed to install helm chart: %w", err)
+	merged, err := prepareHelmValues(ctx, pvcInfo, baseValues, req, logger)
+	if err != nil {
+		return false, fmt.Errorf("failed to install helm chart: %w", err)
+	}
+
+	install := action.NewInstall(actionConfig)
+	install.Namespace = pvcInfo.Claim.Namespace
+	install.ReleaseName = releaseName
+	install.WaitStrategy = kube.LegacyStrategy
+	install.Timeout = req.HelmTimeout
+
+	// Pre-install and name-conflict checks return a nil release, so an existing
+	// release with the same name is never uninstalled.
+	rel, err := install.Run(helmChart, merged)
+	if err != nil {
+		return rel != nil, fmt.Errorf("failed to install helm chart: %w", err)
 	}
 
 	details := narrate.Detail(logger, 1)
@@ -513,7 +529,7 @@ func installHelmChart(
 		}
 	}
 
-	return nil
+	return true, nil
 }
 
 func mergeHelmValues(baseValues map[string]any, req *Request) (map[string]any, error) {
@@ -537,59 +553,102 @@ func mergeHelmValues(baseValues map[string]any, req *Request) (map[string]any, e
 	return loader.MergeMaps(baseValues, userValues), nil
 }
 
-func handleJobCompletion(
+func runRelease(
 	ctx context.Context,
-	req *Request,
+	helmChart *chart.Chart,
 	pvcInfo *pvc.Info,
-	releaseName, jobName, operationID string,
+	releaseName, operationID string,
+	baseValues map[string]any,
+	req *Request,
+	initActionConfig helmActionConfigFunc,
 	logger *slog.Logger,
 ) (retErr error) {
+	if req.Writer == nil {
+		req.Writer = io.Discard
+	}
+
 	kubeClient := pvcInfo.ClusterClient.KubeClient
 	namespace := pvcInfo.Claim.Namespace
-
 	started := time.Now()
 
-	// what the cluster reported about a failure, collected before the cleanup
-	// removes the resources and written after it, like the migration summary
-	var diagnostics string
+	var (
+		diagnostics string
+		installed   bool
+		detached    bool
+	)
 
 	defer func() {
-		cleanupAfterRun(req, pvcInfo, releaseName, retErr, logger)
+		if installed {
+			cleanupAfterRun(req, pvcInfo, releaseName, retErr, detached, initActionConfig, logger)
+		}
+
 		fmt.Fprint(req.Writer, diagnostics)
 
 		// Said after the cleanup, so the run ends on its verdict.
-		if retErr == nil && !req.Detach {
+		if retErr == nil && !detached {
 			logger.Info("✅ "+capitalizedDirection(req.Direction)+" succeeded",
 				"duration", time.Since(started).Round(time.Second))
 		}
 	}()
 
-	if req.Detach {
-		if _, err := k8s.WaitForJobStart(ctx, kubeClient, namespace, jobName, narrate.Detail(logger, 1)); err != nil {
-			return fmt.Errorf("failed to wait for job to start: %w", err)
+	var err error
+
+	installed, err = installHelmRelease(ctx, helmChart, pvcInfo, releaseName, baseValues, req, initActionConfig, logger)
+	if err != nil {
+		if installed {
+			diagnostics = failureDiagnostics(ctx, req, kubeClient, namespace, releaseName, logger)
 		}
 
-		printDetachMessage(req, operationID, logger)
-
-		return nil
+		return err
 	}
 
-	if err := k8s.WaitForJobCompletion(ctx, kubeClient, namespace, jobName,
-		shouldShowProgressBar(req.Writer), req.StructuredLogs,
-		console.Palette{Enabled: req.ColorOutput}, req.Writer, narrate.Detail(logger, 1)); err != nil {
+	detached, err = waitForReleaseJob(ctx, req, kubeClient, namespace, releaseName, operationID, logger)
+	if err != nil {
 		diagnostics = failureDiagnostics(ctx, req, kubeClient, namespace, releaseName, logger)
 
-		// Deliberately unwrapped: the error already names the failed pod and the
-		// exit state, the public API adds the operation prefix, and a plumbing
-		// wrap in between would push the answer further right.
-		return err //nolint:wrapcheck
+		return err
 	}
 
 	return nil
 }
 
+func waitForReleaseJob(
+	ctx context.Context,
+	req *Request,
+	kubeClient kubernetes.Interface,
+	namespace, releaseName, operationID string,
+	logger *slog.Logger,
+) (bool, error) {
+	jobName := releaseName + "-rclone"
+
+	if req.Detach {
+		if _, err := k8s.WaitForJobStart(ctx, kubeClient, namespace, jobName, narrate.Detail(logger, 1)); err != nil {
+			return false, fmt.Errorf("failed to wait for job to start: %w", err)
+		}
+
+		printDetachMessage(req, operationID, logger)
+
+		return true, nil
+	}
+
+	// Deliberately unwrapped: the error already names the failed pod and the
+	// exit state, the public API adds the operation prefix, and a plumbing
+	// wrap in between would push the answer further right.
+	return false, k8s.WaitForJobCompletion(ctx, kubeClient, namespace, jobName,
+		shouldShowProgressBar(req.Writer), req.StructuredLogs,
+		console.Palette{Enabled: req.ColorOutput}, req.Writer, narrate.Detail(logger, 1))
+}
+
 // cleanupAfterRun removes the release, unless told not to.
-func cleanupAfterRun(req *Request, pvcInfo *pvc.Info, releaseName string, runErr error, logger *slog.Logger) {
+func cleanupAfterRun(
+	req *Request,
+	pvcInfo *pvc.Info,
+	releaseName string,
+	runErr error,
+	detached bool,
+	initActionConfig helmActionConfigFunc,
+	logger *slog.Logger,
+) {
 	details := narrate.Detail(logger, 1)
 
 	switch {
@@ -597,11 +656,16 @@ func cleanupAfterRun(req *Request, pvcInfo *pvc.Info, releaseName string, runErr
 		details.Info("🧹 Skipped cleanup, the resources stay in the cluster")
 	case req.NoCleanupOnFailure && runErr != nil:
 		details.Info("🧹 Skipped cleanup because the operation failed, the resources stay for inspection")
-	case req.Detach:
+	case detached:
 	default:
-		if err := cleanupRelease(pvcInfo, releaseName, req.HelmTimeout); err != nil {
+		removed, err := cleanupRelease(pvcInfo, releaseName, req.HelmTimeout, initActionConfig)
+		if err != nil {
 			details.Warn("🔶 Cleanup failed, run pv-migrate cleanup to remove the resources", "error", err)
-		} else {
+
+			return
+		}
+
+		if removed {
 			details.Info("🧹 Removed release", "release", releaseName, "namespace", pvcInfo.Claim.Namespace)
 		}
 	}
@@ -651,24 +715,31 @@ func capitalizedDirection(direction string) string {
 	return strings.ToUpper(direction[:1]) + direction[1:]
 }
 
-func cleanupRelease(pvcInfo *pvc.Info, releaseName string, timeout time.Duration) error {
-	actionConfig := new(action.Configuration)
-
-	err := actionConfig.Init(pvcInfo.ClusterClient.RESTClientGetter,
-		pvcInfo.Claim.Namespace, os.Getenv("HELM_DRIVER"))
+func cleanupRelease(
+	pvcInfo *pvc.Info,
+	releaseName string,
+	timeout time.Duration,
+	initActionConfig helmActionConfigFunc,
+) (bool, error) {
+	actionConfig, err := initActionConfig(pvcInfo)
 	if err != nil {
-		return fmt.Errorf("failed to initialize helm action config: %w", err)
+		return false, err
 	}
 
 	uninstall := action.NewUninstall(actionConfig)
 	uninstall.WaitStrategy = kube.LegacyStrategy
 	uninstall.Timeout = timeout
 
-	if _, err = uninstall.Run(releaseName); err != nil {
-		return fmt.Errorf("failed to uninstall helm release %s: %w", releaseName, err)
+	_, err = uninstall.Run(releaseName)
+	if err == nil {
+		return true, nil
 	}
 
-	return nil
+	if errors.Is(err, driver.ErrReleaseNotFound) {
+		return false, nil
+	}
+
+	return false, fmt.Errorf("failed to uninstall helm release %s: %w", releaseName, err)
 }
 
 func handleMounted(info *pvc.Info, ignoreMounted bool, logger *slog.Logger) error {
