@@ -375,6 +375,10 @@ func validatePVCs(
 		return errors.New("source or destination PVC info is invalid")
 	}
 
+	if request.SourceMountReadWrite && !sourceInfo.SupportsRWO && !sourceInfo.SupportsRWX {
+		return errors.New("source PVC is not writable")
+	}
+
 	if !destInfo.SupportsRWO && !destInfo.SupportsRWX {
 		return errors.New("destination PVC is not writable")
 	}

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 
 	"github.com/utkuozdemir/pv-migrate/internal/migration"
+	"github.com/utkuozdemir/pv-migrate/internal/pvc"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 )
 
@@ -41,17 +42,17 @@ func (r *Mount) Run(ctx context.Context, attempt *migration.Attempt, logger *slo
 func buildMountHelmValues(mig *migration.Migration, rsyncCmd string) map[string]any {
 	sourceInfo := mig.SourceInfo
 	destInfo := mig.DestInfo
+	sourceMountReadWrite := mig.Request != nil && mig.Request.SourceMountReadWrite
 
 	return map[string]any{
 		rsyncComponent: map[string]any{
 			keyEnabled:   true,
 			keyNamespace: sourceInfo.Claim.Namespace,
-			"nodeName":   determineTargetNode(mig),
 			keyPVCMounts: []map[string]any{
 				{
 					keyName:      sourceInfo.Claim.Name,
 					keyMountPath: srcMountPath,
-					keyReadOnly:  !mig.Request.SourceMountReadWrite,
+					keyReadOnly:  !sourceMountReadWrite,
 				},
 				{
 					keyName:      destInfo.Claim.Name,
@@ -59,15 +60,15 @@ func buildMountHelmValues(mig *migration.Migration, rsyncCmd string) map[string]
 				},
 			},
 			"command":        rsyncCmd,
-			keyAffinity:      sourceInfo.AffinityHelmValues,
+			keyAffinity:      pvc.RequiredNodeAffinity(determineTargetNode(mig)),
 			keyNetworkPolicy: map[string]any{keyEnabled: false},
 		},
 	}
 }
 
-func (r *Mount) cannotDoReason(t *migration.Migration) string {
-	sourceInfo := t.SourceInfo
-	destInfo := t.DestInfo
+func (r *Mount) cannotDoReason(mig *migration.Migration) string {
+	sourceInfo := mig.SourceInfo
+	destInfo := mig.DestInfo
 
 	sameCluster := sourceInfo.ClusterClient.RestConfig.Host == destInfo.ClusterClient.RestConfig.Host
 	if !sameCluster {
@@ -82,8 +83,7 @@ func (r *Mount) cannotDoReason(t *migration.Migration) string {
 	sameNode := sourceInfo.MountedNode == destInfo.MountedNode
 	oneUnmounted := sourceInfo.MountedNode == "" || destInfo.MountedNode == ""
 
-	if sameNode || oneUnmounted || sourceInfo.SupportsROX || sourceInfo.SupportsRWX ||
-		destInfo.SupportsRWX {
+	if sameNode || oneUnmounted || canMountSourceMultiNode(mig) || destInfo.SupportsRWX {
 		return ""
 	}
 
@@ -114,15 +114,15 @@ func buildRsyncCmdMount(mig *migration.Migration) (string, error) {
 	return cmd, nil
 }
 
-func determineTargetNode(t *migration.Migration) string {
-	sourceInfo := t.SourceInfo
-	destInfo := t.DestInfo
+func determineTargetNode(mig *migration.Migration) string {
+	sourceInfo := mig.SourceInfo
+	destInfo := mig.DestInfo
 
-	if sourceInfo.MountedNode != "" && !sourceInfo.SupportsROX && !sourceInfo.SupportsRWX {
+	if sourceInfo.MountedNode != "" && !canMountSourceMultiNode(mig) {
 		return sourceInfo.MountedNode
 	}
 
-	if destInfo.MountedNode != "" && !destInfo.SupportsROX && !destInfo.SupportsRWX {
+	if destInfo.MountedNode != "" && !destInfo.SupportsRWX {
 		return destInfo.MountedNode
 	}
 
@@ -131,4 +131,14 @@ func determineTargetNode(t *migration.Migration) string {
 	}
 
 	return destInfo.MountedNode
+}
+
+func canMountSourceMultiNode(mig *migration.Migration) bool {
+	if mig.SourceInfo.SupportsRWX {
+		return true
+	}
+
+	sourceMountReadWrite := mig.Request != nil && mig.Request.SourceMountReadWrite
+
+	return mig.SourceInfo.SupportsROX && !sourceMountReadWrite
 }
