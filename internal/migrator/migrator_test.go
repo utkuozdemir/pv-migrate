@@ -73,6 +73,20 @@ func TestBuildTaskMounted(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestBuildTaskSourceNotWritable(t *testing.T) {
+	t.Parallel()
+
+	logger := slogt.New(t)
+
+	m := Migrator{getKubeClient: fakeClusterClientGetter()}
+	mig := buildMigration(true)
+	mig.SourceMountReadWrite = true
+
+	tsk, err := m.buildMigration(t.Context(), mig, logger)
+	assert.Nil(t, tsk)
+	require.EqualError(t, err, "source PVC is not writable")
+}
+
 func TestBuildMigrationSizeCheck(t *testing.T) {
 	t.Parallel()
 

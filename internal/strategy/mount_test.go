@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
@@ -566,6 +567,161 @@ func TestDetermineTargetNodeDestUnmounted(t *testing.T) {
 
 	targetNode := determineTargetNode(&mig)
 	assert.Equal(t, sourceNode, targetNode)
+}
+
+func TestBuildMountHelmValuesUsesRequiredTargetNodeAffinity(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	t.Run("pins to target node with required nodeAffinity instead of nodeName", func(t *testing.T) {
+		t.Parallel()
+
+		pvcA := buildTestPVC("namespace1", "pvc1", v1.ReadOnlyMany)
+		pvcB := buildTestPVC("namespace1", "pvc2", v1.ReadWriteOnce)
+		podA := buildTestPod("namespace1", "pod1", "node1", "pvc1")
+		podB := buildTestPod("namespace1", "pod2", "node2", "pvc2")
+		c := buildTestClient(pvcA, pvcB, podA, podB)
+
+		src, err := pvc.New(ctx, c, "namespace1", "pvc1")
+		require.NoError(t, err)
+
+		dst, err := pvc.New(ctx, c, "namespace1", "pvc2")
+		require.NoError(t, err)
+
+		mig := migration.Migration{
+			Request:    &migration.Request{},
+			SourceInfo: src,
+			DestInfo:   dst,
+		}
+
+		vals := buildMountHelmValues(&mig, "rsync -a /source/ /dest/")
+		rsyncVals, ok := vals[rsyncComponent].(map[string]any)
+		require.True(t, ok)
+
+		assert.NotContains(t, rsyncVals, "nodeName")
+		assert.Equal(t, pvc.RequiredNodeAffinity("node2"), rsyncVals[keyAffinity])
+	})
+
+	t.Run("sets nil affinity and omits nodeName when both claims are unmounted", func(t *testing.T) {
+		t.Parallel()
+
+		pvcA := buildTestPVC("namespace1", "pvc1", v1.ReadWriteOnce)
+		pvcB := buildTestPVC("namespace1", "pvc2", v1.ReadWriteOnce)
+		c := buildTestClient(pvcA, pvcB)
+
+		src, err := pvc.New(ctx, c, "namespace1", "pvc1")
+		require.NoError(t, err)
+
+		dst, err := pvc.New(ctx, c, "namespace1", "pvc2")
+		require.NoError(t, err)
+
+		mig := migration.Migration{
+			Request:    &migration.Request{},
+			SourceInfo: src,
+			DestInfo:   dst,
+		}
+
+		vals := buildMountHelmValues(&mig, "rsync -a /source/ /dest/")
+		rsyncVals, ok := vals[rsyncComponent].(map[string]any)
+		require.True(t, ok)
+
+		assert.NotContains(t, rsyncVals, "nodeName")
+		assert.Nil(t, rsyncVals[keyAffinity])
+	})
+}
+
+func TestCannotDoCrossNodeROXSourceMountReadWrite(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	pvcA := buildTestPVC("namespace1", "pvc1", v1.ReadWriteOnce, v1.ReadOnlyMany)
+	pvcB := buildTestPVC("namespace1", "pvc2", v1.ReadWriteOnce)
+	podA := buildTestPod("namespace1", "pod1", "node1", "pvc1")
+	podB := buildTestPod("namespace1", "pod2", "node2", "pvc2")
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+
+	src, err := pvc.New(ctx, c, "namespace1", "pvc1")
+	require.NoError(t, err)
+
+	dst, err := pvc.New(ctx, c, "namespace1", "pvc2")
+	require.NoError(t, err)
+
+	mig := migration.Migration{
+		Request:    &migration.Request{SourceMountReadWrite: true},
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	s := Mount{}
+	assert.NotEmpty(t, s.cannotDoReason(&mig))
+}
+
+func TestDetermineTargetNodeDestRWOAndROX(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	pvcA := buildTestPVC("namespace1", "pvc1", v1.ReadOnlyMany)
+	pvcB := buildTestPVC("namespace1", "pvc2", v1.ReadWriteOnce, v1.ReadOnlyMany)
+	podA := buildTestPod("namespace1", "pod1", "node1", "pvc1")
+	podB := buildTestPod("namespace1", "pod2", "node2", "pvc2")
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+
+	src, err := pvc.New(ctx, c, "namespace1", "pvc1")
+	require.NoError(t, err)
+
+	dst, err := pvc.New(ctx, c, "namespace1", "pvc2")
+	require.NoError(t, err)
+
+	mig := migration.Migration{
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+
+	assert.Equal(t, "node2", determineTargetNode(&mig))
+}
+
+func TestTopologyUsesRequiredAffinityForReadWriteROXClaim(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	pvcA := buildTestPVC("namespace1", "pvc1", v1.ReadWriteOnce, v1.ReadOnlyMany)
+	pvcB := buildTestPVC("namespace1", "pvc2", v1.ReadWriteOnce, v1.ReadOnlyMany)
+	podA := buildTestPod("namespace1", "pod1", "node1", "pvc1")
+	podB := buildTestPod("namespace1", "pod2", "node2", "pvc2")
+	c := buildTestClient(pvcA, pvcB, podA, podB)
+
+	src, err := pvc.New(ctx, c, "namespace1", "pvc1")
+	require.NoError(t, err)
+
+	dst, err := pvc.New(ctx, c, "namespace1", "pvc2")
+	require.NoError(t, err)
+
+	defaultMig := migration.Migration{
+		Request:    &migration.Request{},
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+	defaultTopo := resolveTopology(&defaultMig)
+
+	sshdDefault := buildSshdHelmValues(defaultTopo.sshd, "ssh-ed25519 AAAA")
+	rsyncDefault := buildRsyncHelmValues(defaultTopo.rsync, "rsync", "key", "/tmp/id")
+
+	assert.Equal(t, src.AffinityHelmValues, sshdDefault[keyAffinity])
+	assert.Equal(t, pvc.RequiredNodeAffinity("node2"), rsyncDefault[keyAffinity])
+
+	rwMig := migration.Migration{
+		Request:    &migration.Request{SourceMountReadWrite: true},
+		SourceInfo: src,
+		DestInfo:   dst,
+	}
+	rwTopo := resolveTopology(&rwMig)
+
+	sshdRW := buildSshdHelmValues(rwTopo.sshd, "ssh-ed25519 AAAA")
+	assert.Equal(t, pvc.RequiredNodeAffinity("node1"), sshdRW[keyAffinity])
 }
 
 func buildTestClient(objects ...runtime.Object) *k8s.ClusterClient {

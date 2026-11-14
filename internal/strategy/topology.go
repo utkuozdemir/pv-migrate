@@ -160,6 +160,14 @@ func buildRsyncCmdString(req *migration.Request, push bool, sshHost string, port
 	return built, nil
 }
 
+func (s componentSide) affinityHelmValues() map[string]any {
+	if !s.readOnly && !s.info.SupportsRWX {
+		return pvc.RequiredNodeAffinity(s.info.MountedNode)
+	}
+
+	return s.info.AffinityHelmValues
+}
+
 func buildSshdHelmValues(side componentSide, publicKey string) map[string]any {
 	return map[string]any{
 		keyEnabled:   true,
@@ -172,7 +180,7 @@ func buildSshdHelmValues(side componentSide, publicKey string) map[string]any {
 				keyMountPath: side.mountPath,
 			},
 		},
-		keyAffinity: side.info.AffinityHelmValues,
+		keyAffinity: side.affinityHelmValues(),
 	}
 }
 
@@ -191,7 +199,7 @@ func buildRsyncHelmValues(side componentSide, rsyncCmd, privateKey, privateKeyMo
 			},
 		},
 		"command":   rsyncCmd,
-		keyAffinity: side.info.AffinityHelmValues,
+		keyAffinity: side.affinityHelmValues(),
 	}
 }
 
