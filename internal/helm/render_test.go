@@ -53,6 +53,40 @@ func TestRenderedMetadataPathIsNotShellInput(t *testing.T) {
 		"the script should read the metadata path from the environment")
 }
 
+// TestRenderedPosixMetadataPathsAreNotShellInput ensures every user-derived POSIX
+// metadata path reaches the rclone job script via environment variables.
+func TestRenderedPosixMetadataPathsAreNotShellInput(t *testing.T) {
+	t.Parallel()
+
+	const (
+		remoteSub = `remote:$(touch /tmp/pwned-remote)/backup/.pv-migrate-posix.gz`
+		localSub  = `/data/$(touch /tmp/pwned-local)`
+	)
+
+	rendered := render(t, map[string]any{
+		"rclone": map[string]any{
+			"enabled":                 true,
+			"namespace":               "default",
+			"command":                 "rclone copy 'remote:bucket/' '/data'",
+			"posixMetadataDirection":  "restore",
+			"posixMetadataRemotePath": remoteSub,
+			"posixMetadataLocalPath":  localSub,
+			"pvcMounts":               []any{map[string]any{"name": "pvc", "mountPath": "/data"}},
+		},
+	})
+
+	script := containerScript(t, rendered, "rclone")
+
+	assert.NotContains(t, script, remoteSub)
+	assert.NotContains(t, script, localSub)
+	assert.Contains(t, script, `"$PV_MIGRATE_POSIX_REMOTE_PATH"`)
+	assert.Contains(t, script, `"$PV_MIGRATE_LOCAL_PATH"`)
+
+	jobManifest := rendered["pv-migrate/templates/rclone/job.yaml"]
+	assert.Contains(t, jobManifest, "name: PV_MIGRATE_POSIX_REMOTE_PATH")
+	assert.Contains(t, jobManifest, "name: PV_MIGRATE_LOCAL_PATH")
+}
+
 // TestRenderedCommandWithLineBreakFails records why the command builders refuse a
 // line break rather than quoting it. Quoting one is valid shell, but the command
 // is interpolated into a block scalar, so the chart stops rendering and the error

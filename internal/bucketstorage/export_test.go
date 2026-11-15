@@ -3,11 +3,14 @@ package bucketstorage
 type HelmActionConfigFunc = helmActionConfigFunc
 
 var (
-	BuildRemotePath      = buildRemotePath
-	BuildHelmValues      = buildHelmValues
-	MergeHelmValues      = mergeHelmValues
-	PrintDetachMessage   = printDetachMessage
-	RunRelease           = runRelease
-	ShouldUploadMetadata = shouldUploadMetadata
-	ValidateSubpath      = validateSubpath
+	ApplyPosixMetadataValues = applyPosixMetadataValues
+	BuildHelmValues          = buildHelmValues
+	BuildRcloneCommand       = buildRcloneCommand
+	BuildRemotePath          = buildRemotePath
+	MergeHelmValues          = mergeHelmValues
+	PrintDetachMessage       = printDetachMessage
+	ResolveLocalPath         = resolveLocalPath
+	RunRelease               = runRelease
+	ShouldUploadMetadata     = shouldUploadMetadata
+	ValidateSubpath          = validateSubpath
 )

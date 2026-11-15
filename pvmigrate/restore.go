@@ -67,6 +67,7 @@ type Restore struct {
 
 	DeleteExtraneousFiles bool
 	IgnoreMounted         bool
+	NoChown               bool
 	NonRoot               bool
 	Detach                bool
 	NoCleanup             bool
@@ -139,6 +140,7 @@ func toRestoreRequest(restore *Restore) *bucketstorage.Request {
 		Namespace:             restore.PVC.Namespace,
 		PVCName:               restore.PVC.Name,
 		IgnoreMounted:         restore.IgnoreMounted,
+		NoChown:               restore.NoChown,
 		NonRoot:               restore.NonRoot,
 		Detach:                restore.Detach,
 		NoCleanup:             restore.NoCleanup,

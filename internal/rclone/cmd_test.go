@@ -22,7 +22,7 @@ func TestBuildCommand_Backup(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(
 		t,
-		"rclone sync --stats 1s --stats-log-level NOTICE "+
+		"rclone sync --links --exclude /.pv-migrate-posix.gz --stats 1s --stats-log-level NOTICE "+
 			"--use-json-log --stats-one-line '/data' 'remote:my-bucket/default/my-pvc/'",
 		result,
 	)
@@ -41,7 +41,7 @@ func TestBuildCommand_Restore(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(
 		t,
-		"rclone copy --stats 1s --stats-log-level NOTICE "+
+		"rclone copy --links --exclude /.pv-migrate-posix.gz --stats 1s --stats-log-level NOTICE "+
 			"--use-json-log --stats-one-line 'remote:my-bucket/default/my-pvc/' '/data'",
 		result,
 	)
@@ -61,7 +61,7 @@ func TestBuildCommand_RestoreWithDelete(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(
 		t,
-		"rclone sync --stats 1s --stats-log-level NOTICE "+
+		"rclone sync --links --exclude /.pv-migrate-posix.gz --stats 1s --stats-log-level NOTICE "+
 			"--use-json-log --stats-one-line 'remote:my-bucket/default/my-pvc/' '/data'",
 		result,
 	)
@@ -81,7 +81,7 @@ func TestBuildCommand_WithConfigPath(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(
 		t,
-		"rclone sync --config '/etc/rclone/rclone.conf' "+
+		"rclone sync --config '/etc/rclone/rclone.conf' --links --exclude /.pv-migrate-posix.gz "+
 			"--stats 1s --stats-log-level NOTICE --use-json-log --stats-one-line '/data' 'remote:bucket/'",
 		result,
 	)
@@ -101,10 +101,47 @@ func TestBuildCommand_WithExtraArgs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(
 		t,
-		"rclone sync --stats 1s --stats-log-level NOTICE --use-json-log "+
-			"--stats-one-line '/data' 'remote:bucket/path/' --dry-run --verbose",
+		"rclone sync --links --exclude /.pv-migrate-posix.gz --stats 1s --stats-log-level NOTICE "+
+			"--use-json-log --stats-one-line '/data' 'remote:bucket/path/' --dry-run --verbose",
 		result,
 	)
+}
+
+func TestBuildCommand_CopyLinksOmitsLinks(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name      string
+		extraArgs string
+		wantLinks bool
+	}{
+		{name: "short flag -L", extraArgs: "-L", wantLinks: false},
+		{name: "bundled -vL", extraArgs: "-vL", wantLinks: false},
+		{name: "long --copy-links", extraArgs: "--copy-links", wantLinks: false},
+		{name: "disabled --copy-links=false", extraArgs: "--copy-links=false", wantLinks: true},
+		{name: "disabled -L=false", extraArgs: "-L=false", wantLinks: true},
+		{name: "re-enabled after false", extraArgs: "--copy-links=false -L", wantLinks: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cmd := rclone.Cmd{
+				Direction:  rclone.DirectionBackup,
+				RemotePath: "remote:bucket/path/",
+				LocalPath:  "/data",
+				ExtraArgs:  tc.extraArgs,
+			}
+
+			result, err := cmd.Build()
+			require.NoError(t, err)
+
+			if tc.wantLinks {
+				assert.Contains(t, result, " --links ")
+			} else {
+				assert.NotContains(t, result, " --links ")
+			}
+		})
+	}
 }
 
 func TestBuildCommand_QuotesShellArgs(t *testing.T) {
@@ -121,7 +158,7 @@ func TestBuildCommand_QuotesShellArgs(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(
 		t,
-		"rclone sync --config '/etc/rclone/rclone.conf' "+
+		"rclone sync --config '/etc/rclone/rclone.conf' --links --exclude /.pv-migrate-posix.gz "+
 			"--stats 1s --stats-log-level NOTICE --use-json-log --stats-one-line "+
 			"'/data/my dir' 'remote:bucket/path with '\"'\"'quote'\"'\"'/'",
 		result,
@@ -139,6 +176,25 @@ func TestBuildCommand_EmptyDirection_ReturnsError(t *testing.T) {
 	_, err := cmd.Build()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "direction")
+}
+
+func TestBuildCommand_ExcludeLostFound(t *testing.T) {
+	t.Parallel()
+
+	base := rclone.Cmd{
+		Direction:  rclone.DirectionBackup,
+		RemotePath: "remote:bucket/",
+		LocalPath:  "/data",
+	}
+
+	withoutExclude, err := base.Build()
+	require.NoError(t, err)
+	assert.NotContains(t, withoutExclude, "/lost+found/**")
+
+	base.ExcludeLostFound = true
+	withExclude, err := base.Build()
+	require.NoError(t, err)
+	assert.Contains(t, withExclude, "--exclude /.pv-migrate-posix.gz --exclude '/lost+found/**'")
 }
 
 func TestBuildRemotePath(t *testing.T) {
@@ -167,6 +223,17 @@ func TestBuildMetadataRemotePath_EmptyPrefix(t *testing.T) {
 
 	result := rclone.BuildMetadataRemotePath("my-bucket", "", "my-backup")
 	assert.Equal(t, "remote:my-bucket/my-backup.meta.yaml", result)
+}
+
+func TestBuildPosixMetadataRemotePath(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "remote:my-bucket/pv-migrate/my-backup/.pv-migrate-posix.gz",
+		rclone.BuildPosixMetadataRemotePath("remote:my-bucket/pv-migrate/my-backup/"))
+	assert.Equal(t, "myremote:bucket/path/.pv-migrate-posix.gz",
+		rclone.BuildPosixMetadataRemotePath("myremote:bucket/path"))
+	assert.Equal(t, "myalias:.pv-migrate-posix.gz",
+		rclone.BuildPosixMetadataRemotePath("myalias:"))
 }
 
 func TestBuildRemotePathRaw(t *testing.T) {

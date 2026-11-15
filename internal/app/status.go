@@ -119,6 +119,7 @@ func runStatus(
 	}
 
 	printJobStatus(job, logger)
+	k8s.WarnCompletedJob(ctx, client.KubeClient, job, narrate.Detail(logger, 1))
 
 	return nil
 }

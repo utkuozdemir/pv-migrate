@@ -63,6 +63,73 @@ spec:
                 echo "rclone attempt $n/$attempts failed, waiting $period seconds before trying again"
                 sleep $period
               done
+              {{- if and (eq .Values.rclone.posixMetadataDirection "backup") .Values.rclone.posixMetadataRemotePath }}
+
+              if [ $rc -eq 0 ]; then
+                posix_file="${TMPDIR:-/tmp}/pv-migrate-posix-$$.gz"
+                rm -f "$posix_file"
+                posixmeta save --mount-root /data "$PV_MIGRATE_LOCAL_PATH" "$posix_file"
+                posix_rc=$?
+                if [ $posix_rc -ne 0 ]; then
+                  failure="posix metadata capture"
+                  rc=$posix_rc
+                else
+                  n=0
+                  while [ "$n" -le "$retries" ]
+                  do
+                    rclone --config "$PV_MIGRATE_CONFIG_PATH" copyto "$posix_file" "$PV_MIGRATE_POSIX_REMOTE_PATH"
+                    posix_rc=$?
+                    [ "$posix_rc" -eq 0 ] && break
+                    n=$((n+1))
+                    [ "$n" -gt "$retries" ] && break
+                    echo "posix metadata upload attempt $n/$attempts failed, waiting $period seconds before trying again"
+                    sleep $period
+                  done
+                  if [ $posix_rc -ne 0 ]; then
+                    failure="posix metadata upload"
+                    rc=$posix_rc
+                  fi
+                fi
+                rm -f "$posix_file"
+              fi
+              {{- end }}
+              {{- if and (eq .Values.rclone.posixMetadataDirection "restore") .Values.rclone.posixMetadataRemotePath }}
+
+              if [ $rc -eq 0 ]; then
+                posix_file="${TMPDIR:-/tmp}/pv-migrate-posix-$$.gz"
+                posix_missing=0
+                n=0
+                while [ "$n" -le "$retries" ]
+                do
+                  rm -f "$posix_file"
+                  rclone --config "$PV_MIGRATE_CONFIG_PATH" copyto "$PV_MIGRATE_POSIX_REMOTE_PATH" "$posix_file"
+                  posix_rc=$?
+                  if { [ "$posix_rc" -eq 0 ] && [ ! -e "$posix_file" ]; } || [ "$posix_rc" -eq 3 ] || [ "$posix_rc" -eq 4 ]; then
+                    echo "pv-migrate: posix metadata not found, permissions and ownership were not restored"
+                    posix_missing=1
+                    posix_rc=0
+                    break
+                  fi
+                  [ "$posix_rc" -eq 0 ] && break
+                  n=$((n+1))
+                  [ "$n" -gt "$retries" ] && break
+                  echo "posix metadata download attempt $n/$attempts failed, waiting $period seconds before trying again"
+                  sleep $period
+                done
+                if [ $posix_rc -ne 0 ]; then
+                  failure="posix metadata download"
+                  rc=$posix_rc
+                elif [ "$posix_missing" -eq 0 ]; then
+                  posixmeta apply{{- if .Values.rclone.posixMetadataNoChown }} --no-chown{{- end }}{{- if .Values.rclone.posixMetadataNonRoot }} --non-root{{- end }} --mount-root /data "$PV_MIGRATE_LOCAL_PATH" "$posix_file"
+                  posix_rc=$?
+                  if [ $posix_rc -ne 0 ]; then
+                    failure="posix metadata apply"
+                    rc=$posix_rc
+                  fi
+                fi
+                rm -f "$posix_file"
+              fi
+              {{- end }}
               {{- if .Values.rclone.metadataBase64 }}
 
               if [ $rc -eq 0 ]; then
@@ -92,17 +159,24 @@ spec:
                 echo "$failure failed with exit code $rc"
               fi
               exit $rc
-          {{- if .Values.rclone.metadataBase64 }}
+          {{- if or .Values.rclone.metadataBase64 .Values.rclone.posixMetadataRemotePath }}
           # The remote path and the config path reach the script as environment
           # variables rather than being templated into it. Rendering them inline
           # would put them inside shell double quotes, where a command
-          # substitution still runs, so the object path assembled from --bucket,
-          # --prefix and --name would be shell input.
+          # substitution still runs, so a user-supplied path would be shell input.
           env:
             - name: PV_MIGRATE_CONFIG_PATH
               value: {{ .Values.rclone.configMountPath | quote }}
+            {{- if .Values.rclone.metadataBase64 }}
             - name: PV_MIGRATE_METADATA_REMOTE_PATH
               value: {{ .Values.rclone.metadataRemotePath | quote }}
+            {{- end }}
+            {{- if .Values.rclone.posixMetadataRemotePath }}
+            - name: PV_MIGRATE_POSIX_REMOTE_PATH
+              value: {{ .Values.rclone.posixMetadataRemotePath | quote }}
+            - name: PV_MIGRATE_LOCAL_PATH
+              value: {{ .Values.rclone.posixMetadataLocalPath | quote }}
+            {{- end }}
           {{- end }}
           securityContext:
             {{- toYaml .Values.rclone.securityContext | nindent 12 }}

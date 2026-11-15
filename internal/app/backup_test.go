@@ -112,3 +112,23 @@ func TestApplyBucketStorageEnvDefaults_DoesNotOverrideExplicitValues(t *testing.
 	assert.Equal(t, "flag-access", accessKey)
 	assert.Equal(t, "flag-secret", secretKey)
 }
+
+func TestRestoreCmd_SupportsNoChownFlag(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.DiscardHandler)
+
+	cmd, err := app.BuildMigrateCmd(context.Background(), "dev", "commit", "date", logger)
+	require.NoError(t, err)
+
+	restoreCmd, _, err := cmd.Find([]string{"restore"})
+	require.NoError(t, err)
+
+	flag := restoreCmd.Flags().Lookup(app.FlagNoChown)
+	require.NotNil(t, flag)
+	assert.Equal(t, "o", flag.Shorthand)
+
+	backupCmd, _, err := cmd.Find([]string{"backup"})
+	require.NoError(t, err)
+	assert.Nil(t, backupCmd.Flags().Lookup(app.FlagNoChown))
+}

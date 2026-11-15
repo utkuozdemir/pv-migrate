@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/utkuozdemir/pv-migrate/internal/rclone"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 )
 
@@ -227,4 +228,194 @@ func countLines(t *testing.T, path string) int {
 	}
 
 	return count
+}
+
+func TestRcloneScript_BackupPosixMetadataFailuresStopMetadataUpload(t *testing.T) {
+	t.Parallel()
+
+	t.Run("capture fails", func(t *testing.T) {
+		t.Parallel()
+
+		binDir := t.TempDir()
+		rcloneCalls := filepath.Join(t.TempDir(), "rclone-calls")
+
+		writeToolScript(t, binDir, "posixmeta", "exit 1\n")
+		writeToolScript(t, binDir, "rclone", fmt.Sprintf("echo \"$*\" >> %s\nexit 0\n", rcloneCalls))
+
+		script := rcloneScript(t, map[string]any{
+			"command":                 exitingMover(0),
+			"posixMetadataDirection":  rclone.DirectionBackup,
+			"posixMetadataRemotePath": "remote:bucket/backup/.pv-migrate-posix.gz",
+			"posixMetadataLocalPath":  "/data",
+			"metadataBase64":          "dGVzdAo=",
+			"metadataRemotePath":      "remote:bucket/backup.meta.yaml",
+		})
+
+		code, out := runScript(t, script, posixScriptEnv(t, binDir)...)
+		assert.Equal(t, 1, code)
+		assert.Contains(t, out, "posix metadata capture failed with exit code 1")
+		assert.NoFileExists(t, rcloneCalls, "failed capture must skip both posix upload and .meta.yaml upload")
+	})
+
+	t.Run("upload fails", func(t *testing.T) {
+		t.Parallel()
+
+		binDir := t.TempDir()
+		posixArgs := filepath.Join(t.TempDir(), "posix-args")
+		rcloneCalls := filepath.Join(t.TempDir(), "rclone-calls")
+
+		writeToolScript(t, binDir, "posixmeta", fmt.Sprintf("echo \"$*\" > %s\ntouch \"$5\"\nexit 0\n", posixArgs))
+		writeToolScript(t, binDir, "rclone", fmt.Sprintf("echo \"$*\" >> %s\nexit 7\n", rcloneCalls))
+
+		script := rcloneScript(t, map[string]any{
+			"command":                 exitingMover(0),
+			"posixMetadataDirection":  rclone.DirectionBackup,
+			"posixMetadataRemotePath": "remote:bucket/backup/.pv-migrate-posix.gz",
+			"posixMetadataLocalPath":  "/data/sub",
+			"metadataBase64":          "dGVzdAo=",
+			"metadataRemotePath":      "remote:bucket/backup.meta.yaml",
+		})
+
+		code, out := runScript(t, script, posixScriptEnv(t, binDir)...)
+		assert.Equal(t, 7, code)
+		assert.Contains(t, out, "posix metadata upload failed with exit code 7")
+		assert.Equal(t, 1, countLines(t, rcloneCalls), "failed posix upload must stop before .meta.yaml upload")
+
+		argsBytes, err := os.ReadFile(posixArgs)
+		require.NoError(t, err)
+		assert.Contains(t, string(argsBytes), "save --mount-root /data /data/sub ")
+	})
+}
+
+func TestRcloneScript_RestorePosixMetadataMissingSucceedsWithoutRetries(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		exitCode int
+	}{
+		{name: "rc 0 without file on S3", exitCode: 0},
+		{name: "rc 3 directory not found", exitCode: 3},
+		{name: "rc 4 file not found", exitCode: 4},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			binDir := t.TempDir()
+			rcloneCalls := filepath.Join(t.TempDir(), "rclone-calls")
+			posixCalls := filepath.Join(t.TempDir(), "posix-calls")
+
+			writeToolScript(t, binDir, "rclone", fmt.Sprintf("echo \"$*\" >> %s\nexit %d\n", rcloneCalls, tc.exitCode))
+			writeToolScript(t, binDir, "posixmeta", fmt.Sprintf("echo \"$*\" >> %s\nexit 0\n", posixCalls))
+
+			script := rcloneScript(t, map[string]any{
+				"command":                 exitingMover(0),
+				"maxRetries":              2,
+				"posixMetadataDirection":  rclone.DirectionRestore,
+				"posixMetadataRemotePath": "remote:bucket/backup/.pv-migrate-posix.gz",
+				"posixMetadataLocalPath":  "/data",
+			})
+
+			code, out := runScript(t, script, posixScriptEnv(t, binDir)...)
+			assert.Equal(t, 0, code)
+			assert.Contains(t, out, rclone.MissingPosixMetadataMarker)
+			assert.Equal(t, 1, countLines(t, rcloneCalls), "missing manifest must not be retried")
+			assert.NoFileExists(t, posixCalls, "posixmeta apply must not run when manifest is absent")
+		})
+	}
+}
+
+func TestRcloneScript_RestorePosixMetadataDownloadErrorRetriesAndFails(t *testing.T) {
+	t.Parallel()
+
+	binDir := t.TempDir()
+	rcloneCalls := filepath.Join(t.TempDir(), "rclone-calls")
+	posixCalls := filepath.Join(t.TempDir(), "posix-calls")
+
+	writeToolScript(t, binDir, "rclone", fmt.Sprintf("echo \"$*\" >> %s\nexit 7\n", rcloneCalls))
+	writeToolScript(t, binDir, "posixmeta", fmt.Sprintf("echo \"$*\" >> %s\nexit 0\n", posixCalls))
+
+	script := rcloneScript(t, map[string]any{
+		"command":                 exitingMover(0),
+		"maxRetries":              2,
+		"posixMetadataDirection":  rclone.DirectionRestore,
+		"posixMetadataRemotePath": "remote:bucket/backup/.pv-migrate-posix.gz",
+		"posixMetadataLocalPath":  "/data",
+	})
+
+	code, out := runScript(t, script, posixScriptEnv(t, binDir)...)
+	assert.Equal(t, 7, code)
+	assert.Contains(t, out, "posix metadata download failed with exit code 7")
+	assert.Equal(t, 3, countLines(t, rcloneCalls))
+	assert.NoFileExists(t, posixCalls)
+}
+
+func TestRcloneScript_RestorePosixMetadataApplyFlagsAndFailure(t *testing.T) {
+	t.Parallel()
+
+	t.Run("passes no-chown and non-root flags", func(t *testing.T) {
+		t.Parallel()
+
+		binDir := t.TempDir()
+		posixArgs := filepath.Join(t.TempDir(), "posix-args")
+
+		writeToolScript(t, binDir, "rclone", "touch \"$5\"\nexit 0\n")
+		writeToolScript(t, binDir, "posixmeta", fmt.Sprintf("echo \"$*\" > %s\nexit 0\n", posixArgs))
+
+		script := rcloneScript(t, map[string]any{
+			"command":                 exitingMover(0),
+			"posixMetadataDirection":  rclone.DirectionRestore,
+			"posixMetadataRemotePath": "remote:bucket/backup/.pv-migrate-posix.gz",
+			"posixMetadataLocalPath":  "/data/sub",
+			"posixMetadataNoChown":    true,
+			"posixMetadataNonRoot":    true,
+		})
+
+		code, _ := runScript(t, script, posixScriptEnv(t, binDir)...)
+		assert.Equal(t, 0, code)
+
+		argsBytes, err := os.ReadFile(posixArgs)
+		require.NoError(t, err)
+		assert.Contains(t, string(argsBytes), "apply --no-chown --non-root --mount-root /data /data/sub ")
+	})
+
+	t.Run("propagates posixmeta apply failure", func(t *testing.T) {
+		t.Parallel()
+
+		binDir := t.TempDir()
+
+		writeToolScript(t, binDir, "rclone", "touch \"$5\"\nexit 0\n")
+		writeToolScript(t, binDir, "posixmeta", "exit 1\n")
+
+		script := rcloneScript(t, map[string]any{
+			"command":                 exitingMover(0),
+			"posixMetadataDirection":  rclone.DirectionRestore,
+			"posixMetadataRemotePath": "remote:bucket/backup/.pv-migrate-posix.gz",
+			"posixMetadataLocalPath":  "/data",
+		})
+
+		code, out := runScript(t, script, posixScriptEnv(t, binDir)...)
+		assert.Equal(t, 1, code)
+		assert.Contains(t, out, "posix metadata apply failed with exit code 1")
+	})
+}
+
+func posixScriptEnv(t *testing.T, binDir string) []string {
+	t.Helper()
+
+	return []string{
+		"PATH=" + binDir + string(os.PathListSeparator) + os.Getenv("PATH"),
+		"TMPDIR=" + t.TempDir(),
+		"PV_MIGRATE_CONFIG_PATH=/etc/rclone/rclone.conf",
+		"PV_MIGRATE_METADATA_REMOTE_PATH=remote:bucket/backup.meta.yaml",
+		"PV_MIGRATE_POSIX_REMOTE_PATH=remote:bucket/backup/.pv-migrate-posix.gz",
+		"PV_MIGRATE_LOCAL_PATH=/data/sub",
+	}
+}
+
+func writeToolScript(t *testing.T, dir, name, body string) {
+	t.Helper()
+
+	content := "#!/bin/sh\n" + body
+	require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(content), 0o755)) //nolint:gosec
 }

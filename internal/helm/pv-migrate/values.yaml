@@ -268,3 +268,14 @@ rclone:
   metadataBase64: ""
   # -- Remote path for the metadata file (set by pv-migrate)
   metadataRemotePath: ""
+
+  # -- POSIX metadata action: "backup" or "restore" (set by pv-migrate)
+  posixMetadataDirection: ""
+  # -- Remote path for the POSIX metadata archive (set by pv-migrate)
+  posixMetadataRemotePath: ""
+  # -- Local volume path to read from or apply POSIX metadata to (set by pv-migrate)
+  posixMetadataLocalPath: ""
+  # -- Omit chown when applying POSIX metadata on restore (set by pv-migrate)
+  posixMetadataNoChown: false
+  # -- Apply POSIX metadata in non-root mode on restore (set by pv-migrate)
+  posixMetadataNonRoot: false

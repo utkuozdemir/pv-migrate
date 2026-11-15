@@ -214,7 +214,7 @@ jobs:
       - name: Build rclone image
         env:
           TAG: ${{ steps.vars.outputs.sha }}
-        run: docker build -t "integration-test-rclone:${TAG}" ./docker/rclone/
+        run: docker build -t "integration-test-rclone:${TAG}" -f ./docker/rclone/Dockerfile .
 
       - name: Install go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
