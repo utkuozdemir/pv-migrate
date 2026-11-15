@@ -141,6 +141,7 @@ Flags:
       --id string                         Custom operation ID (lowercase alphanumeric with optional hyphens, max 24 chars)
   -i, --ignore-mounted                    Do not fail if the PVC is mounted
       --name string                       Backup name (identity in the bucket, required unless using --rclone-config)
+  -o, --no-chown                          Omit chown on restore
   -x, --no-cleanup                        Do not clean up after the operation
       --no-cleanup-on-failure             Skip cleanup if the operation fails, leaving resources for inspection
       --non-root                          Run rclone container as non-root

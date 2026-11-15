@@ -87,11 +87,14 @@ pv-migrate backup \
 
 ## Object layout
 
-In managed mode, backup data is stored under:
+In managed mode, backup data is stored as plain objects under:
 
 ```text
 <bucket>/<prefix>/<name>/
 ```
+
+POSIX metadata (file and directory modes, ownership, modification times, and empty directories) is recorded alongside the files in `<bucket>/<prefix>/<name>/.pv-migrate-posix.gz`.
+Symbolic links are stored as `<name>.rclonelink` objects via `rclone --links`.
 
 The backup metadata sidecar is stored at:
 
@@ -99,13 +102,14 @@ The backup metadata sidecar is stored at:
 <bucket>/<prefix>/<name>.meta.yaml
 ```
 
-The metadata records the backup time and the source PVC.
+The metadata sidecar records the backup time and the source PVC.
 It is there for inspection, restore does not need it.
 
 For example:
 
 ```text
 pv-backups/pv-migrate/app-data-2026-04-11/
+pv-backups/pv-migrate/app-data-2026-04-11/.pv-migrate-posix.gz
 pv-backups/pv-migrate/app-data-2026-04-11.meta.yaml
 ```
 
@@ -130,8 +134,8 @@ pv-migrate restore \
   --remote myremote:bucket/custom/path
 ```
 
-Managed mode writes the metadata sidecar after the data upload succeeds.
-Raw rclone config mode does not, because `pv-migrate` treats the remote as an opaque rclone path.
+Managed mode writes `.meta.yaml` after the data upload succeeds, while both managed and raw rclone config modes write `.pv-migrate-posix.gz` inside `<remote>`.
+Raw rclone config mode skips `.meta.yaml`, because `pv-migrate` treats the remote as an opaque rclone path.
 
 ## Subdirectory backup and restore
 
@@ -156,6 +160,8 @@ pv-migrate restore \
   --bucket pv-backups \
   --name uploads-2026-04-11
 ```
+
+`--path` must name a directory rather than a symbolic link (symbolic links along parent components inside the volume are fine).
 
 ## Detached mode and progress
 
@@ -193,15 +199,24 @@ pv-migrate backup \
 It is for the rclone options that have no flag of their own.
 Overriding the built-in stats or JSON log flags breaks the progress parsing.
 
-When `--dry-run`, `--dry-run=true` or `-n` is among the extra arguments, `pv-migrate` also skips writing the metadata sidecar, so a dry run does not change the bucket.
+When `--dry-run`, `--dry-run=true` or `-n` is among the extra arguments, `pv-migrate` also skips writing `.meta.yaml` and `.pv-migrate-posix.gz` (and skips restoring `.pv-migrate-posix.gz`), so a dry run does not change the bucket or restored metadata.
 
 ## Permissions and ownership
 
-Bucket backup and restore copies file contents only.
-It does not preserve the POSIX owner, group or mode.
-Restored files belong to the user the rclone process runs as, and regular files come back with default permissions such as `0644`.
+Bucket backup and restore preserve POSIX metadata by default while keeping regular files stored as plain 1-to-1 bucket objects:
 
-Use PVC-to-PVC migration if the owners, groups or modes have to survive the copy.
+- File and directory permission modes, including `setuid`, `setgid`, and `sticky` bits
+- Numeric `uid` and `gid` ownership
+- Symbolic links (including dangling links) and empty directories
+- File and directory modification times
+
+Use `--no-chown` (`-o`) on `pv-migrate restore` to keep the destination ownership while still restoring modes, modification times, symbolic links, and empty directories.
+
+With `--non-root`, `pv-migrate restore` skips ownership changes and omits directory modification times, while still restoring file and writable directory modes, file modification times, symbolic links, and empty directories.
+
+A top-level `lost+found` directory at the volume root is skipped during whole-volume backup and restore so ext4 recovery directories neither block `--non-root` runs nor get removed by `--delete-extraneous-files`.
+
+When restoring an older backup or a plain bucket prefix that has no `.pv-migrate-posix.gz`, `pv-migrate restore` logs a warning and completes the data copy with default ownership and permissions.
 
 ## Scheduled backups
 

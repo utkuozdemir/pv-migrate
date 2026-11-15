@@ -14,13 +14,16 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	clientfeatures "k8s.io/client-go/features"
 	clientfeaturestesting "k8s.io/client-go/features/testing"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	"github.com/utkuozdemir/pv-migrate/internal/console"
 	"github.com/utkuozdemir/pv-migrate/internal/k8s"
+	"github.com/utkuozdemir/pv-migrate/internal/rclone"
 )
 
 //nolint:funlen
@@ -569,4 +572,87 @@ func createPod(t *testing.T, cli kubernetes.Interface, pod *corev1.Pod) {
 
 	_, err := cli.CoreV1().Pods(pod.Namespace).Create(t.Context(), pod, metav1.CreateOptions{})
 	require.NoError(t, err)
+}
+
+func TestWarnCompletedJob(t *testing.T) {
+	t.Parallel()
+
+	cli := fake.NewClientset()
+	cli.PrependReactor("get", "pods", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		if action.GetSubresource() != "log" {
+			return false, nil, nil
+		}
+
+		return true, &runtime.Unknown{Raw: []byte(rclone.MissingPosixMetadataMarker + "\n")}, nil
+	})
+
+	job := &batchv1.Job{
+		Name:      "test-rclone",
+		Namespace: "default",
+		Status:    batchv1.JobStatus{Succeeded: 1},
+	}
+
+	createPod(t, cli, &corev1.Pod{
+		Name:      "test-rclone-failed",
+		Namespace: "default",
+		Labels:    map[string]string{"job-name": "test-rclone"},
+		Status:    corev1.PodStatus{Phase: corev1.PodFailed},
+	})
+	createPod(t, cli, &corev1.Pod{
+		Name:      "test-rclone-succeeded",
+		Namespace: "default",
+		Labels:    map[string]string{"job-name": "test-rclone"},
+		Status:    corev1.PodStatus{Phase: corev1.PodSucceeded},
+	})
+
+	var logOut bytes.Buffer
+
+	k8s.WarnCompletedJob(t.Context(), cli, job, slog.New(slog.NewTextHandler(&logOut, nil)))
+
+	logRequests := 0
+
+	for _, action := range cli.Actions() {
+		if action.GetSubresource() == "log" {
+			logRequests++
+		}
+	}
+
+	assert.Equal(t, 1, logRequests)
+	assert.Contains(t, logOut.String(),
+		"Backup has no POSIX metadata, file permissions and ownership were not restored")
+}
+
+func TestWarnCompletedJob_SkipsUnsucceeded(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		succeeded int32
+		phase     corev1.PodPhase
+	}{
+		{succeeded: 0, phase: corev1.PodSucceeded},
+		{succeeded: 1, phase: corev1.PodRunning},
+		{succeeded: 1, phase: corev1.PodFailed},
+	}
+
+	for _, testCase := range cases {
+		cli := fake.NewClientset()
+		job := &batchv1.Job{
+			Name:      "test-rclone",
+			Namespace: "default",
+			Status:    batchv1.JobStatus{Succeeded: testCase.succeeded},
+		}
+
+		createPod(t, cli, &corev1.Pod{
+			Name:      "test-rclone-pod",
+			Namespace: "default",
+			Labels:    map[string]string{"job-name": "test-rclone"},
+			Status:    corev1.PodStatus{Phase: testCase.phase},
+		})
+
+		k8s.WarnCompletedJob(t.Context(), cli, job, slog.New(slog.DiscardHandler))
+
+		for _, action := range cli.Actions() {
+			assert.NotEqual(t, "log", action.GetSubresource())
+		}
+	}
 }

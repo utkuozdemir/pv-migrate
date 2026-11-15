@@ -3,10 +3,13 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -127,6 +130,22 @@ func TestBackupRestore(t *testing.T) {
 		t.Parallel()
 		testRestoreDeleteExtraneousFiles(t, infra)
 	})
+	t.Run("RestorePosixMetadata", func(t *testing.T) {
+		t.Parallel()
+		testRestorePosixMetadata(t, infra)
+	})
+	t.Run("RestorePosixMetadataNonRoot", func(t *testing.T) {
+		t.Parallel()
+		testRestorePosixMetadataNonRoot(t, infra)
+	})
+	t.Run("RestorePosixMetadataRawRemote", func(t *testing.T) {
+		t.Parallel()
+		testRestorePosixMetadataRawRemote(t, infra)
+	})
+	t.Run("RestoreMissingPosixManifestWarns", func(t *testing.T) {
+		t.Parallel()
+		testRestoreMissingPosixManifestWarns(t, infra)
+	})
 }
 
 //nolint:thelper // subtest implementation, not a helper
@@ -177,6 +196,7 @@ func testBackupBasic(t *testing.T, infra *backupTestInfra) {
 	lsOutput := listBucketPath(t, infra, ns, bucketPath)
 	assert.Contains(t, lsOutput, "backup_test.txt")
 	assert.Contains(t, lsOutput, "second.txt")
+	assert.Contains(t, lsOutput, ".pv-migrate-posix.gz")
 
 	// Sync behavior: deleted files are removed from bucket after re-backup
 	_, err = execInPod(t.Context(), infra.cli, ns, "test-pod", "rm /volume/second.txt")
@@ -188,6 +208,7 @@ func testBackupBasic(t *testing.T, infra *backupTestInfra) {
 	lsOutput = listBucketPath(t, infra, ns, bucketPath)
 	assert.Contains(t, lsOutput, "backup_test.txt")
 	assert.NotContains(t, lsOutput, "second.txt")
+	assert.Contains(t, lsOutput, ".pv-migrate-posix.gz")
 }
 
 //nolint:thelper // subtest implementation, not a helper
@@ -528,6 +549,264 @@ func testRestoreDeleteExtraneousFiles(t *testing.T, infra *backupTestInfra) {
 
 	_, err = execInPod(t.Context(), infra.cli, ns, "dest-pod", "cat /volume/extra.txt")
 	require.Error(t, err)
+}
+
+//nolint:thelper // subtest implementation, not a helper
+func testRestorePosixMetadata(t *testing.T, infra *backupTestInfra) {
+	ns := seedAndCreatePVC(t, infra, posixMetadataSeedCmd())
+	backupName := ns + "-posix-meta"
+
+	srcMtime, err := execInPod(t.Context(), infra.cli, ns, "test-pod", "stat -c '%Y' /volume/secret.txt")
+	require.NoError(t, err)
+
+	backup := pvmigrate.Backup{
+		PVC:                pvmigrate.PVC{Namespace: ns, Name: "test-pvc"},
+		Backend:            "s3",
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
+		Name:               backupName,
+		IgnoreMounted:      true,
+		NoCleanupOnFailure: true,
+		HelmValues:         infra.rcloneHelmVals,
+		Logger:             slogt.New(t),
+		Writer:             os.Stderr,
+	}
+	require.NoError(t, pvmigrate.RunBackup(t.Context(), backup))
+
+	require.NoError(t, provisionPod(t.Context(), infra.cli, ns, "dest-pvc", "dest-pod", ""))
+
+	restore := pvmigrate.Restore{
+		PVC:                pvmigrate.PVC{Namespace: ns, Name: "dest-pvc"},
+		Backend:            "s3",
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
+		Name:               backupName,
+		IgnoreMounted:      true,
+		NoCleanupOnFailure: true,
+		HelmValues:         infra.rcloneHelmVals,
+		Logger:             slogt.New(t),
+		Writer:             os.Stderr,
+	}
+	require.NoError(t, pvmigrate.RunRestore(t.Context(), restore))
+
+	assertPosixMetadataRestored(t, infra, ns, strings.TrimSpace(srcMtime))
+
+	// Re-restore with --no-chown into another PVC and confirm ownership stays 0:0 while modes survive.
+	require.NoError(t, provisionPod(t.Context(), infra.cli, ns, "nochown-pvc", "nochown-pod", ""))
+
+	restore.PVC.Name = "nochown-pvc"
+	restore.NoChown = true
+	require.NoError(t, pvmigrate.RunRestore(t.Context(), restore))
+
+	assertPodStat(t, infra, ns, "nochown-pod", "/volume/secret.txt", "600 0 0")
+	assertPodStat(t, infra, ns, "nochown-pod", "/volume/ro-parent", "500 0 0")
+	assertPodStat(t, infra, ns, "nochown-pod", "/volume/setgid-dir", "2775 0 0")
+}
+
+func posixMetadataSeedCmd() string {
+	return "mkdir -p /volume/empty-sticky /volume/setgid-dir /volume/ro-parent && " +
+		"echo -n SECRET > /volume/secret.txt && chmod 0600 /volume/secret.txt && chown 1234:5678 /volume/secret.txt && " +
+		"echo -n RUN > /volume/run.sh && chmod 0750 /volume/run.sh && chown 1234:5678 /volume/run.sh && " +
+		"echo -n RO > /volume/ro-parent/ro.txt && chmod 0400 /volume/ro-parent/ro.txt && " +
+		"chown 1234:5678 /volume/ro-parent/ro.txt && " +
+		"chmod 0500 /volume/ro-parent && chown 1234:5678 /volume/ro-parent && " +
+		"chmod 2775 /volume/setgid-dir && chown 1234:5678 /volume/setgid-dir && " +
+		"chmod 1777 /volume/empty-sticky && chown 1234:5678 /volume/empty-sticky && " +
+		"ln -s secret.txt /volume/link-valid && chown -h 1234:5678 /volume/link-valid && " +
+		"ln -s missing-target /volume/link-dangling && " +
+		"touch -t 202406011230.45 /volume/secret.txt /volume/empty-sticky"
+}
+
+func assertPosixMetadataRestored(t *testing.T, infra *backupTestInfra, ns, srcMtime string) {
+	t.Helper()
+
+	assertPodStat(t, infra, ns, "dest-pod", "/volume/secret.txt", "600 1234 5678 "+srcMtime)
+	assertPodStat(t, infra, ns, "dest-pod", "/volume/run.sh", "750 1234 5678")
+	assertPodStat(t, infra, ns, "dest-pod", "/volume/ro-parent", "500 1234 5678")
+	assertPodStat(t, infra, ns, "dest-pod", "/volume/ro-parent/ro.txt", "400 1234 5678")
+	assertPodStat(t, infra, ns, "dest-pod", "/volume/setgid-dir", "2775 1234 5678")
+	assertPodStat(t, infra, ns, "dest-pod", "/volume/empty-sticky", "1777 1234 5678 "+srcMtime)
+
+	linkTarget, err := execInPod(t.Context(), infra.cli, ns, "dest-pod", "readlink /volume/link-valid")
+	require.NoError(t, err)
+	assert.Equal(t, "secret.txt", strings.TrimSpace(linkTarget))
+
+	danglingTarget, err := execInPod(t.Context(), infra.cli, ns, "dest-pod", "readlink /volume/link-dangling")
+	require.NoError(t, err)
+	assert.Equal(t, "missing-target", strings.TrimSpace(danglingTarget))
+}
+
+//nolint:thelper // subtest implementation, not a helper
+func testRestorePosixMetadataNonRoot(t *testing.T, infra *backupTestInfra) {
+	ns := seedAndCreatePVC(t, infra,
+		"mkdir -p /volume/lost+found /volume/empty-dir /volume/shared && "+
+			"chmod 0700 /volume/lost+found && chmod 0750 /volume/empty-dir && "+
+			"chown 10000:10000 /volume/empty-dir && chmod 0775 /volume/shared && chown 0:10000 /volume/shared && "+
+			"echo -n SHARED > /volume/shared/item.txt && chmod 0660 /volume/shared/item.txt && "+
+			"chown 10000:10000 /volume/shared/item.txt && echo -n NR_SECRET > /volume/secret.txt && "+
+			"chmod 0600 /volume/secret.txt && chown 10000:10000 /volume/secret.txt && "+
+			"touch -t 202406011230.45 /volume/secret.txt")
+	backupName := ns + "-posix-nonroot"
+	srcMtime, err := execInPod(t.Context(), infra.cli, ns, "test-pod", "stat -c '%Y' /volume/secret.txt")
+	require.NoError(t, err)
+	enforceRestricted(t, infra.cli, ns)
+	require.NoError(t, pvmigrate.RunBackup(t.Context(), pvmigrate.Backup{
+		PVC:                pvmigrate.PVC{Namespace: ns, Name: "test-pvc"},
+		Backend:            "s3",
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
+		Name:               backupName,
+		IgnoreMounted:      true,
+		NonRoot:            true,
+		NoCleanupOnFailure: true,
+		HelmValues:         infra.rcloneHelmVals,
+		Logger:             slogt.New(t),
+		Writer:             os.Stderr,
+	}))
+	destNS := newTestNS(t, infra.cli, "pvmig-bak-nr")
+	require.NoError(t, provisionPod(t.Context(), infra.cli, destNS, "dest-pvc", "dest-pod",
+		"mkdir -p /volume/lost+found /volume/shared && chmod 0700 /volume/lost+found && "+
+			"chmod 0775 /volume/shared && chown 0:10000 /volume/shared && "+
+			"echo -n STALE > /volume/stale.txt && chown 10000:10000 /volume/stale.txt"))
+	enforceRestricted(t, infra.cli, destNS)
+	require.NoError(t, pvmigrate.RunRestore(t.Context(), pvmigrate.Restore{
+		PVC:                   pvmigrate.PVC{Namespace: destNS, Name: "dest-pvc"},
+		Backend:               "s3",
+		Bucket:                s3Bucket,
+		Endpoint:              s3Endpoint,
+		AccessKey:             s3AccessKey,
+		SecretKey:             s3SecretKey,
+		Name:                  backupName,
+		IgnoreMounted:         true,
+		NonRoot:               true,
+		DeleteExtraneousFiles: true,
+		NoCleanupOnFailure:    true,
+		HelmValues:            infra.rcloneHelmVals,
+		Logger:                slogt.New(t),
+		Writer:                os.Stderr,
+	}))
+	assertPodStat(t, infra, destNS, "dest-pod", "/volume/secret.txt", "600 10000 10000 "+strings.TrimSpace(srcMtime))
+	assertPodStat(t, infra, destNS, "dest-pod", "/volume/shared", "775 0 10000")
+	assertPodStat(t, infra, destNS, "dest-pod", "/volume/shared/item.txt", "660 10000 10000")
+	assertPodStat(t, infra, destNS, "dest-pod", "/volume/empty-dir", "750 10000 10000")
+	assertPodStat(t, infra, destNS, "dest-pod", "/volume/lost+found", "700 0 0")
+	_, err = execInPod(t.Context(), infra.cli, destNS, "dest-pod", "stat /volume/stale.txt")
+	require.Error(t, err)
+}
+
+//nolint:thelper // subtest implementation, not a helper
+func testRestorePosixMetadataRawRemote(t *testing.T, infra *backupTestInfra) {
+	seedCmd := "echo -n RAW > /volume/raw.txt && chmod 0600 /volume/raw.txt && chown 1234:5678 /volume/raw.txt"
+	ns := seedAndCreatePVC(t, infra, seedCmd)
+
+	cfgPath := filepath.Join(t.TempDir(), "rclone.conf")
+	cfgContent := fmt.Sprintf(
+		"[raws3]\ntype = s3\nprovider = Other\nendpoint = %s\naccess_key_id = %s\nsecret_access_key = %s\n",
+		s3Endpoint,
+		s3AccessKey,
+		s3SecretKey,
+	)
+	require.NoError(t, os.WriteFile(cfgPath, []byte(cfgContent), 0o600))
+
+	rawRemote := "raws3:" + s3Bucket + "/raw-" + ns
+
+	require.NoError(t, pvmigrate.RunBackup(t.Context(), pvmigrate.Backup{
+		PVC:                pvmigrate.PVC{Namespace: ns, Name: "test-pvc"},
+		RcloneConfigFile:   cfgPath,
+		Remote:             rawRemote,
+		IgnoreMounted:      true,
+		NoCleanupOnFailure: true,
+		HelmValues:         infra.rcloneHelmVals,
+		Logger:             slogt.New(t),
+		Writer:             os.Stderr,
+	}))
+
+	lsOutput := listBucketPath(t, infra, ns, "raw-"+ns+"/")
+	assert.Contains(t, lsOutput, "raw.txt")
+	assert.Contains(t, lsOutput, ".pv-migrate-posix.gz")
+
+	require.NoError(t, provisionPod(t.Context(), infra.cli, ns, "dest-pvc", "dest-pod", ""))
+
+	require.NoError(t, pvmigrate.RunRestore(t.Context(), pvmigrate.Restore{
+		PVC:                pvmigrate.PVC{Namespace: ns, Name: "dest-pvc"},
+		RcloneConfigFile:   cfgPath,
+		Remote:             rawRemote,
+		IgnoreMounted:      true,
+		NoCleanupOnFailure: true,
+		HelmValues:         infra.rcloneHelmVals,
+		Logger:             slogt.New(t),
+		Writer:             os.Stderr,
+	}))
+
+	assertPodStat(t, infra, ns, "dest-pod", "/volume/raw.txt", "600 1234 5678")
+
+	_, err := execInPod(t.Context(), infra.cli, ns, "dest-pod", "stat /volume/.pv-migrate-posix.gz")
+	require.Error(t, err)
+}
+
+//nolint:thelper // subtest implementation, not a helper
+func testRestoreMissingPosixManifestWarns(t *testing.T, infra *backupTestInfra) {
+	ns := seedAndCreatePVC(t, infra, backupSeedCmd())
+	backupName := ns + "-legacy-backup"
+
+	backup := pvmigrate.Backup{
+		PVC:                pvmigrate.PVC{Namespace: ns, Name: "test-pvc"},
+		Backend:            "s3",
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
+		Name:               backupName,
+		IgnoreMounted:      true,
+		NoCleanupOnFailure: true,
+		HelmValues:         infra.rcloneHelmVals,
+		Logger:             slogt.New(t),
+		Writer:             os.Stderr,
+	}
+	require.NoError(t, pvmigrate.RunBackup(t.Context(), backup))
+
+	// Remove the POSIX manifest to simulate a backup written by an older version.
+	runBucketVerifyJob(t, infra, ns, "deletefile", "test:"+s3Bucket+"/pv-migrate/"+backupName+"/.pv-migrate-posix.gz")
+
+	require.NoError(t, provisionPod(t.Context(), infra.cli, ns, "dest-pvc", "dest-pod", ""))
+
+	var logBuf bytes.Buffer
+
+	restore := pvmigrate.Restore{
+		PVC:                pvmigrate.PVC{Namespace: ns, Name: "dest-pvc"},
+		Backend:            "s3",
+		Bucket:             s3Bucket,
+		Endpoint:           s3Endpoint,
+		AccessKey:          s3AccessKey,
+		SecretKey:          s3SecretKey,
+		Name:               backupName,
+		IgnoreMounted:      true,
+		NoCleanupOnFailure: true,
+		HelmValues:         infra.rcloneHelmVals,
+		Logger:             slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, &logBuf), nil)),
+		Writer:             os.Stderr,
+	}
+	require.NoError(t, pvmigrate.RunRestore(t.Context(), restore))
+
+	output, err := execInPod(t.Context(), infra.cli, ns, "dest-pod", "cat "+backupTestDataPath)
+	require.NoError(t, err)
+	assert.Equal(t, backupTestDataContent, output)
+	assert.Contains(t, logBuf.String(), "Backup has no POSIX metadata")
+}
+
+func assertPodStat(t *testing.T, infra *backupTestInfra, ns, podName, path, wantPrefix string) {
+	t.Helper()
+
+	got, err := execInPod(t.Context(), infra.cli, ns, podName, "stat -c '%a %u %g %Y' "+path)
+	require.NoError(t, err)
+	assert.True(t, strings.HasPrefix(strings.TrimSpace(got), wantPrefix),
+		"unexpected stat for %s: got %q, want prefix %q", path, strings.TrimSpace(got), wantPrefix)
 }
 
 // --- Verification helpers ---

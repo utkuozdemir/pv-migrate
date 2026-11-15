@@ -1,0 +1,9 @@
+# Context rules for docker/rclone/Dockerfile only. Keep scoped to this
+# Dockerfile so goreleaser's release image contexts stay unaffected.
+*
+!go.mod
+!go.sum
+!cmd/posixmeta
+!internal/posixmeta
+**/*_test.go
+**/testdata

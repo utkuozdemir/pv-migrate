@@ -623,6 +623,91 @@ func TestPrintDetachMessage_StructuredLogsKeepsJSONStreamClean(t *testing.T) {
 	assert.Contains(t, textOut.String(), "pv-migrate cleanup op-456")
 }
 
+func TestApplyPosixMetadataValues(t *testing.T) {
+	t.Parallel()
+
+	info := testPVCInfo("src")
+
+	t.Run("sets posix metadata values for managed backup", func(t *testing.T) {
+		t.Parallel()
+
+		req := &bucketstorage.Request{
+			Direction: rclone.DirectionBackup,
+		}
+		vals := testBackupValues(req, info)
+		bucketstorage.ApplyPosixMetadataValues(vals, req, "remote:bucket/prefix/name/", "/data/sub")
+
+		rcloneVals := vals["rclone"].(map[string]any) //nolint:forcetypeassert
+		assert.Equal(t, rclone.DirectionBackup, rcloneVals["posixMetadataDirection"])
+		assert.Equal(t, "remote:bucket/prefix/name/.pv-migrate-posix.gz", rcloneVals["posixMetadataRemotePath"])
+		assert.Equal(t, "/data/sub", rcloneVals["posixMetadataLocalPath"])
+		assert.Equal(t, false, rcloneVals["posixMetadataNoChown"])
+		assert.Equal(t, false, rcloneVals["posixMetadataNonRoot"])
+	})
+
+	t.Run("sets posix metadata values for raw restore with flags", func(t *testing.T) {
+		t.Parallel()
+
+		req := &bucketstorage.Request{
+			Direction:        rclone.DirectionRestore,
+			RcloneConfigFile: "/etc/rclone.conf",
+			Remote:           "myremote:bucket/path",
+			NoChown:          true,
+			NonRoot:          true,
+		}
+		vals := testBackupValues(req, info)
+		bucketstorage.ApplyPosixMetadataValues(vals, req, "myremote:bucket/path", "/data")
+
+		rcloneVals := vals["rclone"].(map[string]any) //nolint:forcetypeassert
+		assert.Equal(t, rclone.DirectionRestore, rcloneVals["posixMetadataDirection"])
+		assert.Equal(t, "myremote:bucket/path/.pv-migrate-posix.gz", rcloneVals["posixMetadataRemotePath"])
+		assert.Equal(t, "/data", rcloneVals["posixMetadataLocalPath"])
+		assert.Equal(t, true, rcloneVals["posixMetadataNoChown"])
+		assert.Equal(t, true, rcloneVals["posixMetadataNonRoot"])
+	})
+
+	t.Run("skips posix metadata on dry run", func(t *testing.T) {
+		t.Parallel()
+
+		req := &bucketstorage.Request{
+			Direction:       rclone.DirectionBackup,
+			RcloneExtraArgs: "-n",
+		}
+		vals := testBackupValues(req, info)
+		bucketstorage.ApplyPosixMetadataValues(vals, req, "remote:bucket/prefix/name/", "/data")
+
+		rcloneVals := vals["rclone"].(map[string]any) //nolint:forcetypeassert
+		assert.NotContains(t, rcloneVals, "posixMetadataDirection")
+		assert.NotContains(t, rcloneVals, "posixMetadataRemotePath")
+	})
+}
+
+func TestBuildRcloneCommand_LostFoundExclusionMatchesResolvedRoot(t *testing.T) {
+	t.Parallel()
+
+	for _, subpath := range []string{"", ".", "sub/.."} {
+		localPath, err := bucketstorage.ResolveLocalPath(subpath)
+		require.NoError(t, err)
+		assert.Equal(t, "/data", localPath)
+
+		cmdStr, err := bucketstorage.BuildRcloneCommand(&bucketstorage.Request{
+			Direction: rclone.DirectionBackup,
+		}, "remote:bucket/prefix/name/", localPath)
+		require.NoError(t, err)
+		assert.Contains(t, cmdStr, "--exclude '/lost+found/**'")
+	}
+
+	subLocalPath, err := bucketstorage.ResolveLocalPath("sub")
+	require.NoError(t, err)
+	assert.Equal(t, "/data/sub", subLocalPath)
+
+	cmdStr, err := bucketstorage.BuildRcloneCommand(&bucketstorage.Request{
+		Direction: rclone.DirectionBackup,
+	}, "remote:bucket/prefix/name/", subLocalPath)
+	require.NoError(t, err)
+	assert.NotContains(t, cmdStr, "lost+found")
+}
+
 func testPVCInfo(name string) *pvc.Info {
 	return &pvc.Info{
 		Claim: &corev1.PersistentVolumeClaim{

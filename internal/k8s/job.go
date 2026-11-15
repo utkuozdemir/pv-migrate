@@ -20,6 +20,7 @@ import (
 	"github.com/utkuozdemir/pv-migrate/internal/jobprogress"
 	"github.com/utkuozdemir/pv-migrate/internal/opid"
 	"github.com/utkuozdemir/pv-migrate/internal/progresslog"
+	"github.com/utkuozdemir/pv-migrate/internal/rclone"
 	"github.com/utkuozdemir/pv-migrate/internal/rsync"
 )
 
@@ -246,9 +247,9 @@ func WaitForJobCompletion(ctx context.Context, cli kubernetes.Interface,
 	progress.FinishBar(logger)
 	progress.LogCopied(logger)
 
-	// The progress parser consumed the log, so the marker the job script prints
-	// for skipped files has to be fetched back to be seen at all.
-	warnIfSourceFilesVanished(recentPodLogs(ctx, cli, finalPod, logger), logger)
+	// The progress parser consumed the log, so the markers the job script prints
+	// have to be fetched back to be seen at all.
+	warnTerminalPodLogs(ctx, cli, finalPod, logger)
 
 	return nil
 }
@@ -362,7 +363,7 @@ func finishTerminalPod(
 		return failedPodError(ctx, cli, jobName, pod)
 	}
 
-	warnIfSourceFilesVanished(recentPodLogs(ctx, cli, pod, logger), logger)
+	warnTerminalPodLogs(ctx, cli, pod, logger)
 
 	return nil
 }
@@ -424,6 +425,28 @@ func findTerminalJobPod(
 	return terminal, len(pods.Items) > 0, nil
 }
 
+// WarnCompletedJob checks the succeeded pod's recent log lines for non-fatal
+// transfer markers (vanished source files or a missing POSIX manifest) so
+// plain status queries surface the same warnings as --follow.
+func WarnCompletedJob(ctx context.Context, cli kubernetes.Interface, job *batchv1.Job, logger *slog.Logger) {
+	if job.Status.Succeeded == 0 {
+		return
+	}
+
+	pod, _, err := findTerminalJobPod(ctx, cli, job.Namespace, job.Name)
+	if err != nil || pod == nil || pod.Status.Phase != corev1.PodSucceeded {
+		return
+	}
+
+	warnTerminalPodLogs(ctx, cli, pod, logger)
+}
+
+func warnTerminalPodLogs(ctx context.Context, cli kubernetes.Interface, pod *corev1.Pod, logger *slog.Logger) {
+	tail := recentPodLogs(ctx, cli, pod, logger)
+	warnIfSourceFilesVanished(tail, logger)
+	warnIfPosixMetadataMissing(tail, logger)
+}
+
 // warnIfSourceFilesVanished surfaces the marker as a single line. It matters most
 // with --delete, where the files rsync skipped keep their old copies on the
 // destination while the run reports success. The count comes from rsync's own
@@ -443,6 +466,14 @@ func warnIfSourceFilesVanished(tail string, logger *slog.Logger) {
 	}
 
 	logger.Warn(msg)
+}
+
+func warnIfPosixMetadataMissing(tail string, logger *slog.Logger) {
+	if !strings.Contains(tail, rclone.MissingPosixMetadataMarker) {
+		return
+	}
+
+	logger.Warn("🔶 Backup has no POSIX metadata, file permissions and ownership were not restored")
 }
 
 // writeTail puts a fetched log tail on the writer as a labelled, indented

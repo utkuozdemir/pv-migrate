@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -58,6 +57,7 @@ type Request struct {
 	Namespace             string
 	PVCName               string
 	IgnoreMounted         bool
+	NoChown               bool
 	NonRoot               bool
 	Detach                bool
 	NoCleanup             bool
@@ -129,14 +129,9 @@ func Run(ctx context.Context, req *Request) error {
 		return err
 	}
 
-	localPath := dataMountPath
-
-	if req.Path != "" {
-		if err = validateSubpath(req.Path); err != nil {
-			return fmt.Errorf("invalid --path: %w", err)
-		}
-
-		localPath = path.Join(dataMountPath, req.Path)
+	localPath, err := resolveLocalPath(req.Path)
+	if err != nil {
+		return err
 	}
 
 	client, err := k8s.GetClusterClient(req.KubeconfigPath, req.Context, logger)
@@ -171,16 +166,7 @@ func Run(ctx context.Context, req *Request) error {
 		details.Info("❕ Files missing on the source will be deleted from the destination")
 	}
 
-	rcloneCmd := rclone.Cmd{
-		Direction:  req.Direction,
-		RemotePath: remotePath,
-		LocalPath:  localPath,
-		ConfigPath: "/etc/rclone/rclone.conf",
-		ExtraArgs:  req.RcloneExtraArgs,
-		Delete:     req.DeleteExtraneousFiles,
-	}
-
-	cmdStr, err := rcloneCmd.Build()
+	cmdStr, err := buildRcloneCommand(req, remotePath, localPath)
 	if err != nil {
 		return fmt.Errorf("failed to build rclone command: %w", err)
 	}
@@ -204,6 +190,7 @@ func Run(ctx context.Context, req *Request) error {
 	}
 
 	helmVals := buildHelmValues(ns, req, pvcInfo, rcloneConf, cmdStr, readOnly, metadataBase64, metadataRemotePath)
+	applyPosixMetadataValues(helmVals, req, remotePath, localPath)
 
 	releaseName := opid.ReleasePrefix + operationID + "-" + req.Direction
 
@@ -281,71 +268,11 @@ func shouldUploadMetadata(req *Request) bool {
 		!hasRcloneDryRun(req.RcloneExtraArgs)
 }
 
-// shortFlagCluster matches a run of rclone short flags, which are letters only.
-// Requiring the whole token to be letters keeps a value like -1n from reading as
-// a dry run.
-var shortFlagCluster = regexp.MustCompile(`^-[a-zA-Z]+$`)
-
 // hasRcloneDryRun reports whether the extra rclone arguments ask for a dry run,
-// in which case the metadata sidecar must not be uploaded: a run that transfers
-// nothing has no business writing a real object to the bucket.
+// in which case the metadata sidecar and POSIX manifest must not be uploaded: a
+// run that transfers nothing has no business writing a real object to the bucket.
 func hasRcloneDryRun(extraArgs string) bool {
-	// pflag applies each occurrence in order, so a later one overrides an earlier
-	// one and the last is what rclone ends up with. Answering on the first match
-	// instead would get "--dry-run=false -n" and "-n --dry-run=false" both wrong,
-	// in opposite directions.
-	dryRun := false
-
-	for arg := range strings.FieldsSeq(extraArgs) {
-		name, value, assigned := strings.Cut(arg, "=")
-
-		if assigned {
-			applyAssignedFlag(&dryRun, name, value)
-
-			continue
-		}
-
-		// rclone uses pflag, so -n may be bundled with other short flags, as in -nv.
-		if arg == "--dry-run" || (shortFlagCluster.MatchString(arg) && strings.Contains(arg, "n")) {
-			dryRun = true
-		}
-	}
-
-	return dryRun
-}
-
-// applyAssignedFlag applies one `name=value` argument to the dry-run state.
-//
-// A boolean flag's value is read with strconv.ParseBool, so "1", "T" and "TRUE"
-// ask for a dry run just as much as "true" does, and "0" does not.
-func applyAssignedFlag(dryRun *bool, name, value string) {
-	switch {
-	case name == "--dry-run":
-		setFromBool(dryRun, value)
-	case shortFlagCluster.MatchString(name):
-		// pflag walks a bundle left to right, setting each shorthand on its own, and
-		// gives the assigned value only to the last one. So -vn=false turns the dry run
-		// off, while -nv=false leaves it on because there the n was already set bare.
-		letters := strings.TrimPrefix(name, "-")
-
-		for i, letter := range letters {
-			switch {
-			case letter != 'n':
-			case i == len(letters)-1:
-				setFromBool(dryRun, value)
-			default:
-				*dryRun = true
-			}
-		}
-	}
-}
-
-// setFromBool leaves the target alone when the value is not a boolean at all,
-// since rclone would reject such an argument itself.
-func setFromBool(target *bool, value string) {
-	if enabled, err := strconv.ParseBool(value); err == nil {
-		*target = enabled
-	}
+	return rclone.HasBoolFlag(extraArgs, "--dry-run", 'n')
 }
 
 func validateBucketSegment(value, flag string) error {
@@ -428,6 +355,23 @@ func buildHelmValues(
 	}
 
 	return vals
+}
+
+func applyPosixMetadataValues(vals map[string]any, req *Request, remotePath, localPath string) {
+	if hasRcloneDryRun(req.RcloneExtraArgs) {
+		return
+	}
+
+	rcloneSection, ok := vals["rclone"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	rcloneSection["posixMetadataDirection"] = req.Direction
+	rcloneSection["posixMetadataRemotePath"] = rclone.BuildPosixMetadataRemotePath(remotePath)
+	rcloneSection["posixMetadataLocalPath"] = localPath
+	rcloneSection["posixMetadataNoChown"] = req.NoChown
+	rcloneSection["posixMetadataNonRoot"] = req.NonRoot
 }
 
 func applyNonRootValues(vals map[string]any) {
@@ -760,6 +704,32 @@ func handleMounted(info *pvc.Info, ignoreMounted bool, logger *slog.Logger) erro
 
 	return fmt.Errorf("PVC is mounted to a node and --ignore-mounted is not requested: "+
 		"node: %s, claim: %s/%s", info.MountedNode, info.Claim.Namespace, info.Claim.Name)
+}
+
+func resolveLocalPath(subpath string) (string, error) {
+	if subpath == "" {
+		return dataMountPath, nil
+	}
+
+	if err := validateSubpath(subpath); err != nil {
+		return "", fmt.Errorf("invalid --path: %w", err)
+	}
+
+	return path.Join(dataMountPath, subpath), nil
+}
+
+func buildRcloneCommand(req *Request, remotePath, localPath string) (string, error) {
+	rcloneCmd := rclone.Cmd{
+		Direction:        req.Direction,
+		RemotePath:       remotePath,
+		LocalPath:        localPath,
+		ConfigPath:       "/etc/rclone/rclone.conf",
+		ExtraArgs:        req.RcloneExtraArgs,
+		Delete:           req.DeleteExtraneousFiles,
+		ExcludeLostFound: localPath == dataMountPath,
+	}
+
+	return rcloneCmd.Build()
 }
 
 // validateSubpath ensures the path is a relative subpath that stays under the mount root.

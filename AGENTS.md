@@ -52,11 +52,13 @@ So there is a ladder of strategies, tried in order, each of which declines the j
 
 Bucket backup and restore is the simpler workflow: one release, one rclone job, no networking between clusters.
 It has its own identity concept, because a backup has to be findable again later, which a migration does not.
+Because object stores flatten POSIX modes, numeric owners, empty directories and special bits, `pv-migrate-rclone` pairs `rclone --links` with the compiled `posixmeta` helper to capture and reapply a `.pv-migrate-posix.gz` manifest inside the backup root while excluding that filename from rclone transfers.
 `docs/backup-restore.md` carries the object layout.
 
 ## Code map
 
 - `cmd/pv-migrate`: the binary. Thin: signals, exit code, and the version strings goreleaser stamps.
+- `cmd/posixmeta`, `internal/posixmeta`: the static Go helper inside `pv-migrate-rclone` that captures and applies `.pv-migrate-posix.gz` POSIX metadata manifests.
 - `pvmigrate`: the public Go API, and the only supported way to drive this as a library.
   It is a stable surface with defaulting and validation, and it converts into the internal request types.
   Everything under `internal/` may be rearranged freely; this may not.

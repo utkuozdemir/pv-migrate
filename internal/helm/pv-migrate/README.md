@@ -44,6 +44,11 @@ The helm chart of pv-migrate
 | rclone.podAnnotations | object | `{}` | Rclone pod annotations |
 | rclone.podLabels | object | `{}` | Rclone pod labels |
 | rclone.podSecurityContext | object | `{}` | Rclone pod security context |
+| rclone.posixMetadataDirection | string | `""` | POSIX metadata action: "backup" or "restore" (set by pv-migrate) |
+| rclone.posixMetadataLocalPath | string | `""` | Local volume path to read from or apply POSIX metadata to (set by pv-migrate) |
+| rclone.posixMetadataNoChown | bool | `false` | Omit chown when applying POSIX metadata on restore (set by pv-migrate) |
+| rclone.posixMetadataNonRoot | bool | `false` | Apply POSIX metadata in non-root mode on restore (set by pv-migrate) |
+| rclone.posixMetadataRemotePath | string | `""` | Remote path for the POSIX metadata archive (set by pv-migrate) |
 | rclone.pvcMounts | list | `[]` | PVC mounts into the Rclone pod. For examples, see [values.yaml](values.yaml) |
 | rclone.resources | object | `{}` | Rclone pod resources |
 | rclone.restartPolicy | string | `"Never"` |  |

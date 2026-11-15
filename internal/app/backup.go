@@ -140,6 +140,7 @@ func buildRestoreCmd(logger **slog.Logger, imageTag, chartVersion string) (*cobr
 
 	setRawConfigFlags(cmd, &restore.RcloneConfigFile, &restore.Remote)
 	setRestoreDeleteFlags(cmd, &restore.DeleteExtraneousFiles)
+	setRestorePermissionsFlags(cmd, &restore.NoChown)
 
 	if err := setBucketStorageFlagCompletions(cmd); err != nil {
 		return nil, err
@@ -285,6 +286,10 @@ func setRawConfigFlags(cmd *cobra.Command, rcloneConfig, remote *string) {
 func setRestoreDeleteFlags(cmd *cobra.Command, deleteExtraneousFiles *bool) {
 	cmd.Flags().BoolVarP(deleteExtraneousFiles, FlagDeleteExtraneousFiles, "d", false,
 		"Delete extraneous files on the destination using rclone sync instead of copy")
+}
+
+func setRestorePermissionsFlags(cmd *cobra.Command, noChown *bool) {
+	cmd.Flags().BoolVarP(noChown, FlagNoChown, "o", false, "Omit chown on restore")
 }
 
 func setBucketStorageFlagCompletions(cmd *cobra.Command) error {
