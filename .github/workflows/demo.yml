@@ -57,7 +57,7 @@ jobs:
       - name: Record
         env:
           # renovate: depName=ghcr.io/charmbracelet/vhs datasource=docker
-          VHS_IMAGE: ghcr.io/charmbracelet/vhs:v0.11.0
+          VHS_IMAGE: ghcr.io/charmbracelet/vhs:v0.12.1
         run: |
           task demo:record VHS="docker run --rm --network host -v ${PWD}:/vhs -v ${PWD}/dist/demo/pv-migrate:/usr/local/bin/pv-migrate -v ${HOME}/.kube:/root/.kube -e KUBECONFIG=/root/.kube/config ${VHS_IMAGE}"
 
