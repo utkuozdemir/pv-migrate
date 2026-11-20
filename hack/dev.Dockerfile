@@ -24,9 +24,9 @@ ARG SHFMT_VERSION=3.14.1
 # the single declaration of the goreleaser version: the workflows read it from
 # here rather than carrying their own, so the version that validates the release
 # config is always the version that performs the release
-ARG GORELEASER_VERSION=v2.20.2
+ARG GORELEASER_VERSION=v2.20.3
 
-FROM goreleaser/goreleaser:${GORELEASER_VERSION}@sha256:5d30bb36091b1a6d275ef450be05ee9c0d8c8b22955efe53dfe0974dd583cdc2 AS goreleaser-bin
+FROM goreleaser/goreleaser:${GORELEASER_VERSION}@sha256:3019e0e61c99808e42ce60c9cf77f7882685ffd2bd09d18ef6da8f9c9810e71c AS goreleaser-bin
 FROM alpine/helm:4.3.2@sha256:a3b9d617c0c30a6c488cebb429c4ba83995a26dc2184599af5fd408a361b2e67 AS helm-bin
 FROM jnorwood/helm-docs:v1.14.2@sha256:7e562b49ab6b1dbc50c3da8f2dd6ffa8a5c6bba327b1c6335cc15ce29267979c AS helm-docs-bin
 
