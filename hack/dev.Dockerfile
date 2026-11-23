@@ -102,7 +102,7 @@ RUN git init -q . \
 # anyway. Every finding fails the stage, and an accepted one is listed in the
 # config with its reason. Its own image rather than the tools stage: the
 # binary is built against glibc and does not run on alpine.
-FROM ghcr.io/zizmorcore/zizmor:1.33.0@sha256:1b9bebe30894567d922aa8467ec3b6d39d8f4f65b7736addbda6e83d1b0c477f AS lint-workflows
+FROM ghcr.io/zizmorcore/zizmor:1.33.1@sha256:ecd3ffe6158de1322e05a044ed43749bee12b1dccb7e1a7859bc6ac4b2a1c516 AS lint-workflows
 WORKDIR /src
 COPY .github ./.github
 RUN zizmor --offline --config .github/zizmor.yml .github
