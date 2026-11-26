@@ -109,7 +109,7 @@ jobs:
         uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
         with:
           # renovate: depName=sigstore/cosign datasource=github-releases
-          cosign-release: v3.1.5
+          cosign-release: v3.1.6
       # the goreleaser version is declared once, in hack/dev.Dockerfile, so the
       # version that validates the release config in lint is the version that
       # performs the release. Fail loudly rather than guessing if that
@@ -354,7 +354,7 @@ jobs:
         uses: sigstore/cosign-installer@881c63bd87e38389154debd8331404ce7ca8a3ab # v4.1.4
         with:
           # renovate: depName=sigstore/cosign datasource=github-releases
-          cosign-release: v3.1.5
+          cosign-release: v3.1.6
       - name: Determine tags
         id: tags
         env:
